@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { MONTHS, MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
+import { GRADE_LABEL, finishGrade } from '@/data/ladders.js'
+import LadderBreakdownTable from './LadderBreakdownTable.jsx'
 
 // Full month-by-month plan for a ladder, every grade from Pre-1A to the finish
 // grade. Each cell is the cumulative kapitel (Aleph-Beis) + minutes.
@@ -9,9 +10,6 @@ export default function LadderBreakdown({ ladder, onClose }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-
-  const grades = ['pre1a']
-  for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-navy/75 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Ladder ${ladder} full breakdown`}>
@@ -27,37 +25,7 @@ export default function LadderBreakdown({ ladder, onClose }) {
         </div>
 
         <div className="max-h-[70vh] overflow-auto p-4">
-          <table className="w-full border-separate border-spacing-0 text-center text-[13px]">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 bg-paper px-2 py-2 text-left font-cond uppercase tracking-wide text-muted">Grade</th>
-                {MONTHS.map((m) => (
-                  <th key={m} className="font-heb px-2 py-2 text-[15px] font-bold text-navy">{MONTH_HEB[m]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {grades.map((g) => (
-                <tr key={g}>
-                  <td className="sticky left-0 z-10 bg-paper px-2 py-1.5 text-left font-semibold text-navy">{GRADE_LABEL[g]}</td>
-                  {MONTHS.map((m) => {
-                    const cell = QUOTA[g]?.[m]?.[ladder]
-                    const finish = cell && cell.v >= 150
-                    return (
-                      <td key={m} className={`rounded px-2 py-1 leading-tight ${finish ? 'bg-gold/30 font-bold text-navy' : 'odd:bg-card/60'}`}>
-                        {cell ? (
-                          <>
-                            <div className="font-heb text-[15px] text-navy">{finish ? '👑' : toHebrewNumeral(cell.v)}</div>
-                            <div className="text-[10px] text-muted">{cell.m}m</div>
-                          </>
-                        ) : '—'}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <LadderBreakdownTable ladder={ladder} />
           <p className="mt-3 text-center text-xs text-muted">Each cell shows the kapitel you say up to (from kapitel א) and the minutes. 👑 = the whole Tehillim (קנ).</p>
         </div>
       </div>

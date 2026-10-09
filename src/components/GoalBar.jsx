@@ -1,6 +1,6 @@
 // The nationwide progress bar: a rounded track with a blue gradient fill to
-// `percent`, and a crown riding the fill's end as the marker (Dovid HaMelech —
-// the Tehillim stand-in for Lulav's lulav-esrog marker).
+// `percent`, and a Sefer Tehillim riding the fill's end as the marker (the
+// Tehillim stand-in for Lulav's lulav-esrog marker).
 export default function GoalBar({ percent, label = 'of goal', marker = true, className = '' }) {
   const actual = Math.max(0, Math.floor(Number(percent) || 0))
   const p = Math.min(100, actual)
@@ -26,7 +26,7 @@ export default function GoalBar({ percent, label = 'of goal', marker = true, cla
           className="pointer-events-none absolute -bottom-[10px] -translate-x-1/2 select-none text-[34px] leading-none transition-[left] duration-1000 ease-out sm:-bottom-[14px] sm:text-[44px]"
           style={{ left: `${p}%`, filter: 'drop-shadow(0 6px 8px rgba(15, 35, 80, 0.22))' }}
         >
-          👑
+          📖
         </span>
       )}
     </div>

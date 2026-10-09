@@ -245,7 +245,13 @@ export function setKidLadder(id, ladder) {
 export function getKidSocial(id) {
   const found = locate(id)
   if (!found) return null
-  const { school, cls } = found
+  const { kid, school, cls } = found
+
+  // This soldier's own rank within their class (missions, then kapitlach/year).
+  const classKids = cls.kids
+    .slice()
+    .sort((a, b) => b.missionsTotal - a.missionsTotal || kidSaidYear(b) - kidSaidYear(a))
+  const myRankInClass = classKids.findIndex((k) => k.id === kid.id) + 1
 
   // Class standings within this school, by % of soldiers who completed.
   const standings = school.classes
@@ -278,6 +284,8 @@ export function getKidSocial(id) {
     totalClasses: standings.length,
     classAheadName: ahead?.name ?? null,
     needToPass,
+    myRankInClass,
+    classSize: cls.kids.length,
     schoolName: school.name,
     schoolRank: schoolRank + 1,
     totalSchools: schoolRanked.length,

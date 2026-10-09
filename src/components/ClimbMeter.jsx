@@ -1,27 +1,33 @@
-import { toHebrewNumeral } from '@/data/ladders.js'
+import { QUOTA, MONTHS, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
 
 // The whole-Tehillim climb: every Shabbos Mevorchim a child says kapitel א up to
 // their cumulative target, so their position on the climb to 150 is simply that
 // kapitel number. This is the lifetime goal the ladder is pacing — the hero of
 // the dashboard. `reached` is how far they've actually climbed (furthest month
-// they completed); `target` is where this month's rung takes them.
+// they completed); `target` is where this month's rung takes them. The marks
+// are where THIS ladder finishes each grade (Elul), labeled in Aleph-Beis.
 
-// The five Sefarim of Tehillim — milestones on the way up.
-const BOOKS = [
-  { end: 41, label: 'א' },
-  { end: 72, label: 'ב' },
-  { end: 89, label: 'ג' },
-  { end: 106, label: 'ד' },
-  { end: 150, label: 'ה' },
-]
 const TOTAL = 150
+const LAST_MONTH = MONTHS[MONTHS.length - 1] // Elul — the end of each grade's year
 
-export default function ClimbMeter({ reached = 0, target = 0, finishGradeLabel }) {
+function gradeMarks(ladder) {
+  const grades = ['pre1a']
+  for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
+  return grades
+    .map((g) => {
+      const cell = QUOTA[g]?.[LAST_MONTH]?.[ladder]
+      return cell ? { grade: g, v: cell.v, heb: toHebrewNumeral(cell.v) } : null
+    })
+    .filter(Boolean)
+}
+
+export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel }) {
   const r = Math.max(0, Math.min(TOTAL, reached))
   const t = Math.max(0, Math.min(TOTAL, target))
   const pct = (n) => (n / TOTAL) * 100
   const done = r >= TOTAL
   const climbingTo = t > r ? t : null
+  const marks = ladder ? gradeMarks(ladder) : []
 
   return (
     <div className="rounded-2xl bg-paper/70 p-5 sm:p-6">
@@ -48,7 +54,7 @@ export default function ClimbMeter({ reached = 0, target = 0, finishGradeLabel }
       </div>
 
       {/* The climb track */}
-      <div className="relative mt-6 mb-7 h-6">
+      <div className="relative mt-7 mb-16 h-6">
         <div className="absolute inset-0 overflow-hidden rounded-full bg-track">
           {/* ghost fill to this month's target */}
           {climbingTo ? (
@@ -64,15 +70,27 @@ export default function ClimbMeter({ reached = 0, target = 0, finishGradeLabel }
           />
         </div>
 
-        {/* Sefarim dividers + numbers */}
-        {BOOKS.slice(0, -1).map((b) => (
-          <span key={b.end} className="absolute top-0 h-6 w-px bg-white/70" style={{ left: `${pct(b.end)}%` }} aria-hidden="true" />
-        ))}
-        {BOOKS.map((b) => (
-          <span key={`n${b.end}`} className="absolute -bottom-6 -translate-x-1/2 text-[11px] font-semibold text-muted" style={{ left: `${pct(b.end)}%` }}>
-            {b.end}
-          </span>
-        ))}
+        {/* A tick where this ladder finishes each grade: divider + Aleph-Beis kapitel
+            + grade. Labels alternate high/low so close grades don't collide. */}
+        {marks.map((m, i) => {
+          const finish = m.v >= TOTAL
+          const left = `${pct(m.v)}%`
+          const low = i % 2 === 1
+          return (
+            <span key={m.grade}>
+              <span className="absolute top-0 w-px bg-white/70" style={{ left, height: low ? '2.5rem' : '1.5rem' }} aria-hidden="true" />
+              <span
+                className="absolute flex -translate-x-1/2 flex-col items-center leading-tight"
+                style={{ left, top: low ? '2.6rem' : '1.75rem' }}
+              >
+                <span className={`font-heb text-[13px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>
+                  {finish ? '👑' : m.heb}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
+              </span>
+            </span>
+          )
+        })}
 
         {/* climber marker at reached */}
         <span

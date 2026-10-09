@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
-import { Button, Card, Avatar, Pill, Field, Input } from '@/components/ui.jsx'
+import { Button, Card, Avatar, Field, Input } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import FirstLadderModal from '@/components/FirstLadderModal.jsx'
 import GoalBar from '@/components/GoalBar.jsx'
 import ClimbMeter from '@/components/ClimbMeter.jsx'
+import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
@@ -82,9 +83,34 @@ export default function KidDashboard() {
 
   return (
     <>
-      <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title="Soldier Dashboard">
-        Say your Tehillim this Shabbos Mevorchim and climb toward finishing the whole Sefer Tehillim.
-      </PageHero>
+      {/* Soldier hero — the ID lives right in the dashboard header */}
+      <section className="hero-navy">
+        <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · {CAMPAIGN_YEAR}</p>
+            <button onClick={logoutKid} className="rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/10">Sign out</button>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            {/* Photo once the backend provides one (Avatar falls back to initials). */}
+            <Avatar name={kid.name} src={kid.photoUrl} size={72} className="ring-2 ring-white/50" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
+                {social?.myRankInClass ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2.5 py-0.5 font-cond text-sm font-bold uppercase tracking-wide text-gold" title="Your rank in your class">
+                    🏅 #{social.myRankInClass} in class
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1.5 text-white/80">{kid.className} · {kid.schoolName}</p>
+            </div>
+            <div className="text-right">
+              <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
+              <p className="mt-1 text-xs text-white/70">finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
         {/* Countdown to the next Shabbos Mevorchim */}
@@ -100,24 +126,6 @@ export default function KidDashboard() {
             <span className="font-heb text-base text-muted">{sMevorchim.hebDateLabel}</span>
           </div>
         ) : null}
-
-        {/* ID card */}
-        <Card className="p-5 sm:p-6">
-          <div className="flex items-center gap-4">
-            <Avatar name={kid.name} size={64} />
-            <div className="min-w-0 flex-1">
-              <h2 className="font-display text-2xl font-black text-navy">{kid.name}</h2>
-              <p className="text-sm text-muted">
-                {kid.className} · {kid.schoolName}
-              </p>
-            </div>
-            <div className="hidden text-right sm:block">
-              <Pill>Ladder {kid.ladder}</Pill>
-              <p className="mt-1 text-xs text-muted">finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
-            </div>
-            <Button variant="ghost" className="!px-3 !text-[15px]" onClick={logoutKid}>Sign out</Button>
-          </div>
-        </Card>
 
         {/* This month's mission — the big, kid-facing card */}
         <Card className="overflow-hidden">
@@ -236,6 +244,7 @@ export default function KidDashboard() {
           <ClimbMeter
             reached={reached}
             target={cur.quota}
+            ladder={kid.ladder}
             finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
           />
         </Card>
@@ -263,9 +272,12 @@ export default function KidDashboard() {
                 )}
               </p>
             </div>
-            <span className="hidden shrink-0 rounded-full bg-card px-3 py-1 text-xs font-semibold text-navy sm:inline">
-              School #{social.schoolRank} worldwide
-            </span>
+            <div className="shrink-0 rounded-2xl bg-card px-4 py-2 text-center">
+              <div className="font-cond text-2xl font-bold leading-none text-navy">#{social.schoolRank}</div>
+              <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                School worldwide<span className="text-muted/70"> · of {social.totalSchools}</span>
+              </div>
+            </div>
           </Card>
         ) : null}
 
@@ -287,16 +299,26 @@ export default function KidDashboard() {
           </div>
         </Card>
 
-        {/* Ladder — a quick summary + a button to the ladder-picking page */}
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
-          <div>
-            <p className="sh">Your Ladder</p>
-            <h3 className="font-display text-xl font-black text-navy">
-              Ladder {kid.ladder}
-              <span className="font-normal text-muted"> — finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
-            </h3>
+        {/* Ladder — summary + the full month-by-month breakdown of this ladder */}
+        <Card className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="sh">Your Ladder</p>
+              <h3 className="font-display text-xl font-black text-navy">
+                Ladder {kid.ladder}
+                <span className="font-normal text-muted"> — finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+              </h3>
+            </div>
+            <Button variant="navy" onClick={() => navigate('/ladders')}>Switch my ladder</Button>
           </div>
-          <Button variant="navy" onClick={() => navigate('/ladders')}>Switch my ladder</Button>
+
+          <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
+            <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} />
+          </div>
+          <p className="mt-2 text-center text-xs text-muted">
+            Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · 👑 = the whole Tehillim ·{' '}
+            <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
+          </p>
         </Card>
       </div>
     </>
