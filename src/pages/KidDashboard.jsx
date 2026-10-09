@@ -105,14 +105,7 @@ export default function KidDashboard() {
             {/* Photo once the backend provides one (Avatar falls back to initials). */}
             <Avatar name={kid.name} src={kid.photoUrl} size={72} className="ring-2 ring-white/50" />
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
-                {social?.myRankInClass ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2.5 py-0.5 font-cond text-sm font-bold uppercase tracking-wide text-gold" title="Your rank in your class">
-                    🏅 #{social.myRankInClass} in class
-                  </span>
-                ) : null}
-              </div>
+              <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
               <p className="mt-1.5 text-white/80">{kid.className} · {kid.schoolName}</p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -212,6 +205,11 @@ export default function KidDashboard() {
                   <div className="min-w-0">
                     <h3 className="font-display text-xl font-black leading-tight text-navy">{social.className}</h3>
                     <p className="text-sm font-semibold text-green">#{social.classRank} of {social.totalClasses} in {social.schoolName}</p>
+                    {social.myRankInClass ? (
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-gold/20 px-2.5 py-0.5 font-cond text-sm font-bold uppercase tracking-wide text-navy" title="Your rank in your class">
+                        🏅 You’re #{social.myRankInClass} of {social.classSize} in class
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-muted">
