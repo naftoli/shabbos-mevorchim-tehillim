@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import { Button, Card, Avatar, Field, Input } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import FirstLadderModal from '@/components/FirstLadderModal.jsx'
+import GoalBar from '@/components/GoalBar.jsx'
 import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
@@ -181,6 +182,32 @@ export default function KidDashboard() {
               <Field label="Minutes I said"><Input className="w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
               <button className="btn btn-gold !px-7" onClick={saveReport}>Save</button>
             </div>
+
+            {/* Two lines — kapitlach + time — like the worldwide card */}
+            {cur.said > 0 || cur.saidMinutes > 0 ? (
+              <div className="mx-auto mt-7 max-w-md space-y-6">
+                <div>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span className="flex items-center gap-1.5 font-semibold text-navy"><span aria-hidden="true">📖</span> Kapitlach</span>
+                    <span className="tabular-nums text-navy">
+                      <b className="text-green">{fmt(cur.said)}</b> of {cur.quota}
+                      {cur.said > cur.quota ? <span className="font-semibold text-green"> · +{fmt(cur.said - cur.quota)} extra! 🎉</span> : null}
+                    </span>
+                  </div>
+                  <GoalBar percent={(cur.said / Math.max(1, cur.quota)) * 100} marker={false} className="mt-2" />
+                </div>
+                <div>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span className="flex items-center gap-1.5 font-semibold text-navy"><img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto" /> Time</span>
+                    <span className="tabular-nums text-navy">
+                      <b className="text-green">{fmt(cur.saidMinutes)}</b> of {cur.minutes} min
+                      {cur.saidMinutes > cur.minutes ? <span className="font-semibold text-green"> · +{fmt(cur.saidMinutes - cur.minutes)} extra!</span> : null}
+                    </span>
+                  </div>
+                  <GoalBar percent={(cur.saidMinutes / Math.max(1, cur.minutes)) * 100} marker={false} className="mt-2" />
+                </div>
+              </div>
+            ) : null}
           </div>
         </Card>
 

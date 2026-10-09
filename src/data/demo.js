@@ -25,6 +25,28 @@ export const CAMPAIGN_YEAR = _upcoming ? currentHebrewYear() : '5786'
 // Tehillim said in prior years (so "all-time" reads bigger than this year).
 const PRIOR_YEARS_KAPITLACH = 1_240_000
 
+// Demo persistence: the roster is synthetic and rebuilt on every page load, so a
+// soldier's own ladder + monthly reports are kept in localStorage and overlaid
+// back on, making the demo feel real (what you entered is still there on reload).
+const PROGRESS_KEY = 'wwtc.demo.progress'
+function loadProgress() {
+  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}') } catch { return {} }
+}
+export function saveKidProgress(kid) {
+  try {
+    const all = loadProgress()
+    all[kid.id] = { ladder: kid.ladder, reports: kid.reports, minutesByMonth: kid.minutesByMonth }
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(all))
+  } catch { /* private mode / unavailable */ }
+}
+export function clearKidProgress(kidId) {
+  try {
+    const all = loadProgress()
+    delete all[kidId]
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(all))
+  } catch { /* ignore */ }
+}
+
 // Deterministic PRNG (mulberry32).
 function rng(seed) {
   let a = seed
@@ -150,6 +172,29 @@ function buildRoster() {
     fresh.priorMissions = 0
     fresh.metThisYear = 0
     fresh.missionsTotal = 0
+  }
+
+  // Overlay any saved demo progress so a soldier's own ladder + reports survive
+  // a page reload (the synthetic roster is otherwise rebuilt from scratch).
+  const saved = loadProgress()
+  for (const school of schools) {
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        const s = saved[kid.id]
+        if (!s) continue
+        if (s.ladder != null) kid.ladder = s.ladder
+        if (s.reports) kid.reports = { ...kid.reports, ...s.reports }
+        if (s.minutesByMonth) kid.minutesByMonth = { ...kid.minutesByMonth, ...s.minutesByMonth }
+        let met = 0
+        for (const mo of ELAPSED_MONTHS) {
+          const q = quotaFor(kid.grade, mo, kid.ladder)
+          if (q && (kid.reports[mo] ?? 0) >= q.v) met += 1
+        }
+        kid.metThisYear = met
+        kid.missionsTotal = (kid.priorMissions || 0) + met
+        kid.minutes = Object.values(kid.minutesByMonth || {}).reduce((a, m) => a + (m || 0), 0)
+      }
+    }
   }
 
   return schools

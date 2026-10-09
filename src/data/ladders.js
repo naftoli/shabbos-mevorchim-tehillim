@@ -240,8 +240,10 @@ export const QUOTA = Object.fromEntries(
 )
 
 // Look up one cell. grade: 'pre1a' | '1'..'12'; month: a MONTHS entry; ladder 5-12.
+// Leap years have two Adars (Adar I + Adar II); both use the same Adar quota.
 export function quotaFor(grade, month, ladder) {
-  return QUOTA[grade]?.[month]?.[ladder] ?? null
+  const mo = month === 'Adar I' || month === 'Adar II' ? 'Adar' : month
+  return QUOTA[grade]?.[mo]?.[ladder] ?? null
 }
 
 // Integer → Hebrew numeral (gematria): 10→"י", 15→"טו", 119→"קיט", 150→"קנ".

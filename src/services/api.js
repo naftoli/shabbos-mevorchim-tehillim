@@ -16,6 +16,8 @@ import {
   DEMO_ADMIN_PASSWORD,
   ARMY_DEDICATION,
   schoolDedication,
+  saveKidProgress,
+  clearKidProgress,
 } from '@/data/demo.js'
 
 export { CURRENT_MONTH, CURRENT_MONTH_INDEX, ELAPSED_MONTHS, CAMPAIGN_YEAR }
@@ -168,9 +170,11 @@ export function verifyKid(serial, dob) {
         if (kid.isDemoNew) {
           kid.ladder = null
           kid.reports = {}
+          kid.minutesByMonth = {}
           kid.minutes = 0
           kid.metThisYear = 0
           kid.missionsTotal = 0
+          clearKidProgress(kid.id)
           invalidate()
         }
         return safeKid(kid, school, cls)
@@ -235,6 +239,7 @@ export function recordMonth(id, month, kapitlach, minutes) {
   kid.minutesByMonth = kid.minutesByMonth || {}
   kid.minutesByMonth[month] = Number(minutes) || 0
   kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
+  saveKidProgress(kid)
   invalidate()
   return getKidProgress(id)
 }
@@ -251,6 +256,7 @@ export function setKidLadder(id, ladder) {
   for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
   kid.metThisYear = met
   kid.missionsTotal = kid.priorMissions + met
+  saveKidProgress(kid)
   invalidate()
   return getKidProgress(id)
 }

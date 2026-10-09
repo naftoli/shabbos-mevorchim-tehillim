@@ -27,7 +27,20 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
   const pct = (n) => (n / TOTAL) * 100
   const done = r >= TOTAL
   const climbingTo = t > r ? t : null
-  const marks = ladder ? gradeMarks(ladder) : []
+  // Place each grade-finish mark, stacking labels onto higher rows when they sit
+  // too close together (high ladders finish the early grades near kapitel 0), so
+  // nothing overlaps.
+  const MIN_GAP = 6 // percent of the bar
+  const ROW = 1.45 // rem per stacked row
+  const BASE_TOP = 1.65 // rem below the track
+  let _prev = -Infinity
+  let _level = 0
+  const placed = (ladder ? gradeMarks(ladder) : []).map((m) => {
+    const pos = pct(m.v)
+    _level = pos - _prev < MIN_GAP ? (_level + 1) % 3 : 0
+    _prev = pos
+    return { ...m, pos, top: BASE_TOP + _level * ROW }
+  })
 
   return (
     <div className="rounded-2xl bg-paper/70 p-5 sm:p-6">
@@ -54,7 +67,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
       </div>
 
       {/* The climb track */}
-      <div className="relative mt-7 mb-16 h-6">
+      <div className="relative mt-7 mb-20 h-6">
         <div className="absolute inset-0 overflow-hidden rounded-full bg-track">
           {/* ghost fill to this month's target */}
           {climbingTo ? (
@@ -70,23 +83,22 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           />
         </div>
 
-        {/* A tick where this ladder finishes each grade: divider + Aleph-Beis kapitel
-            + grade. Labels alternate high/low so close grades don't collide. */}
-        {marks.map((m, i) => {
+        {/* A tick where this ladder finishes each grade: divider + Aleph-Beis
+            kapitel + grade, stacked onto rows so nothing overlaps. */}
+        {placed.map((m) => {
           const finish = m.v >= TOTAL
-          const left = `${pct(m.v)}%`
-          const low = i % 2 === 1
+          const left = `${m.pos}%`
           return (
             <span key={m.grade}>
-              <span className="absolute top-0 w-px bg-white/70" style={{ left, height: low ? '2.5rem' : '1.5rem' }} aria-hidden="true" />
+              <span className="absolute top-0 w-px bg-white/70" style={{ left, height: `${m.top - 0.15}rem` }} aria-hidden="true" />
               <span
                 className="absolute flex -translate-x-1/2 flex-col items-center leading-tight"
-                style={{ left, top: low ? '2.6rem' : '1.75rem' }}
+                style={{ left, top: `${m.top}rem` }}
               >
-                <span className={`font-heb text-[13px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>
+                <span className={`font-heb text-[12px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>
                   {finish ? '👑' : m.heb}
                 </span>
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
+                <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
               </span>
             </span>
           )
