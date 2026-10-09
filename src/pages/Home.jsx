@@ -65,12 +65,18 @@ function SchoolsRace({ schools }) {
   const seg = (active) =>
     `rounded-full px-3.5 py-2 text-green transition sm:px-5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
   const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined)
+  const caption = {
+    finished: 'Ranked by the share of each school’s soldiers who finished their full quota.',
+    kapitlach: 'Ranked by how much of each school’s kapitlach goal was said.',
+    time: 'Ranked by how much of each school’s minutes goal was reached.',
+  }[sort]
   return (
     <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-7">
         <div className="min-w-0">
           <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px]">The Race</Eyebrow>
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
+          <p className="mt-1.5 max-w-md text-[13px] font-semibold text-muted">{caption}</p>
         </div>
         <div className="inline-flex rounded-full bg-[#6d93d8] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px]">
           <button type="button" onClick={() => setSort('finished')} className={seg(sort === 'finished')} style={segStyle(sort === 'finished')}>% Finished</button>
