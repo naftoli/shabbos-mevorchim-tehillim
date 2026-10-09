@@ -224,7 +224,7 @@ export default function Home() {
           </div>
 
           <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
-            <GoalBar percent={stats.minutesPct} icon="⏰" label="of minutes quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
+            <GoalBar percent={stats.minutesPct} iconSrc={asset('design/icon-clock.png')} label="of minutes quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
             <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{stats.minutesPct}%</span>
           </div>
 
