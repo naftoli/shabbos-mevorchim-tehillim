@@ -22,7 +22,7 @@ export default function Ladders() {
       </PageHero>
 
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 4} onPick={pick} />
+        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 8} onPick={pick} />
         <p className="mt-6 text-center text-sm text-muted">You can change your ladder later from your dashboard.</p>
       </div>
     </>

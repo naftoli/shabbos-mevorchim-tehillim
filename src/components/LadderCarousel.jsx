@@ -82,7 +82,7 @@ function LadderCard({ ladder, active, onPick, onBreakdown, preview, height }) {
   )
 }
 
-export default function LadderCarousel({ grade, defaultLadder = 4, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255 }) {
+export default function LadderCarousel({ grade, defaultLadder = 8, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255 }) {
   const ladders = useMemo(() => availableLadders(grade), [grade])
   const preferred = ladders.indexOf(defaultLadder)
   const [active, setActive] = useState(preferred >= 0 ? preferred : Math.floor(ladders.length / 2))

@@ -7,7 +7,7 @@ import FirstLadderModal from '@/components/FirstLadderModal.jsx'
 import GoalBar from '@/components/GoalBar.jsx'
 import ClimbMeter from '@/components/ClimbMeter.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
-import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
@@ -40,8 +40,9 @@ export default function KidDashboard() {
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) return <Navigate to="/login" replace />
 
-  // First login, no ladder yet: graphic welcome + a prompt to choose.
-  if (!kid.ladder) {
+  // First login, or no valid ladder yet: graphic welcome + a prompt to choose.
+  // (An out-of-range ladder — e.g. a stale value — counts as not chosen.)
+  if (!kid.ladder || !LADDERS.includes(kid.ladder)) {
     return (
       <>
         <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={`Welcome, ${kid.name.split(' ')[0]}!`}>

@@ -31,11 +31,13 @@ export default function ClimbMeter({ reached = 0, target = 0, finishGradeLabel }
           <p className="mt-1 font-display text-2xl font-black leading-none text-navy">
             {done ? (
               <>You finished all 150! 👑</>
-            ) : (
+            ) : r > 0 ? (
               <>
-                Kapitel <span className="font-heb text-green">{r > 0 ? toHebrewNumeral(r) : '—'}</span>
+                Kapitel <span className="font-heb text-green">{toHebrewNumeral(r)}</span>
                 <span className="text-muted"> of 150</span>
               </>
+            ) : (
+              <>Ready to start climbing!</>
             )}
           </p>
         </div>

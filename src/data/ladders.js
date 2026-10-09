@@ -24,18 +24,23 @@ export const GRADES = ["pre1a","1","2","3","4","5","6","7","8","9","10","11","12
 
 export const GRADE_LABEL = {"1":"1st","2":"2nd","3":"3rd","4":"4th","5":"5th","6":"6th","7":"7th","8":"8th","9":"9th","10":"10th","11":"11th","12":"12th","pre1a":"Pre-1A"}
 
-export const LADDERS = [1, 2, 3, 4, 5, 6, 7, 8]
+// A ladder IS numbered by the grade a child finishes the whole Tehillim in:
+// Ladder 5 finishes in 5th grade … Ladder 12 finishes in 12th grade.
+export const LADDERS = [5, 6, 7, 8, 9, 10, 11, 12]
 
-// The grade in which a ladder reaches the full 150 kapitlach.
-export const finishGrade = (ladder) => ladder + 4
+// The grade in which a ladder reaches the full 150 kapitlach — the ladder number.
+export const finishGrade = (ladder) => ladder
 
-// Ladders available to a grade (numeric grade; Pre-1A counts as 0).
+// Ladders available to a grade (numeric grade; Pre-1A counts as 0). A child can
+// only pick a ladder that finishes in their current grade or later.
 export function availableLadders(grade) {
   const g = grade === 'pre1a' ? 0 : Number(grade)
-  return LADDERS.filter((L) => L >= Math.max(1, g - 4))
+  return LADDERS.filter((L) => L >= Math.max(5, g))
 }
 
-export const QUOTA = {
+// GENERATED, indexed by pace 1..8. Re-keyed below to the public ladder number
+// (finish grade = pace + 4), so do not read QUOTA_RAW directly — use QUOTA.
+const QUOTA_RAW = {
   'pre1a': {
     Tishrei: { 1:{k:"א-לא",v:31,m:80}, 2:{k:"א-יז",v:17,m:53}, 3:{k:"א-ז",v:7,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
     Cheshvan: { 1:{k:"א-לג",v:33,m:80}, 2:{k:"א-יח",v:18,m:55}, 3:{k:"א-יא",v:11,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
@@ -220,7 +225,21 @@ export const QUOTA = {
   },
 }
 
-// Look up one cell. grade: 'pre1a' | '1'..'12'; month: a MONTHS entry; ladder 1-8.
+// Re-key every month's cells from pace (1..8) to the public ladder number
+// (5..12 = finish grade), so the whole app indexes quotas by finish grade.
+export const QUOTA = Object.fromEntries(
+  Object.entries(QUOTA_RAW).map(([grade, months]) => [
+    grade,
+    Object.fromEntries(
+      Object.entries(months).map(([mo, cells]) => [
+        mo,
+        Object.fromEntries(Object.entries(cells).map(([pace, cell]) => [Number(pace) + 4, cell])),
+      ]),
+    ),
+  ]),
+)
+
+// Look up one cell. grade: 'pre1a' | '1'..'12'; month: a MONTHS entry; ladder 5-12.
 export function quotaFor(grade, month, ladder) {
   return QUOTA[grade]?.[month]?.[ladder] ?? null
 }

@@ -48,7 +48,7 @@ export default function FirstLadderModal({ open, name, grade, onPick, onClose })
         {/* A preview of the ladder situation — tapping any card (or the button)
             opens the full ladder selection page. */}
         <div className="px-3 py-6 sm:px-6">
-          <LadderCarousel grade={grade} defaultLadder={4} onPick={onPick} preview height={380} cardWidth={272} spacing={232} />
+          <LadderCarousel grade={grade} defaultLadder={8} onPick={onPick} preview height={380} cardWidth={272} spacing={232} />
           <div className="mt-5 flex flex-col items-center gap-3">
             <button className="btn btn-gold !px-8 !py-3.5 !text-[20px]" onClick={onPick}>Pick my ladder</button>
             <button className="text-sm font-semibold text-muted hover:text-navy" onClick={onClose}>Maybe later</button>
