@@ -46,14 +46,20 @@ function Stat({ value, label, icon }) {
 }
 
 function SchoolsRace({ schools }) {
-  const [sort, setSort] = useState('percent')
+  const [sort, setSort] = useState('finished')
   const [visible, setVisible] = useState(10)
-  // Ties break predictably: for "% finished" → % of quota, then total kapitlach,
-  // then name; for "kapitlach" → % finished, then name.
-  const ranked = [...schools].sort((a, b) =>
-    sort === 'percent'
-      ? b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name)
-      : b.saidMonth - a.saidMonth || b.pctMet - a.pctMet || a.name.localeCompare(b.name),
+  // Three percentage metrics: % of kids who finished, % of the kapitlach goal
+  // said, and % of the minutes goal reached. Ties fall through the other metrics
+  // then total kapitlach then name, so the order is always stable.
+  const metric = (s) => (sort === 'finished' ? s.pctMet : sort === 'kapitlach' ? s.pct : s.minutesPct)
+  const ranked = [...schools].sort(
+    (a, b) =>
+      metric(b) - metric(a) ||
+      b.pctMet - a.pctMet ||
+      b.pct - a.pct ||
+      b.minutesPct - a.minutesPct ||
+      b.saidMonth - a.saidMonth ||
+      a.name.localeCompare(b.name),
   )
   const shown = ranked.slice(0, visible)
   const seg = (active) =>
@@ -67,8 +73,9 @@ function SchoolsRace({ schools }) {
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
         </div>
         <div className="inline-flex rounded-full bg-[#6d93d8] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px]">
-          <button type="button" onClick={() => setSort('percent')} className={seg(sort === 'percent')} style={segStyle(sort === 'percent')}>% Finished</button>
-          <button type="button" onClick={() => setSort('total')} className={seg(sort === 'total')} style={segStyle(sort === 'total')}>Kapitlach</button>
+          <button type="button" onClick={() => setSort('finished')} className={seg(sort === 'finished')} style={segStyle(sort === 'finished')}>% Finished</button>
+          <button type="button" onClick={() => setSort('kapitlach')} className={seg(sort === 'kapitlach')} style={segStyle(sort === 'kapitlach')}>% Kapitlach</button>
+          <button type="button" onClick={() => setSort('time')} className={seg(sort === 'time')} style={segStyle(sort === 'time')}>% Time</button>
         </div>
       </div>
 
@@ -89,11 +96,11 @@ function SchoolsRace({ schools }) {
             <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
               <span
                 className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
-                style={{ width: `${Math.min(100, Math.max(sort === 'percent' ? s.pctMet : s.pct, 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
+                style={{ width: `${Math.min(100, Math.max(metric(s), 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
               />
             </span>
             <span className="text-right font-display text-[16px] font-bold tabular-nums text-green sm:w-16 sm:flex-none sm:text-[18px] lg:w-24 lg:text-[20px]">
-              {sort === 'percent' ? `${s.pctMet}%` : fmt(s.saidMonth)}
+              {metric(s)}%
             </span>
           </Link>
         ))}

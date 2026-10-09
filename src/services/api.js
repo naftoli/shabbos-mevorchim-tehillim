@@ -52,6 +52,7 @@ function schoolAgg(school) {
   }
   const pct = quotaMonth > 0 ? Math.min(Math.round((saidMonth / quotaMonth) * 100), 100) : 0
   const pctMet = kids > 0 ? Math.round((metMonth / kids) * 100) : 0
+  const minutesPct = minutesQuotaMonth > 0 ? Math.min(Math.round((minutesSaidMonth / minutesQuotaMonth) * 100), 100) : 0
   return {
     id: school.id,
     name: school.name,
@@ -66,6 +67,7 @@ function schoolAgg(school) {
     metMonth,
     pct,
     pctMet,
+    minutesPct,
   }
 }
 
