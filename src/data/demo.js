@@ -63,6 +63,7 @@ function buildRoster() {
         const ladder = pick(ladders)
         const diligence = Math.min(0.99, classDiligence + (rand() - 0.5) * 0.25)
         const reports = {}
+        const minutesByMonth = {}
         let minutes = 0
         let metThisYear = 0
         for (const mo of ELAPSED_MONTHS) {
@@ -71,13 +72,16 @@ function buildRoster() {
           const r = rand()
           if (r < diligence) {
             reports[mo] = q.v
+            minutesByMonth[mo] = q.m
             minutes += q.m
             metThisYear += 1
           } else if (r < diligence + 0.12) {
             reports[mo] = Math.round(q.v * (0.4 + rand() * 0.4) * 2) / 2
-            minutes += Math.round(q.m * 0.6)
+            minutesByMonth[mo] = Math.round(q.m * 0.6)
+            minutes += minutesByMonth[mo]
           } else {
             reports[mo] = 0
+            minutesByMonth[mo] = 0
           }
         }
         // Prior-year missions so medal boards are interesting; older kids have more.
@@ -91,6 +95,7 @@ function buildRoster() {
           grade,
           ladder,
           reports,
+          minutesByMonth,
           minutes,
           priorMissions,
           metThisYear,
@@ -112,6 +117,7 @@ function buildRoster() {
     fresh.isDemoNew = true // reset to ladderless on every sign-in (see verifyKid)
     fresh.ladder = null
     fresh.reports = {}
+    fresh.minutesByMonth = {}
     fresh.minutes = 0
     fresh.priorMissions = 0
     fresh.metThisYear = 0

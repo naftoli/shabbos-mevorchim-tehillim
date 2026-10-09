@@ -22,6 +22,7 @@ export { CURRENT_MONTH, CURRENT_MONTH_INDEX, ELAPSED_MONTHS, CAMPAIGN_YEAR }
 
 const kidMonthQuota = (kid, month) => quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
 const kidMonthSaid = (kid, month) => kid.reports[month] ?? 0
+const kidMonthMinutes = (kid, month) => kid.minutesByMonth?.[month] ?? 0
 const metQuota = (kid, month) => {
   const q = kidMonthQuota(kid, month)
   return q > 0 && kidMonthSaid(kid, month) >= q
@@ -192,7 +193,8 @@ export function getKidProgress(id) {
       quota: q?.v ?? 0,
       quotaLabel: q?.k ?? '—',
       said: kidMonthSaid(kid, mo),
-      minutes: q?.m ?? 0,
+      minutes: q?.m ?? 0, // the quota's target minutes
+      saidMinutes: kidMonthMinutes(kid, mo), // minutes the soldier reported
       met: metQuota(kid, mo),
       isCurrent: mo === CURRENT_MONTH,
     }
@@ -218,7 +220,10 @@ export function recordMonth(id, month, kapitlach, minutes) {
   const nowMet = metQuota(kid, month)
   if (nowMet && !prevMet) { kid.metThisYear += 1; kid.missionsTotal += 1 }
   if (!nowMet && prevMet) { kid.metThisYear -= 1; kid.missionsTotal -= 1 }
-  kid.minutes = (kid.minutes || 0) + (Number(minutes) || 0)
+  // Per-month reported minutes (replace, not accumulate); keep the total in sync.
+  kid.minutesByMonth = kid.minutesByMonth || {}
+  kid.minutesByMonth[month] = Number(minutes) || 0
+  kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
   invalidate()
   return getKidProgress(id)
 }

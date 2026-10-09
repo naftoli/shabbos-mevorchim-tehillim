@@ -7,6 +7,7 @@ import FirstLadderModal from '@/components/FirstLadderModal.jsx'
 import GoalBar from '@/components/GoalBar.jsx'
 import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
+import MedalBoard from '@/components/MedalBoard.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
@@ -139,7 +140,8 @@ export default function KidDashboard() {
               <div className="animate-pop relative text-6xl">👑</div>
               <h3 className="relative mt-2 font-display text-3xl font-black text-white">Mission Complete!</h3>
               <p className="relative mt-1 text-white/85">
-                You said <span className="font-heb text-gold">{cur.quotaLabel}</span> this{' '}
+                You said <span className="font-heb text-gold">{cur.quotaLabel}</span>
+                {cur.saidMinutes > 0 ? <> in <span className="text-gold">{fmt(cur.saidMinutes)} minutes</span></> : null} this{' '}
                 <span className="font-heb text-gold">{MONTH_HEB[cur.month]}</span> — a full mission! 🎉
               </p>
               <div className="relative mt-4 flex items-center justify-center gap-3">
@@ -179,7 +181,8 @@ export default function KidDashboard() {
                   /* Already reported part — not the full mission */
                   <>
                     <p className="text-center text-sm font-semibold text-navy">
-                      You reported saying {fmt(cur.said)} of {cur.quota} kapitlach this{' '}
+                      You reported saying {fmt(cur.said)} of {cur.quota} kapitlach
+                      {cur.saidMinutes > 0 ? <> in {fmt(cur.saidMinutes)} minutes</> : null} this{' '}
                       <span className="font-heb">{MONTH_HEB[cur.month]}</span>.
                     </p>
                     <GoalBar percent={Math.min(100, (cur.said / Math.max(1, cur.quota)) * 100)} label="of your mission" className="mx-auto mt-4 max-w-sm" />
@@ -298,6 +301,9 @@ export default function KidDashboard() {
             ))}
           </div>
         </Card>
+
+        {/* Medal board — cumulative missions earn medals */}
+        <MedalBoard progress={progress} />
 
         {/* Ladder — summary + the full month-by-month breakdown of this ladder */}
         <Card className="p-5 sm:p-6">

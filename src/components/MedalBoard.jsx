@@ -18,7 +18,7 @@ function Medal({ medal, earned, current }) {
 }
 
 export default function MedalBoard({ progress }) {
-  const { medal, months, missionsTotal } = progress
+  const { medal, missionsTotal } = progress
   const earnedCount = medal.earnedCount
   return (
     <Card className="p-5 sm:p-6">
@@ -52,26 +52,6 @@ export default function MedalBoard({ progress }) {
         {MEDALS.map((m) => (
           <Medal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
         ))}
-      </div>
-
-      {/* Month strip — every month this year; missed months crossed out. */}
-      <div className="mt-6">
-        <p className="sh mb-2">This Year</p>
-        <div className="flex flex-wrap gap-2">
-          {months.map((m) => (
-            <span
-              key={m.month}
-              className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${
-                m.met
-                  ? 'bg-green/10 text-green'
-                  : 'bg-track text-muted line-through'
-              } ${m.isCurrent ? 'ring-2 ring-gold' : ''}`}
-              title={m.met ? 'Mission complete' : 'Missed'}
-            >
-              {m.month}
-            </span>
-          ))}
-        </div>
       </div>
     </Card>
   )
