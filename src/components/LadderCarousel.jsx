@@ -48,7 +48,7 @@ function LadderCard({ ladder, active, onPick, onBreakdown, preview, height }) {
           <div className="font-cond text-[40px] uppercase leading-none tracking-[0.03em] text-white">Ladder {ladder}</div>
         </div>
         <div className="relative mt-1.5 inline-block rounded-full bg-white/15 px-3 py-1 text-[13px] font-semibold text-gold">
-          Finish by {GRADE_LABEL[String(finishGrade(ladder))]} grade
+          Complete my goal by {GRADE_LABEL[String(finishGrade(ladder))]} grade
         </div>
       </div>
       <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${accent}, var(--color-gold))` }} />
