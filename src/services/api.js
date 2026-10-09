@@ -125,7 +125,7 @@ export function getPerfectPlatoons() {
   for (const school of ROSTER) {
     for (const cls of school.classes) {
       if (cls.kids.length > 0 && cls.kids.every((k) => metQuota(k, CURRENT_MONTH))) {
-        out.push({ schoolId: school.id, school: school.name, className: cls.name, grade: cls.grade, size: cls.kids.length })
+        out.push({ schoolId: school.id, school: school.name, className: cls.name, teacher: cls.teacher, grade: cls.grade, size: cls.kids.length })
       }
     }
   }

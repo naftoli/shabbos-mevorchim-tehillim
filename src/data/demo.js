@@ -52,6 +52,11 @@ const FIRST = [
 ]
 const LAST = ['K.', 'B.', 'S.', 'L.', 'R.', 'G.', 'F.', 'T.', 'C.', 'M.', 'W.', 'D.']
 const GRADES_IN_PLAY = ['1', '2', '3', '4', '5', '6', '7', '8']
+const TEACHERS = [
+  'Rabbi Cohen', 'Rabbi Levin', 'Rabbi Gordon', 'Rabbi Katz', 'Rabbi Shapiro', 'Rabbi Weiss',
+  'Rabbi Rubin', 'Rabbi Lerner', 'Rabbi Posner', 'Rabbi Feller', 'Rabbi Hecht', 'Rabbi Gansburg',
+  'Rabbi Lipskar', 'Rabbi Denburg', 'Rabbi Marlow', 'Rabbi Teleshevsky',
+]
 
 const pad2 = (n) => String(n).padStart(2, '0')
 
@@ -62,9 +67,11 @@ function buildRoster() {
 
   const schools = SCHOOLS.map((s, si) => {
     const classCount = 4 + Math.floor(rand() * 3) // 4–6 classes
-    const classes = Array.from({ length: classCount }, (_, ci) => {
-      const grade = GRADES_IN_PLAY[(si + ci) % GRADES_IN_PLAY.length]
+    const rawClasses = Array.from({ length: classCount }, (_, ci) => {
+      // Pair classes up so most grades have a couple of sections (A/B).
+      const grade = GRADES_IN_PLAY[(si + Math.floor(ci / 2)) % GRADES_IN_PLAY.length]
       const size = 10 + Math.floor(rand() * 11) // 10–20 kids
+      const teacher = pick(TEACHERS)
       const classDiligence = 0.55 + rand() * 0.42
       const ladders = availableLadders(grade)
       const gradeNum = grade === 'pre1a' ? 0 : Number(grade)
@@ -114,7 +121,17 @@ function buildRoster() {
         }
       })
 
-      return { id: `${s.id}-c${ci + 1}`, name: `${GRADE_LABEL[grade]} Grade`, grade, kids }
+      return { id: `${s.id}-c${ci + 1}`, grade, teacher, kids }
+    })
+
+    // Name classes; when a grade has several classes, add section letters (A, B…).
+    const byGrade = {}
+    for (const c of rawClasses) (byGrade[c.grade] ||= []).push(c)
+    const classes = rawClasses.map((c) => {
+      const peers = byGrade[c.grade]
+      const base = `${GRADE_LABEL[c.grade]} Grade`
+      const name = peers.length > 1 ? `${base} ${String.fromCharCode(65 + peers.indexOf(c))}` : base
+      return { ...c, name }
     })
 
     return { ...s, classes }

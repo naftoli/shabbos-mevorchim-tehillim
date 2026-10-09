@@ -31,7 +31,7 @@ function Eyebrow({ icon, iconClass = 'h-5', className = '', children }) {
   )
 }
 
-function Stat({ value, label, icon }) {
+function Stat({ value, label, icon, hint }) {
   return (
     <div className="flex items-center gap-3 sm:gap-4">
       <span className="grid h-[60px] w-[72px] flex-none place-items-center lg:h-[76px] lg:w-[92px]">
@@ -40,6 +40,7 @@ function Stat({ value, label, icon }) {
       <div className="min-w-0">
         <div className="font-display text-[28px] font-black leading-none tabular-nums text-navy lg:text-[34px]">{value}</div>
         <div className="mt-1 font-display text-[15px] font-semibold uppercase leading-tight text-navy sm:text-[16px] lg:text-[18px]">{label}</div>
+        {hint ? <div className="mt-1 text-[11.5px] font-medium leading-snug text-muted">{hint}</div> : null}
       </div>
     </div>
   )
@@ -62,26 +63,41 @@ function SchoolsRace({ schools }) {
       a.name.localeCompare(b.name),
   )
   const shown = ranked.slice(0, visible)
-  const seg = (active) =>
-    `rounded-full px-3.5 py-2 text-green transition sm:px-5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
   const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined)
-  const caption = {
-    finished: 'Ranked by the share of each school’s soldiers who finished their full quota.',
-    kapitlach: 'Ranked by how much of each school’s kapitlach goal was said.',
-    time: 'Ranked by how much of each school’s minutes goal was reached.',
-  }[sort]
+  const SEGMENTS = [
+    { key: 'finished', label: '% Finished', sub: 'soldiers done', icon: asset('design/icon-soldier-hat.png') },
+    { key: 'kapitlach', label: '% Kapitlach', sub: 'of goal said', emoji: '📖' },
+    { key: 'time', label: '% Time', sub: 'of minutes', icon: asset('design/icon-clock.png') },
+  ]
   return (
     <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-7">
         <div className="min-w-0">
           <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px]">The Race</Eyebrow>
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
-          <p className="mt-1.5 max-w-md text-[13px] font-semibold text-muted">{caption}</p>
         </div>
-        <div className="inline-flex rounded-full bg-[#6d93d8] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px]">
-          <button type="button" onClick={() => setSort('finished')} className={seg(sort === 'finished')} style={segStyle(sort === 'finished')}>% Finished</button>
-          <button type="button" onClick={() => setSort('kapitlach')} className={seg(sort === 'kapitlach')} style={segStyle(sort === 'kapitlach')}>% Kapitlach</button>
-          <button type="button" onClick={() => setSort('time')} className={seg(sort === 'time')} style={segStyle(sort === 'time')}>% Time</button>
+        <div className="inline-flex rounded-[24px] bg-[#6d93d8] p-1 font-cond uppercase leading-none tracking-[0.04em]">
+          {SEGMENTS.map((sg) => {
+            const active = sort === sg.key
+            return (
+              <button
+                key={sg.key}
+                type="button"
+                onClick={() => setSort(sg.key)}
+                aria-pressed={active}
+                className={`flex w-[92px] flex-col items-center gap-1 rounded-[20px] px-2 py-2 text-green transition sm:w-[106px] ${active ? 'shadow-sm' : 'hover:bg-white/15'}`}
+                style={segStyle(active)}
+              >
+                {sg.icon ? (
+                  <img src={sg.icon} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto sm:h-7" />
+                ) : (
+                  <span className="text-[22px] leading-none sm:text-[26px]">{sg.emoji}</span>
+                )}
+                <span className="text-[13px] leading-none sm:text-[15px]">{sg.label}</span>
+                <span className="text-[9.5px] font-semibold normal-case leading-tight tracking-normal text-navy/70">{sg.sub}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -156,6 +172,7 @@ export default function Home() {
   const totals = useMemo(() => getRunningTotals(), [])
   const schools = useMemo(() => getSchools(), [])
   const platoons = useMemo(() => getPerfectPlatoons(), [])
+  const [platoonLimit, setPlatoonLimit] = useState(12)
   const [query, setQuery] = useState('')
 
   const q = query.trim().toLowerCase()
@@ -244,7 +261,7 @@ export default function Home() {
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
             <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.soldiers)} label="Soldiers" />
             <Stat icon={asset('design/icon-school.png')} value={fmt(stats.schools)} label="Schools" />
-            <Stat icon={asset('design/flag.png')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" />
+            <Stat icon={asset('design/flag.png')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
           </div>
         </Card>
       </section>
@@ -262,19 +279,32 @@ export default function Home() {
       {/* Perfect Platoons */}
       {platoons.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
-          <h2 className="mb-4 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
+          <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
             Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
+            <span className="align-middle text-[18px] not-italic text-muted"> · {fmt(platoons.length)}</span>
           </h2>
+          <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
+            A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota this month.
+          </p>
           <div className="flex flex-wrap gap-2">
-            {platoons.map((p) => (
+            {platoons.slice(0, platoonLimit).map((p) => (
               <Link key={`${p.schoolId}-${p.className}`} to={`/s/${p.schoolId}`}>
                 <Card className="px-4 py-3 transition hover:shadow-hover">
                   <span className="font-display font-bold text-navy">{p.className}</span>
+                  {p.teacher ? <span className="text-sm font-semibold text-green"> · {p.teacher}</span> : null}
                   <span className="text-sm text-muted"> · {p.school} · {p.size} soldiers</span>
                 </Card>
               </Link>
             ))}
           </div>
+          {platoons.length > platoonLimit ? (
+            <button
+              onClick={() => setPlatoonLimit(platoons.length)}
+              className="btn btn-o mt-4"
+            >
+              Show all {fmt(platoons.length)} perfect platoons
+            </button>
+          ) : null}
         </section>
       ) : null}
 
