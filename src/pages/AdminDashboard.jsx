@@ -4,24 +4,68 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
-import { GRADE_LABEL, LADDERS, finishGrade } from '@/data/ladders.js'
+import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import {
   getSchools,
   getSchool,
   getBaseReport,
   notCompleted,
+  setSchoolDedication,
+  removeSchoolDedication,
   CURRENT_MONTH,
 } from '@/services/api.js'
+
+// School admins add / edit / remove their school's monthly dedication.
+function DedicationEditor({ school, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(school.dedication?.text || '')
+  const open = () => { setText(school.dedication?.text || ''); setEditing(true) }
+  const save = () => { setSchoolDedication(school.id, text); setEditing(false); onSaved() }
+  const remove = () => { removeSchoolDedication(school.id); setEditing(false); setText(''); onSaved() }
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
+        {!editing ? (
+          <div className="flex gap-2">
+            <Button variant="outline" className="!px-3 !py-1 !text-sm" onClick={open}>{school.dedication ? 'Edit' : 'Add dedication'}</Button>
+            {school.dedication ? <Button variant="ghost" className="!px-3 !py-1 !text-sm" onClick={remove}>Remove</Button> : null}
+          </div>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-3">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder="This month’s Tehillim is dedicated…"
+            className="w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-navy outline-none transition focus:border-green"
+          />
+          <div className="mt-2 flex gap-2">
+            <Button variant="navy" onClick={save}>Save</Button>
+            <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : school.dedication ? (
+        <p className="mt-2 font-display text-lg italic text-navy">{school.dedication.text}</p>
+      ) : (
+        <p className="mt-2 text-sm text-muted">No dedication this month yet.</p>
+      )}
+    </Card>
+  )
+}
 
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
   const allSchools = useMemo(() => (isSuper ? getSchools() : []), [isSuper])
   const [schoolId, setSchoolId] = useState(admin?.schoolId || null)
+  const [tick, setTick] = useState(0) // bump to re-read after editing the dedication
 
   if (!admin) return <Navigate to="/admin/login" replace />
 
   const activeId = isSuper ? schoolId : admin.schoolId
-  const school = activeId ? getSchool(activeId) : null
+  const school = useMemo(() => (activeId ? getSchool(activeId) : null), [activeId, tick])
   const base = activeId ? getBaseReport(activeId) : null
   const missing = activeId ? notCompleted(activeId) : []
 
@@ -81,6 +125,9 @@ export default function AdminDashboard() {
               </div>
               <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
             </Card>
+
+            {/* Dedication — add / edit / remove */}
+            <DedicationEditor school={school} onSaved={() => setTick((t) => t + 1)} />
 
             {/* Set a class/school onto a ladder */}
             <Card className="p-5 sm:p-6">

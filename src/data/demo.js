@@ -216,9 +216,24 @@ export const ARMY_DEDICATION = {
   month: CURRENT_MONTH,
   text: 'The Worldwide Tehillim this month is dedicated לזכות the Rebbe’s shluchim around the world.',
 }
+// School admins can add / edit / remove their school's dedication; the choice
+// is kept in localStorage (demo only). An explicit null means "removed".
+const DEDICATION_KEY = 'wwtc.demo.dedications'
+function loadDedications() {
+  try { return JSON.parse(localStorage.getItem(DEDICATION_KEY) || '{}') } catch { return {} }
+}
+export function setSchoolDedicationStore(schoolId, dedication) {
+  try {
+    const all = loadDedications()
+    all[schoolId] = dedication // { month, text } | null
+    localStorage.setItem(DEDICATION_KEY, JSON.stringify(all))
+  } catch { /* private mode / unavailable */ }
+}
 export function schoolDedication(schoolId) {
   const s = SCHOOLS.find((x) => x.id === schoolId)
   if (!s) return null
+  const store = loadDedications()
+  if (Object.prototype.hasOwnProperty.call(store, schoolId)) return store[schoolId]
   return {
     month: CURRENT_MONTH,
     text: `${s.name}’s Tehillim this month is dedicated לרפואה שלימה for all cholei Yisroel.`,

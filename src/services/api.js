@@ -16,6 +16,7 @@ import {
   DEMO_ADMIN_PASSWORD,
   ARMY_DEDICATION,
   schoolDedication,
+  setSchoolDedicationStore,
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
@@ -458,6 +459,19 @@ export function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX) {
 }
 
 export function getArmyDedication() { return ARMY_DEDICATION }
+
+// School admins: add / edit / remove this school's monthly dedication.
+export function setSchoolDedication(schoolId, text) {
+  const t = String(text || '').trim()
+  setSchoolDedicationStore(schoolId, t ? { month: CURRENT_MONTH, text: t } : null)
+  invalidate()
+  return schoolDedication(schoolId)
+}
+export function removeSchoolDedication(schoolId) {
+  setSchoolDedicationStore(schoolId, null)
+  invalidate()
+  return null
+}
 
 // Who hasn't completed this month, per class — drives the teacher deadline email.
 export function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
