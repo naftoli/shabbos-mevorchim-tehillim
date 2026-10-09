@@ -324,21 +324,28 @@ export function getSchool(id) {
     let said = 0
     let quota = 0
     let met = 0
+    let minsSaid = 0
+    let minsQuota = 0
     for (const kid of cls.kids) {
       said += kidMonthSaid(kid, CURRENT_MONTH)
       quota += kidMonthQuota(kid, CURRENT_MONTH)
+      minsSaid += kidMonthMinutes(kid, CURRENT_MONTH)
+      minsQuota += quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)?.m ?? 0
       if (metQuota(kid, CURRENT_MONTH)) met += 1
     }
+    const size = cls.kids.length
     return {
       id: cls.id,
       name: cls.name,
       grade: cls.grade,
-      size: cls.kids.length,
+      size,
       said,
       quota,
       pct: quota > 0 ? Math.min(Math.round((said / quota) * 100), 100) : 0,
+      pctMet: size > 0 ? Math.round((met / size) * 100) : 0,
+      minutesPct: minsQuota > 0 ? Math.min(Math.round((minsSaid / minsQuota) * 100), 100) : 0,
       met,
-      perfect: cls.kids.length > 0 && met === cls.kids.length,
+      perfect: size > 0 && met === size,
     }
   })
   return { ...agg, classes, dedication: schoolDedication(id) }

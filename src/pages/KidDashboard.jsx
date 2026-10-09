@@ -183,31 +183,37 @@ export default function KidDashboard() {
               <button className="btn btn-gold !px-7" onClick={saveReport}>Save</button>
             </div>
 
-            {/* Two lines — kapitlach + time — like the worldwide card */}
-            {cur.said > 0 || cur.saidMinutes > 0 ? (
-              <div className="mx-auto mt-7 max-w-md space-y-6">
-                <div>
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span className="flex items-center gap-1.5 font-semibold text-navy"><span aria-hidden="true">📖</span> Kapitlach</span>
-                    <span className="tabular-nums text-navy">
-                      <b className="text-green">{fmt(cur.said)}</b> of {cur.quota}
-                      {cur.said > cur.quota ? <span className="font-semibold text-green"> · +{fmt(cur.said - cur.quota)} extra! 🎉</span> : null}
-                    </span>
+            {/* Progress — kapitlach + minutes, laid out like the worldwide card */}
+            <div className="mt-8 space-y-7">
+              <div>
+                <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
+                  <div>
+                    <p className="font-display text-[13px] font-semibold uppercase leading-none text-navy">Kapitlach Quota</p>
+                    <p className="mt-1.5 font-display text-2xl font-black tabular-nums text-navy">{fmt(cur.quota)}</p>
                   </div>
-                  <GoalBar percent={(cur.said / Math.max(1, cur.quota)) * 100} marker={false} className="mt-2" />
-                </div>
-                <div>
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span className="flex items-center gap-1.5 font-semibold text-navy"><img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto" /> Time</span>
-                    <span className="tabular-nums text-navy">
-                      <b className="text-green">{fmt(cur.saidMinutes)}</b> of {cur.minutes} min
-                      {cur.saidMinutes > cur.minutes ? <span className="font-semibold text-green"> · +{fmt(cur.saidMinutes - cur.minutes)} extra!</span> : null}
-                    </span>
+                  <div>
+                    <p className="font-display text-[13px] font-semibold uppercase leading-none text-navy">Kapitlach Said</p>
+                    <p className="mt-1.5 font-display text-2xl font-black tabular-nums text-green">{fmt(cur.said)}</p>
                   </div>
-                  <GoalBar percent={(cur.saidMinutes / Math.max(1, cur.minutes)) * 100} marker={false} className="mt-2" />
+                  <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.quota > 0 ? Math.round((cur.said / cur.quota) * 100) : 0}%</p>
                 </div>
+                <GoalBar percent={cur.quota > 0 ? (cur.said / cur.quota) * 100 : 0} icon="📖" className="mt-4 sm:mr-14" />
               </div>
-            ) : null}
+              <div>
+                <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
+                  <div>
+                    <p className="font-display text-[13px] font-semibold uppercase leading-none text-navy">Minutes Quota</p>
+                    <p className="mt-1.5 font-display text-2xl font-black tabular-nums text-navy">{fmt(cur.minutes)}</p>
+                  </div>
+                  <div>
+                    <p className="font-display text-[13px] font-semibold uppercase leading-none text-navy">Minutes Said</p>
+                    <p className="mt-1.5 font-display text-2xl font-black tabular-nums text-green">{fmt(cur.saidMinutes)}</p>
+                  </div>
+                  <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.minutes > 0 ? Math.round((cur.saidMinutes / cur.minutes) * 100) : 0}%</p>
+                </div>
+                <GoalBar percent={cur.minutes > 0 ? (cur.saidMinutes / cur.minutes) * 100 : 0} iconSrc={asset('design/icon-clock.png')} className="mt-4 sm:mr-14" />
+              </div>
+            </div>
           </div>
         </Card>
 
