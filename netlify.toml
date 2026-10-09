@@ -1,0 +1,12 @@
+# Standalone Netlify preview of the Worldwide Tehillim Club.
+# Built at root base ("/") so the .netlify.app URL is clean, separate from the
+# production deploy under /mivtzoim/tehillim/.
+[build]
+  command = "npm run build -- --base=/"
+  publish = "dist"
+
+# SPA fallback: every route serves the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

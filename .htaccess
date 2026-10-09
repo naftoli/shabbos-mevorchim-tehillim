@@ -1,0 +1,28 @@
+RewriteEngine On
+Options -MultiViews
+
+# Apache running PHP as FastCGI drops the Authorization header, so every
+# signed-in call arrived without its Bearer token, got a 401, and logged the
+# soldier or admin straight back out. Copy it into the environment, where
+# wwtcBearerToken() reads it (HTTP_ or REDIRECT_HTTP_AUTHORIZATION). Same fix
+# as Mashpia's /api/.htaccess.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+
+# Send every API URL to PHP. A no-op pass-through plus the SPA catch-all
+# below lets Apache/LiteSpeed still rewrite /api/* to dist/index.html.
+RewriteRule ^api/index\.php$ - [L]
+RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
+
+# Serve Vite's generated files from dist while keeping the public URL at
+# /mivtzoim/tehillim/.
+RewriteRule ^dist(/.*)?$ - [L]
+RewriteCond %{DOCUMENT_ROOT}/mivtzoim/tehillim/dist/$1 -f
+RewriteRule ^(.+)$ dist/$1 [L]
+
+# React Router handles application routes such as /admin and /s/example.
+RewriteCond %{REQUEST_URI} !/api(/|$)
+RewriteRule ^$ dist/index.html [L]
+RewriteCond %{REQUEST_URI} !/api(/|$)
+RewriteRule . dist/index.html [L]

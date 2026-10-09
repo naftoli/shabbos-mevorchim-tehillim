@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Worldwide Tehillim Club — theme tokens.
+   The visual system mirrors Mivtza Lulav; the palette is swapped to royal
+   blue + gold (Dovid HaMelech / crown) on a soft sky page. The SEMANTIC token
+   names from Lulav are kept (green / navy / sky / mint / gold / track / line /
+   muted …) so components port over verbatim and re-theme through these values.
+   Here "green" is the BRAND color — now a royal blue, not green.
+   ========================================================================= */
+@theme {
+  --color-ink: #0f2350;            /* body text = royal navy */
+  --color-navy: #0f2350;           /* headings / numbers / body on light */
+  --color-navy-dark: #0a1838;      /* darkest ground */
+  --color-blue: #2a5fb8;           /* links / focus rings */
+  --color-blue-bright: #3a72d6;
+  --color-cyan: #0e8aa6;           /* secondary accent */
+  --color-red: #c0392b;            /* danger / remove only */
+  --color-gold: #ffd54a;           /* highlight — crown gold on blue/dark */
+  --color-gold-dark: #8a6a00;      /* legible "gold" for labels on light */
+  --color-green: #17356f;          /* BRAND deep (royal blue) — Lulav's "green" slot */
+  --color-green-mid: #3f6fd0;      /* progress fills, active pills */
+  --color-green-light: #7aa0f0;    /* gradient light end */
+  --color-orange: #d97706;
+  --color-purple: #5b3fa8;
+
+  --color-sky: #cddafa;            /* header bar / chips */
+  --color-mint: #f4edda;           /* page background (warm parchment) */
+  --color-blue-accent: #2246a8;    /* rank numerals */
+
+  /* race bar palette — one per school, in rank order */
+  --color-race-green: #4f93e8;
+  --color-race-yellow: #fbcc4a;
+  --color-race-blue: #2a5fb8;
+  --color-race-red: #eb635d;
+  --color-race-teal: #0e8aa6;
+
+  --color-paper: #f4edda;          /* page background (warm parchment — no white) */
+  --color-card: #dce8ff;           /* cards = soft sky blue (Lulav-style, not white) */
+  --color-line: #bccfee;           /* hairlines */
+  --color-muted: #46557d;          /* muted text */
+  --color-track: #cadcf8;          /* progress tracks / chips / soft fills */
+
+  --font-display: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-cond: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+  --font-heb: "Frank Ruhl Libre", "Times New Roman", serif;
+
+  --shadow-card: 0 1px 2px rgba(15, 35, 80, 0.05), 0 10px 22px rgba(15, 35, 80, 0.08);
+  --shadow-hover: 0 14px 30px rgba(15, 35, 80, 0.16);
+}
+
+/* Shared gradients / glass (referenced by class rules and inline styles). */
+:root {
+  --grad-cta-green: linear-gradient(90deg, #17356f 0%, #3f6fd0 100%);   /* primary CTA */
+  --grad-cta-gold: linear-gradient(90deg, #ffd54a 0%, #e0a21a 100%);    /* gold CTA */
+  --grad-pill-green: linear-gradient(90deg, #8fb4f5 0%, #6f93e6 100%);  /* nav active pill / toggle */
+  --grad-progress: linear-gradient(90deg, #6f93e6 0%, #2a5fb8 100%);    /* bar fills */
+  --glass-green: rgba(15, 35, 80, 0.8);                                 /* hero glass panel */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { line-height: 1.15; }
+
+@layer base {
+  /* Bebas Neue ships one weight — don't let the browser fake a bold. */
+  .font-cond { font-synthesis-weight: none; }
+}
+
+/* sky page with a soft blue / gold glow */
+.bg-field {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(circle at 15% 18%, rgba(135, 180, 245, 0.35), transparent 45%),
+    radial-gradient(circle at 85% 8%, rgba(255, 213, 74, 0.12), transparent 42%);
+}
+
+/* subtle brand strip (used on login cards) */
+.band { height: 6px; display: block; background: linear-gradient(90deg, var(--color-gold), var(--color-green-mid) 55%, var(--color-green)); }
+.band > i { display: none; }
+
+/* small section label / card eyebrow — brand-blue Exo caps */
+.sh {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-green);
+}
+
+.kick { letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* buttons — fully rounded pills, condensed caps. In @layer components so
+   Tailwind utilities (hidden, w-full, whitespace-*) win. */
+@layer components {
+  .btn {
+    font-family: var(--font-cond);
+    font-size: 18px;
+    font-weight: 400;
+    font-synthesis-weight: none;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+    border: 0;
+    cursor: pointer;
+    padding: 13px 24px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: transform 0.12s, filter 0.12s, background 0.15s, color 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.04); }
+  .btn:focus-visible { outline: 3px solid rgba(42, 95, 184, 0.45); outline-offset: 2px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
+  /* primary CTA — royal blue, white text */
+  .btn-p, .btn-s, .btn-navy { background: var(--grad-cta-green); color: #fff; box-shadow: 0 2px 8px rgba(15, 35, 80, 0.16); }
+  /* gold CTA — gold gradient, navy text */
+  .btn-gold { background: var(--grad-cta-gold); color: var(--color-navy); box-shadow: 0 2px 8px rgba(15, 35, 80, 0.12); }
+  /* light blue pill — nav login item, toggles */
+  .btn-green { background: var(--grad-pill-green); color: var(--color-green); }
+  .btn-red { background: var(--color-red); color: #fff; }
+  /* outline — sky fill, brand text */
+  .btn-o { background: var(--color-sky); color: var(--color-green); box-shadow: inset 0 0 0 1.5px rgba(23, 53, 111, 0.28); }
+  .btn-o:hover { background: var(--color-track); }
+  /* for dark grounds (hero panel) */
+  .btn-o-white { background: rgba(255,255,255,.12); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.45); }
+  .btn-ghost { background: transparent; color: var(--color-green); }
+  .btn-ghost:hover { background: rgba(23, 53, 111, 0.08); filter: none; }
+}
+
+/* hero band — royal blue with a soft gold glow (class name kept for stability) */
+.hero-navy {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(900px 360px at 12% -20%, rgba(255, 213, 74, 0.16), transparent 60%),
+    linear-gradient(135deg, #0f2350 0%, #17356f 55%, #3f6fd0 100%);
+}
+
+/* glass panel: brand at ~80% over the hero, big radius, soft blur */
+.hero-glass {
+  color: #fff;
+  background: var(--glass-green);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: 40px;
+  box-shadow: 0 24px 60px -30px rgba(15, 35, 80, 0.45);
+}
+
+/* animations */
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.animate-rise { animation: rise 0.35s ease-out both; }
+@keyframes pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.animate-pop { animation: pop 0.3s ease-out both; }
+
+.font-heb { font-family: var(--font-heb); direction: rtl; unicode-bidi: isolate; }
+
+/* Hide the scrollbar but keep the area scrollable (used on cards that may
+   overflow on long ladders but shouldn't show a track). */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
