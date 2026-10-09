@@ -113,7 +113,10 @@ export function topSchoolsByKapitlach(n = 5) {
   return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth).slice(0, n)
 }
 export function topSchoolsByQuota(n = 5) {
-  return schools().slice().sort((a, b) => b.pctMet - a.pctMet || b.saidMonth - a.saidMonth).slice(0, n)
+  return schools()
+    .slice()
+    .sort((a, b) => b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name))
+    .slice(0, n)
 }
 export function getPerfectPlatoons() {
   const out = []

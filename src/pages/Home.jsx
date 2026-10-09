@@ -48,7 +48,13 @@ function Stat({ value, label, icon }) {
 function SchoolsRace({ schools }) {
   const [sort, setSort] = useState('percent')
   const [visible, setVisible] = useState(10)
-  const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.pctMet - a.pctMet : b.saidMonth - a.saidMonth))
+  // Ties break predictably: for "% finished" → % of quota, then total kapitlach,
+  // then name; for "kapitlach" → % finished, then name.
+  const ranked = [...schools].sort((a, b) =>
+    sort === 'percent'
+      ? b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name)
+      : b.saidMonth - a.saidMonth || b.pctMet - a.pctMet || a.name.localeCompare(b.name),
+  )
   const shown = ranked.slice(0, visible)
   const seg = (active) =>
     `rounded-full px-3.5 py-2 text-green transition sm:px-5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`

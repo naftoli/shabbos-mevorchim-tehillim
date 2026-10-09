@@ -65,7 +65,12 @@ function StatTile({ icon, value, label, sub }) {
 function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
   const report = useMemo(() => getArmyReport(monthIdx), [monthIdx])
   const [sort, setSort] = useState('accomplished')
-  const rows = [...report.rows].sort((a, b) => (sort === 'met' ? b.pctMet - a.pctMet : b.accomplished - a.accomplished))
+  const ratio = (r) => r.accomplished / (r.goal || 1) // % of quota, as a tiebreaker
+  const rows = [...report.rows].sort((a, b) =>
+    sort === 'met'
+      ? b.pctMet - a.pctMet || ratio(b) - ratio(a) || b.accomplished - a.accomplished || a.name.localeCompare(b.name)
+      : b.accomplished - a.accomplished || b.pctMet - a.pctMet || a.name.localeCompare(b.name),
+  )
 
   const totals = report.rows.reduce(
     (a, r) => ({
