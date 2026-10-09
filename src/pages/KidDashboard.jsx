@@ -1,16 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Button, Card, Avatar, Field, Input } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import FirstLadderModal from '@/components/FirstLadderModal.jsx'
-import GoalBar from '@/components/GoalBar.jsx'
 import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
+import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 
@@ -37,7 +37,11 @@ export default function KidDashboard() {
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
   const [welcomeOpen, setWelcomeOpen] = useState(true)
-  const [editing, setEditing] = useState(false)
+  // Keep the report inputs showing what's currently on record for this month.
+  useEffect(() => {
+    setSaid(cur && cur.said ? String(cur.said) : '')
+    setMins(cur && cur.saidMinutes ? String(cur.saidMinutes) : '')
+  }, [cur?.month, cur?.said, cur?.saidMinutes])
 
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) return <Navigate to="/login" replace />
@@ -71,16 +75,22 @@ export default function KidDashboard() {
     )
   }
 
-  function record(full) {
-    const kap = full ? cur.quota : Number(said) || 0
-    const m = full ? cur.minutes : Number(mins) || 0
+  function saveReport() {
     const wasMet = cur.met
-    const prog = recordMonth(kid.id, cur.month, kap, m)
-    setSaid('')
-    setMins('')
+    const prog = recordMonth(kid.id, cur.month, Number(said) || 0, Number(mins) || 0)
     setTick((t) => t + 1)
     if (prog?.current?.met && !wasMet) celebrate()
   }
+
+  // Shared ladder glyph (gold on navy).
+  const LadderGlyph = (props) => (
+    <svg viewBox="0 0 26 40" aria-hidden="true" {...props}>
+      <g stroke="#ffd54a" strokeWidth="3" strokeLinecap="round">
+        <line x1="7" y1="38" x2="7" y2="3" /><line x1="19" y1="38" x2="19" y2="3" />
+        <line x1="7" y1="30" x2="19" y2="30" /><line x1="7" y1="21" x2="19" y2="21" /><line x1="7" y1="12" x2="19" y2="12" />
+      </g>
+    </svg>
+  )
 
   return (
     <>
@@ -105,9 +115,12 @@ export default function KidDashboard() {
               </div>
               <p className="mt-1.5 text-white/80">{kid.className} · {kid.schoolName}</p>
             </div>
-            <div className="text-right">
-              <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
-              <p className="mt-1 text-xs text-white/70">finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+            <div className="flex items-center gap-2.5">
+              <LadderGlyph width="22" height="34" className="flex-none" />
+              <div className="text-right">
+                <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
+                <p className="mt-1 text-xs text-white/70">finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+              </div>
             </div>
           </div>
         </div>
@@ -128,157 +141,102 @@ export default function KidDashboard() {
           </div>
         ) : null}
 
-        {/* This month's mission — the big, kid-facing card */}
+        {/* This month's mission — quota header + a simple report form */}
         <Card className="overflow-hidden">
-          {cur.met ? (
-            /* Celebratory done state */
-            <div className="hero-navy relative px-6 py-10 text-center">
-              <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-60" viewBox="0 0 400 200" aria-hidden="true">
-                <g fill="#ffd54a"><circle cx="60" cy="40" r="3" /><circle cx="340" cy="56" r="3.5" /><circle cx="120" cy="150" r="2.5" /><circle cx="300" cy="150" r="2.5" /></g>
-                <g fill="#fff" opacity=".6"><circle cx="200" cy="30" r="2" /><circle cx="40" cy="120" r="2" /><circle cx="360" cy="120" r="2" /></g>
-              </svg>
-              <div className="animate-pop relative text-6xl">👑</div>
-              <h3 className="relative mt-2 font-display text-3xl font-black text-white">Mission Complete!</h3>
-              <p className="relative mt-1 text-white/85">
-                You said <span className="font-heb text-gold">{cur.quotaLabel}</span>
-                {cur.saidMinutes > 0 ? <> in <span className="text-gold">{fmt(cur.saidMinutes)} minutes</span></> : null} this{' '}
-                <span className="font-heb text-gold">{MONTH_HEB[cur.month]}</span> — a full mission! 🎉
-              </p>
-              <div className="relative mt-4 flex items-center justify-center gap-3">
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-4 py-1.5 font-cond text-lg uppercase tracking-wide text-gold">✓ Done</span>
-                <button onClick={() => { setSaid(String(cur.said)); setMins(''); setEditing(true) }} className="text-sm font-semibold text-white/80 underline hover:text-white">Edit entry</button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Graphic header: what you were meant to say this month */}
-              <div className="hero-navy relative px-5 pb-5 pt-5">
-                <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-50" viewBox="0 0 400 120" aria-hidden="true">
-                  <g fill="#fff"><circle cx="30" cy="24" r="2" /><circle cx="360" cy="30" r="2.5" /><circle cx="330" cy="86" r="1.8" /></g>
-                  <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#ffd54a" opacity=".7" />
-                </svg>
-                <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">This Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
-                <div className="relative mt-2 flex items-end justify-between gap-3">
-                  <div className="flex items-end gap-3">
-                    <svg width="26" height="40" viewBox="0 0 26 40" aria-hidden="true">
-                      <g stroke="#ffd54a" strokeWidth="3" strokeLinecap="round"><line x1="7" y1="38" x2="7" y2="3" /><line x1="19" y1="38" x2="19" y2="3" /><line x1="7" y1="30" x2="19" y2="30" /><line x1="7" y1="21" x2="19" y2="21" /><line x1="7" y1="12" x2="19" y2="12" /></g>
-                    </svg>
-                    <div>
-                      <div className="text-xs text-white/80">Your kapitlach</div>
-                      <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-cond text-3xl leading-none text-white">{cur.quota}</div>
-                    <div className="text-xs text-white/80">kapitlach · {cur.minutes} min</div>
-                  </div>
+          {/* Graphic header: the book (kapitlach quota) + the clock (minute quota) */}
+          <div className="hero-navy relative px-5 pb-5 pt-5">
+            <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-50" viewBox="0 0 400 120" aria-hidden="true">
+              <g fill="#fff"><circle cx="30" cy="24" r="2" /><circle cx="360" cy="30" r="2.5" /><circle cx="330" cy="86" r="1.8" /></g>
+              <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#ffd54a" opacity=".7" />
+            </svg>
+            <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">This Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
+            <div className="relative mt-3 flex items-end justify-between gap-4">
+              {/* Kapitlach quota — book */}
+              <div className="flex items-end gap-3">
+                <span className="text-4xl leading-none" aria-hidden="true">📖</span>
+                <div>
+                  <div className="text-xs text-white/80">Your kapitlach</div>
+                  <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
+                  <div className="mt-1 text-xs text-white/70">{cur.quota} kapitlach</div>
                 </div>
               </div>
-
-              {/* The monthly report: what did you actually say on Shabbos? */}
-              <div className="p-5 sm:p-6">
-                {cur.said > 0 ? (
-                  /* Already reported part — not the full mission */
-                  <>
-                    <p className="text-center text-sm font-semibold text-navy">
-                      You reported saying {fmt(cur.said)} of {cur.quota} kapitlach
-                      {cur.saidMinutes > 0 ? <> in {fmt(cur.saidMinutes)} minutes</> : null} this{' '}
-                      <span className="font-heb">{MONTH_HEB[cur.month]}</span>.
-                    </p>
-                    <GoalBar percent={Math.min(100, (cur.said / Math.max(1, cur.quota)) * 100)} label="of your mission" className="mx-auto mt-4 max-w-sm" />
-                    <button
-                      onClick={() => { setSaid(String(cur.said)); setMins(''); setEditing(true) }}
-                      className="mx-auto mt-6 block text-sm font-semibold text-blue underline"
-                    >
-                      Fix what I reported
-                    </button>
-                  </>
-                ) : (
-                  /* Nothing reported yet for this month */
-                  <>
-                    <p className="text-center font-display text-lg font-black text-navy">
-                      Did you say your Tehillim this Shabbos Mevorchim?
-                    </p>
-                    <p className="mt-1 text-center text-sm text-muted">Tell us what you said — it’s counted for your class and school.</p>
-
-                    <button
-                      onClick={() => record(true)}
-                      className="btn btn-gold mx-auto mt-4 block w-full max-w-sm !py-4 !text-[22px]"
-                    >
-                      ✓ Yes — I said it all!
-                    </button>
-
-                    <details className="mt-4 text-center">
-                      <summary className="cursor-pointer text-sm font-semibold text-blue">I said a different amount</summary>
-                      <div className="mt-3 flex flex-wrap items-end justify-center gap-2">
-                        <Field label="Kapitlach I said"><Input className="w-28" inputMode="numeric" value={said} onChange={(e) => setSaid(e.target.value)} /></Field>
-                        <Field label="Minutes"><Input className="w-24" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-                        <Button variant="outline" onClick={() => record(false)}>Report</Button>
-                      </div>
-                    </details>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Edit / correct this month's entry */}
-          {editing ? (
-            <div className="border-t border-line bg-paper/60 p-5 sm:p-6">
-              <p className="sh mb-2">Edit this month’s entry</p>
-              <div className="flex flex-wrap items-end gap-2">
-                <Field label="Kapitlach said"><Input className="w-28" inputMode="numeric" value={said} onChange={(e) => setSaid(e.target.value)} /></Field>
-                <Field label="Minutes"><Input className="w-24" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-                <Button variant="navy" onClick={() => {
-                  const wasMet = cur.met
-                  const prog = recordMonth(kid.id, cur.month, Number(said) || 0, Number(mins) || 0)
-                  setEditing(false); setSaid(''); setMins(''); setTick((t) => t + 1)
-                  if (prog?.current?.met && !wasMet) celebrate()
-                }}>Save</Button>
-                <Button variant="outline" onClick={() => { recordMonth(kid.id, cur.month, 0, 0); setEditing(false); setSaid(''); setMins(''); setTick((t) => t + 1) }}>Mark not done</Button>
-                <Button variant="ghost" onClick={() => { setEditing(false); setSaid(''); setMins('') }}>Cancel</Button>
+              {/* Minute quota — clock */}
+              <div className="flex items-end gap-3">
+                <img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-10 w-auto" />
+                <div className="text-right">
+                  <div className="text-xs text-white/80">Minute quota</div>
+                  <div className="font-cond text-4xl leading-none text-white">{cur.minutes}</div>
+                  <div className="mt-1 text-xs text-white/70">minutes</div>
+                </div>
               </div>
             </div>
-          ) : null}
+          </div>
+
+          {/* Report form — just enter kapitlach + minutes */}
+          <div className="p-5 sm:p-6">
+            {cur.met ? (
+              <p className="mb-4 text-center font-display text-lg font-black text-green">👑 Mission Complete — you said it all!</p>
+            ) : cur.said > 0 ? (
+              <p className="mb-4 text-center text-sm font-semibold text-navy">
+                You reported {fmt(cur.said)} of {cur.quota} kapitlach{cur.saidMinutes > 0 ? <> in {fmt(cur.saidMinutes)} minutes</> : null}.
+              </p>
+            ) : (
+              <p className="mb-4 text-center text-sm text-muted">Tell us what you said — it’s counted for your class, school and army.</p>
+            )}
+            <div className="flex flex-wrap items-end justify-center gap-3">
+              <Field label="Kapitlach I said"><Input className="w-32" inputMode="numeric" value={said} onChange={(e) => setSaid(e.target.value)} /></Field>
+              <Field label="Minutes I said"><Input className="w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
+              <button className="btn btn-gold !px-7" onClick={saveReport}>Save</button>
+            </div>
+          </div>
         </Card>
 
-        {/* The whole-Tehillim climb — the big-picture goal the ladder paces */}
-        <Card className="overflow-hidden">
-          <ClimbMeter
-            reached={reached}
-            target={cur.quota}
-            ladder={kid.ladder}
-            finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
-          />
-        </Card>
-
-        {/* Your class needs you — social standing + a nudge */}
+        {/* Your standing — class rank in the school + the school's rank worldwide */}
         {social ? (
-          <Card className="flex flex-wrap items-center gap-4 p-5 sm:p-6">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-navy font-cond text-2xl font-bold text-gold">
-              #{social.classRank}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-display text-lg font-black text-navy">
-                {social.className} is #{social.classRank} of {social.totalClasses} in {social.schoolName}
-              </p>
-              <p className="mt-0.5 text-sm text-muted">
-                {social.classRank === 1 ? (
-                  <>Your class is in <span className="font-semibold text-green">first place</span> — keep it on top! 🏆</>
-                ) : social.needToPass > 0 ? (
-                  <>
-                    {social.needToPass} more {social.needToPass === 1 ? 'soldier' : 'soldiers'} finishing puts you ahead of{' '}
-                    <span className="font-semibold text-navy">{social.classAheadName}</span>. Your Tehillim counts!
-                  </>
-                ) : (
-                  <>Every soldier counts — say your Tehillim and lift your class up.</>
-                )}
-              </p>
-            </div>
-            <div className="shrink-0 rounded-2xl bg-card px-4 py-2 text-center">
-              <div className="font-cond text-2xl font-bold leading-none text-navy">#{social.schoolRank}</div>
-              <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                School worldwide<span className="text-muted/70"> · of {social.totalSchools}</span>
+          <Card className="overflow-hidden">
+            <div className="grid bg-line sm:grid-cols-[1.6fr_1fr] sm:gap-px">
+              {/* Class standing in the school */}
+              <div className="bg-card p-5 sm:p-6">
+                <p className="sh">Your class standing</p>
+                <div className="mt-3 flex items-center gap-4">
+                  {social.classRank <= 3 ? (
+                    <img
+                      src={asset(`design/${['medal-gold', 'medal-silver', 'medal-bronze'][social.classRank - 1]}.png`)}
+                      alt={`#${social.classRank}`}
+                      draggable="false"
+                      className="h-16 w-auto flex-none drop-shadow"
+                    />
+                  ) : (
+                    <span className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-navy font-cond text-2xl font-bold text-gold">#{social.classRank}</span>
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="font-display text-xl font-black leading-tight text-navy">{social.className}</h3>
+                    <p className="text-sm font-semibold text-green">#{social.classRank} of {social.totalClasses} in {social.schoolName}</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-muted">
+                  {social.classRank === 1 ? (
+                    <>Your class is in <span className="font-semibold text-green">first place</span> — keep it on top! 🏆</>
+                  ) : social.needToPass > 0 ? (
+                    <>
+                      {social.needToPass} more {social.needToPass === 1 ? 'soldier' : 'soldiers'} finishing puts you ahead of{' '}
+                      <span className="font-semibold text-navy">{social.classAheadName}</span>. Your Tehillim counts!
+                    </>
+                  ) : (
+                    <>Every soldier counts — say your Tehillim and lift your class up.</>
+                  )}
+                </p>
+              </div>
+
+              {/* The school's standing worldwide */}
+              <div className="hero-navy relative flex flex-col justify-center px-5 py-6 text-white sm:px-6">
+                <img src={asset('design/flag.png')} alt="" aria-hidden="true" draggable="false" className="absolute right-4 top-4 h-7 w-auto opacity-80" />
+                <p className="font-cond text-xs uppercase tracking-[0.12em] text-gold">School worldwide</p>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="font-cond text-5xl font-bold leading-none text-white">#{social.schoolRank}</span>
+                  <span className="text-sm text-white/70">of {social.totalSchools}</span>
+                </div>
+                <p className="mt-1.5 text-sm text-white/80">{social.schoolName}</p>
               </div>
             </div>
           </Card>
@@ -325,6 +283,16 @@ export default function KidDashboard() {
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · 👑 = the whole Tehillim ·{' '}
             <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
           </p>
+        </Card>
+
+        {/* The whole-Tehillim climb — the big-picture goal, at the very bottom */}
+        <Card className="overflow-hidden">
+          <ClimbMeter
+            reached={reached}
+            target={cur.quota}
+            ladder={kid.ladder}
+            finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
+          />
         </Card>
       </div>
     </>
