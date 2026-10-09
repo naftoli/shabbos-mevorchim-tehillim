@@ -87,6 +87,7 @@ export function getGlobalStats() {
   const soldiers = s.reduce((a, x) => a + x.kids, 0)
   const minutes = s.reduce((a, x) => a + x.minutesSaidMonth, 0)
   const minutesQuota = s.reduce((a, x) => a + x.minutesQuotaMonth, 0)
+  const metSoldiers = s.reduce((a, x) => a + x.metMonth, 0)
   const classes = ROSTER.reduce((a, x) => a + x.classes.length, 0)
   return {
     monthLabel: CURRENT_MONTH,
@@ -97,6 +98,8 @@ export function getGlobalStats() {
     minutes,
     minutesQuota,
     minutesPct: minutesQuota > 0 ? Math.min(Math.round((minutes / minutesQuota) * 100), 100) : 0,
+    metSoldiers,
+    pctSoldiersMet: soldiers > 0 ? Math.round((metSoldiers / soldiers) * 100) : 0,
     soldiers,
     schools: s.length,
     classes,

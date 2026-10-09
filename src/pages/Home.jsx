@@ -10,6 +10,7 @@ import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { Button, Card, Pill, SchoolLogo, Input } from '@/components/ui.jsx'
 import GoalBar from '@/components/GoalBar.jsx'
+import QuotaBars from '@/components/QuotaBars.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 
 const RACE_FILLS = [
@@ -222,44 +223,14 @@ export default function Home() {
             {stats.pct >= 100 && <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill>}
           </div>
 
-          {/* Kapitlach */}
-          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12">
-            <div>
-              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Kapitlach Quota</p>
-              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(stats.quota)}</p>
-            </div>
-            <div>
-              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Kapitlach Said</p>
-              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px]">{fmt(stats.accomplished)}</p>
-            </div>
-            <p className="ml-auto hidden font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-card)] sm:block sm:text-[40px] lg:text-[44px]">{stats.pct}%</p>
-          </div>
+          <QuotaBars
+            className="mt-6 sm:mt-7"
+            kapitlach={{ quota: stats.quota, said: stats.accomplished, pct: stats.pct }}
+            minutes={{ quota: stats.minutesQuota, said: stats.minutes, pct: stats.minutesPct }}
+            soldiers={{ total: stats.soldiers, finished: stats.metSoldiers, pct: stats.pctSoldiersMet }}
+          />
 
-          <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
-            <GoalBar percent={stats.pct} label="of kapitlach quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
-            <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{stats.pct}%</span>
-          </div>
-
-          {/* Minutes — the same, for time spent saying Tehillim */}
-          <div className="relative z-10 mt-8 flex flex-wrap items-end gap-x-6 gap-y-2 sm:gap-x-12">
-            <div>
-              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Minutes Quota</p>
-              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(stats.minutesQuota)}</p>
-            </div>
-            <div>
-              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Minutes Said</p>
-              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px]">{fmt(stats.minutes)}</p>
-            </div>
-            <p className="ml-auto hidden font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-card)] sm:block sm:text-[40px] lg:text-[44px]">{stats.minutesPct}%</p>
-          </div>
-
-          <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
-            <GoalBar percent={stats.minutesPct} iconSrc={asset('design/icon-clock.png')} label="of minutes quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
-            <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{stats.minutesPct}%</span>
-          </div>
-
-          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
-            <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.soldiers)} label="Soldiers" />
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:gap-8">
             <Stat icon={asset('design/icon-school.png')} value={fmt(stats.schools)} label="Schools" />
             <Stat icon={asset('design/flag.png')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
           </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Card, Pill, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
-import GoalBar from '@/components/GoalBar.jsx'
+import QuotaBars from '@/components/QuotaBars.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
@@ -61,22 +61,17 @@ export default function SchoolCampaign() {
       </section>
 
       <div className="mx-auto max-w-[1400px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
-        {/* Goal meter */}
+        {/* Goal meter — kapitlach, minutes and soldiers finished */}
         <Card className="p-6 sm:p-8">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex items-end gap-x-10 gap-y-2">
-              <div>
-                <p className="font-display text-[15px] font-semibold uppercase text-navy">Quota</p>
-                <p className="mt-1 font-display text-[34px] font-black tabular-nums text-navy">{fmt(school.quotaMonth)}</p>
-              </div>
-              <div>
-                <p className="font-display text-[15px] font-semibold uppercase text-navy">Kapitlach Said</p>
-                <p className="mt-1 font-display text-[34px] font-black tabular-nums text-green">{fmt(school.saidMonth)}</p>
-              </div>
-            </div>
-            {school.pct >= 100 ? <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill> : <Pill>{school.pct}% of quota</Pill>}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="sh">This month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
+            {school.pct >= 100 ? <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill> : null}
           </div>
-          <GoalBar percent={school.pct} label="of quota" className="mt-8 sm:mr-[120px]" />
+          <QuotaBars
+            kapitlach={{ quota: school.quotaMonth, said: school.saidMonth, pct: school.pct }}
+            minutes={{ quota: school.minutesQuotaMonth, said: school.minutesSaidMonth, pct: school.minutesPct }}
+            soldiers={{ total: school.kids, finished: school.metMonth, pct: school.pctMet }}
+          />
         </Card>
 
         {/* Dedication */}
