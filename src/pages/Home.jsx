@@ -48,7 +48,7 @@ function Stat({ value, label, icon }) {
 function SchoolsRace({ schools }) {
   const [sort, setSort] = useState('percent')
   const [visible, setVisible] = useState(10)
-  const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.pct - a.pct : b.saidMonth - a.saidMonth))
+  const ranked = [...schools].sort((a, b) => (sort === 'percent' ? b.pctMet - a.pctMet : b.saidMonth - a.saidMonth))
   const shown = ranked.slice(0, visible)
   const seg = (active) =>
     `rounded-full px-3.5 py-2 text-green transition sm:px-5 ${active ? 'shadow-sm' : 'hover:bg-white/15'}`
@@ -61,7 +61,7 @@ function SchoolsRace({ schools }) {
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
         </div>
         <div className="inline-flex rounded-full bg-[#6d93d8] p-1 font-cond text-[15px] uppercase leading-none tracking-[0.04em] sm:text-[17px]">
-          <button type="button" onClick={() => setSort('percent')} className={seg(sort === 'percent')} style={segStyle(sort === 'percent')}>% of quota</button>
+          <button type="button" onClick={() => setSort('percent')} className={seg(sort === 'percent')} style={segStyle(sort === 'percent')}>% Finished</button>
           <button type="button" onClick={() => setSort('total')} className={seg(sort === 'total')} style={segStyle(sort === 'total')}>Kapitlach</button>
         </div>
       </div>
@@ -83,11 +83,11 @@ function SchoolsRace({ schools }) {
             <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
               <span
                 className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
-                style={{ width: `${Math.min(100, Math.max(s.pct, 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
+                style={{ width: `${Math.min(100, Math.max(sort === 'percent' ? s.pctMet : s.pct, 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}
               />
             </span>
             <span className="text-right font-display text-[16px] font-bold tabular-nums text-green sm:w-16 sm:flex-none sm:text-[18px] lg:w-24 lg:text-[20px]">
-              {sort === 'percent' ? `${s.pct}%` : fmt(s.saidMonth)}
+              {sort === 'percent' ? `${s.pctMet}%` : fmt(s.saidMonth)}
             </span>
           </Link>
         ))}
@@ -186,9 +186,10 @@ export default function Home() {
             {stats.pct >= 100 && <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill>}
           </div>
 
+          {/* Kapitlach */}
           <div className="relative z-10 mt-4 flex flex-wrap items-end gap-x-6 gap-y-2 sm:mt-5 sm:gap-x-12">
             <div>
-              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Quota</p>
+              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Kapitlach Quota</p>
               <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(stats.quota)}</p>
             </div>
             <div>
@@ -199,22 +200,38 @@ export default function Home() {
           </div>
 
           <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
-            <GoalBar percent={stats.pct} label="of quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
+            <GoalBar percent={stats.pct} label="of kapitlach quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
             <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{stats.pct}%</span>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:grid-cols-4 lg:gap-8">
+          {/* Minutes — the same, for time spent saying Tehillim */}
+          <div className="relative z-10 mt-8 flex flex-wrap items-end gap-x-6 gap-y-2 sm:gap-x-12">
+            <div>
+              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Minutes Quota</p>
+              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[40px] lg:text-[44px]">{fmt(stats.minutesQuota)}</p>
+            </div>
+            <div>
+              <p className="font-display text-[15px] font-semibold uppercase leading-none text-navy sm:text-[18px]">Minutes Said</p>
+              <p className="mt-2 font-display text-[30px] font-black leading-none tabular-nums text-green sm:text-[40px] lg:text-[44px]">{fmt(stats.minutes)}</p>
+            </div>
+            <p className="ml-auto hidden font-display text-[30px] font-black leading-none tabular-nums text-green [paint-order:stroke_fill] [-webkit-text-stroke:8px_var(--color-card)] sm:block sm:text-[40px] lg:text-[44px]">{stats.minutesPct}%</p>
+          </div>
+
+          <div className="mt-5 flex items-center gap-3 sm:mt-0 sm:block">
+            <GoalBar percent={stats.minutesPct} label="of minutes quota" className="min-w-0 flex-1 sm:mt-6 sm:mr-[120px] lg:mr-[132px]" />
+            <span className="flex-none font-display text-[26px] font-black leading-none tabular-nums text-green sm:hidden">{stats.minutesPct}%</span>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-6 lg:mt-10 lg:gap-8">
             <Stat icon={asset('design/icon-soldier-hat.png')} value={fmt(stats.soldiers)} label="Soldiers" />
             <Stat icon={asset('design/icon-school.png')} value={fmt(stats.schools)} label="Schools" />
             <Stat icon={asset('design/flag.png')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" />
-            <Stat icon={asset('design/icon-clock.png')} value={fmt(stats.minutes)} label="Minutes" />
           </div>
         </Card>
       </section>
 
       {/* Running totals */}
-      <section className="mx-auto mt-8 grid max-w-[1400px] grid-cols-2 gap-3 px-4 sm:px-6 md:grid-cols-3 lg:px-10">
-        <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.thisMonth)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">This Month</div><div className="text-xs text-muted">kapitlach</div></Card>
+      <section className="mx-auto mt-8 grid max-w-[1400px] grid-cols-1 gap-3 px-4 sm:grid-cols-2 sm:px-6 lg:px-10">
         <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.thisYear)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">This Year</div><div className="text-xs text-muted">kapitlach</div></Card>
         <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.allTime)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">All-Time</div><div className="text-xs text-muted">kapitlach</div></Card>
       </section>

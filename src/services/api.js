@@ -36,14 +36,16 @@ function schoolAgg(school) {
   let saidMonth = 0
   let quotaMonth = 0
   let saidYear = 0
-  let minutesMonth = 0
+  let minutesSaidMonth = 0
+  let minutesQuotaMonth = 0
   let metMonth = 0
   for (const cls of school.classes) {
     for (const kid of cls.kids) {
       kids += 1
       saidMonth += kidMonthSaid(kid, CURRENT_MONTH)
       quotaMonth += kidMonthQuota(kid, CURRENT_MONTH)
-      minutesMonth += metQuota(kid, CURRENT_MONTH) ? quotaFor(kid.grade, CURRENT_MONTH, kid.ladder).m : 0
+      minutesSaidMonth += kidMonthMinutes(kid, CURRENT_MONTH)
+      minutesQuotaMonth += quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)?.m ?? 0
       if (metQuota(kid, CURRENT_MONTH)) metMonth += 1
       saidYear += kidSaidYear(kid)
     }
@@ -59,7 +61,8 @@ function schoolAgg(school) {
     saidMonth,
     quotaMonth,
     saidYear,
-    minutesMonth,
+    minutesSaidMonth,
+    minutesQuotaMonth,
     metMonth,
     pct,
     pctMet,
@@ -77,7 +80,8 @@ export function getGlobalStats() {
   const acc = s.reduce((a, x) => a + x.saidMonth, 0)
   const quota = s.reduce((a, x) => a + x.quotaMonth, 0)
   const soldiers = s.reduce((a, x) => a + x.kids, 0)
-  const minutes = s.reduce((a, x) => a + x.minutesMonth, 0)
+  const minutes = s.reduce((a, x) => a + x.minutesSaidMonth, 0)
+  const minutesQuota = s.reduce((a, x) => a + x.minutesQuotaMonth, 0)
   const classes = ROSTER.reduce((a, x) => a + x.classes.length, 0)
   return {
     monthLabel: CURRENT_MONTH,
@@ -85,11 +89,13 @@ export function getGlobalStats() {
     accomplished: acc,
     quota,
     pct: quota > 0 ? Math.min(Math.round((acc / quota) * 100), 100) : 0,
+    minutes,
+    minutesQuota,
+    minutesPct: minutesQuota > 0 ? Math.min(Math.round((minutes / minutesQuota) * 100), 100) : 0,
     soldiers,
     schools: s.length,
     classes,
     perfectPlatoons: getPerfectPlatoons().length,
-    minutes,
   }
 }
 
