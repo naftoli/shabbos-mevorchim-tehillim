@@ -4,12 +4,23 @@
 // roster until the real API is wired; the api.js facade reads it in demo mode.
 
 import { MONTHS, GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
+import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 
-// Where the campaign "is" right now: months up to and including this one count.
-export const CURRENT_MONTH_INDEX = 2 // 0=Tishrei … 2=Kislev
+// Where the campaign "is" right now — driven by the REAL date so the demo always
+// agrees with the live Shabbos-Mevorchim countdown. The current month is the one
+// the next Shabbos Mevorchim bentches (what you say on it); months up to and
+// including it count as elapsed. Falls back to Kislev 5786 if Intl can't resolve.
+function currentHebrewYear(d = new Date()) {
+  const y = new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' })
+    .formatToParts(d)
+    .find((p) => p.type === 'year')?.value
+  return (y || '').replace(/[^0-9]/g, '') || '5786'
+}
+const _upcoming = nextShabbosMevorchim()
+export const CURRENT_MONTH_INDEX = Math.max(0, MONTHS.indexOf(_upcoming?.monthEn ?? 'Kislev'))
 export const CURRENT_MONTH = MONTHS[CURRENT_MONTH_INDEX]
 export const ELAPSED_MONTHS = MONTHS.slice(0, CURRENT_MONTH_INDEX + 1)
-export const CAMPAIGN_YEAR = '5786'
+export const CAMPAIGN_YEAR = _upcoming ? currentHebrewYear() : '5786'
 
 // Tehillim said in prior years (so "all-time" reads bigger than this year).
 const PRIOR_YEARS_KAPITLACH = 1_240_000
