@@ -65,7 +65,8 @@ export default function AdminDashboard() {
   if (!admin) return <Navigate to="/admin/login" replace />
 
   const activeId = isSuper ? schoolId : admin.schoolId
-  const school = useMemo(() => (activeId ? getSchool(activeId) : null), [activeId, tick])
+  void tick // re-render trigger after editing the dedication
+  const school = activeId ? getSchool(activeId) : null
   const base = activeId ? getBaseReport(activeId) : null
   const missing = activeId ? notCompleted(activeId) : []
 

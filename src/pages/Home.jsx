@@ -9,7 +9,6 @@ import {
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { Button, Card, Pill, SchoolLogo, Input } from '@/components/ui.jsx'
-import GoalBar from '@/components/GoalBar.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 
