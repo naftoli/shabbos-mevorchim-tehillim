@@ -46,7 +46,7 @@ export default function QuotaBars({ kapitlach, minutes, soldiers, className = ''
       <Line
         leftLabel="Soldiers"
         leftValue={fmt(soldiers.total)}
-        rightLabel="Finished Quota"
+        rightLabel="Completed Quota"
         rightValue={fmt(soldiers.finished)}
         pct={soldiers.pct}
         iconSrc={asset('design/icon-soldier-hat.png')}
