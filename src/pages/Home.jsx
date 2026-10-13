@@ -236,10 +236,13 @@ export default function Home() {
         </Card>
       </section>
 
-      {/* Running totals */}
-      <section className="mx-auto mt-8 grid max-w-[1400px] grid-cols-1 gap-3 px-4 sm:grid-cols-2 sm:px-6 lg:px-10">
-        <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.thisYear)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">This Year</div><div className="text-xs text-muted">kapitlach</div></Card>
-        <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.allTime)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">All-Time</div><div className="text-xs text-muted">kapitlach</div></Card>
+      {/* Running totals — kapitlach said */}
+      <section className="mx-auto mt-8 max-w-[1400px] px-4 sm:px-6 lg:px-10">
+        <p className="sh mb-3">Kapitlach Said</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.thisYear)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">{stats.year}</div><div className="text-xs text-muted">this year</div></Card>
+          <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.allTime)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">All-Time</div><div className="text-xs text-muted">every year</div></Card>
+        </div>
       </section>
 
       <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 sm:pt-12 lg:px-10">
