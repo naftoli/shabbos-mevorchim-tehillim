@@ -143,7 +143,7 @@ export default function KidDashboard() {
               <g fill="#fff"><circle cx="30" cy="24" r="2" /><circle cx="360" cy="30" r="2.5" /><circle cx="330" cy="86" r="1.8" /></g>
               <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#ffd54a" opacity=".7" />
             </svg>
-            <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">This Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
+            <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
             <div className="relative mt-3 flex items-end justify-between gap-4">
               {/* Kapitlach quota — book */}
               <div className="flex items-end gap-3">

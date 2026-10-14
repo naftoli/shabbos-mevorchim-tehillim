@@ -92,3 +92,39 @@ export function nextShabbosMevorchim(from = new Date()) {
     dateLabel: shabbos.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
   }
 }
+
+// Hebrew year of a date, as a number (5787, …).
+function hebrewYearNum(d) {
+  const y = new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' })
+    .formatToParts(d)
+    .find((p) => p.type === 'year')?.value || ''
+  return Number(y.replace(/[^0-9]/g, '')) || 0
+}
+
+// Campaign month bentshed by `saturday` if it IS a Shabbos Mevorchim (a non-
+// Tishrei Rosh Chodesh falls within the next six days), with that RC's year.
+function bentshedBy(saturday) {
+  for (let i = 1; i <= 6; i += 1) {
+    const rc = new Date(saturday.getTime() + i * DAY)
+    const { day, month } = hebParts(rc)
+    if (day === 1 && month !== 'Tishri') return { monthEn: HEB_MONTH_TO_EN[month] || month, year: hebrewYearNum(rc) }
+  }
+  return null
+}
+
+// The month currently being reported: the one bentshed by the most recent
+// Shabbos Mevorchim on or before today (it holds from that Shabbos until the
+// next one). Before the year's first Shabbos Mevorchim, falls back to the
+// upcoming month. e.g. the Shabbos after Mevorchim-Cheshvan → still Cheshvan.
+export function currentReportingMonth(from = new Date()) {
+  const today = atMidnight(from)
+  const thisYear = hebrewYearNum(today)
+  let sat = today
+  while (sat.getDay() !== 6) sat = new Date(sat.getTime() - DAY)
+  for (let w = 0; w < 6; w += 1) {
+    const hit = bentshedBy(sat)
+    if (hit && hit.year === thisYear) return hit.monthEn
+    sat = new Date(sat.getTime() - 7 * DAY)
+  }
+  return nextShabbosMevorchim(from)?.monthEn ?? null
+}

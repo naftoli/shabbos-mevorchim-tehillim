@@ -4,7 +4,7 @@
 // roster until the real API is wired; the api.js facade reads it in demo mode.
 
 import { MONTHS, GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
-import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
+import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 
 // Where the campaign "is" right now — driven by the REAL date so the demo always
 // agrees with the live Shabbos-Mevorchim countdown. The current month is the one
@@ -16,11 +16,13 @@ function currentHebrewYear(d = new Date()) {
     .find((p) => p.type === 'year')?.value
   return (y || '').replace(/[^0-9]/g, '') || '5786'
 }
-const _upcoming = nextShabbosMevorchim()
-export const CURRENT_MONTH_INDEX = Math.max(0, MONTHS.indexOf(_upcoming?.monthEn ?? 'Kislev'))
+// The current reporting month is the one the MOST RECENT Shabbos Mevorchim
+// bentshed — what kids are reporting now — not the next upcoming one.
+const _current = currentReportingMonth()
+export const CURRENT_MONTH_INDEX = Math.max(0, MONTHS.indexOf(_current ?? 'Cheshvan'))
 export const CURRENT_MONTH = MONTHS[CURRENT_MONTH_INDEX]
 export const ELAPSED_MONTHS = MONTHS.slice(0, CURRENT_MONTH_INDEX + 1)
-export const CAMPAIGN_YEAR = _upcoming ? currentHebrewYear() : '5786'
+export const CAMPAIGN_YEAR = _current ? currentHebrewYear() : '5786'
 
 // Tehillim said in prior years (so "all-time" reads bigger than this year).
 const PRIOR_YEARS_KAPITLACH = 1_240_000
