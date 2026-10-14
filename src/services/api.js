@@ -177,7 +177,7 @@ export function verifyKid(serial, dob) {
           kid.minutesByMonth = {}
           kid.minutes = 0
           kid.metThisYear = 0
-          kid.missionsTotal = 0
+          kid.missionsTotal = kid.priorMissions || 0 // keep prior-year missions for the medal demo
           clearKidProgress(kid.id)
           invalidate()
         }

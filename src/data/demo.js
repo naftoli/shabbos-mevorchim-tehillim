@@ -171,9 +171,11 @@ function buildRoster() {
     fresh.reports = {}
     fresh.minutesByMonth = {}
     fresh.minutes = 0
-    fresh.priorMissions = 0
+    // New to THIS year's ladder, but carries a prior-year mission history so the
+    // medal board demos with earned medals.
+    fresh.priorMissions = 30
     fresh.metThisYear = 0
-    fresh.missionsTotal = 0
+    fresh.missionsTotal = 30
   }
 
   // Overlay any saved demo progress so a soldier's own ladder + reports survive

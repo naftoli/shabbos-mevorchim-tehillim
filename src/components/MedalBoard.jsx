@@ -1,58 +1,68 @@
+import { Link } from 'react-router-dom'
 import { MEDALS } from '@/lib/medals.js'
 import { Card } from './ui.jsx'
+import { asset } from '@/lib/asset.js'
 
-function Medal({ medal, earned, current }) {
+// Small medal chip (just the threshold number); greyed until earned.
+function MiniMedal({ medal, earned, current }) {
   return (
-    <div className={`flex flex-col items-center gap-1 ${earned ? '' : 'opacity-35 grayscale'}`}>
-      <span
-        className={`grid h-12 w-12 place-items-center rounded-full text-white shadow-sm ring-2 ${current ? 'ring-gold' : 'ring-white'}`}
-        style={{ background: medal.color }}
-        title={`${medal.name} — ${medal.threshold} missions`}
-      >
-        <span className="text-lg">🎖️</span>
-      </span>
-      <span className="font-cond text-[13px] uppercase leading-none text-navy">{medal.name}</span>
-      <span className="text-[11px] text-muted">{medal.threshold}</span>
-    </div>
+    <span
+      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold text-white ${earned ? 'ring-2' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-white'}`}
+      style={{ background: medal.color }}
+      title={`${medal.name} — ${medal.threshold} missions`}
+    >
+      {medal.threshold}
+    </span>
   )
 }
 
+// Compact medal summary on the dashboard — tap to open the full levels page.
 export default function MedalBoard({ progress }) {
   const { medal, missionsTotal } = progress
   const earnedCount = medal.earnedCount
   return (
-    <Card className="p-5 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="sh">Medal Board</p>
-          <h3 className="font-display text-xl font-black text-navy">
-            {missionsTotal} mission{missionsTotal === 1 ? '' : 's'} completed
-          </h3>
-        </div>
-        <div className="text-right">
-          {medal.current ? (
+    <Link to="/medals" className="block">
+      <Card className="p-5 transition hover:shadow-hover sm:p-6">
+        <div className="flex items-center gap-4">
+          <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto flex-none" />
+          <div className="min-w-0 flex-1">
+            <p className="sh">Medal Board</p>
+            <h3 className="font-display text-xl font-black text-navy">
+              {missionsTotal} monthly mission{missionsTotal === 1 ? '' : 's'} earned
+            </h3>
             <p className="text-sm text-muted">
-              Current medal: <span className="font-bold" style={{ color: medal.current.color }}>{medal.current.name}</span>
+              {medal.current ? (
+                <>Current medal: <span className="font-bold" style={{ color: medal.current.color }}>{medal.current.name}</span></>
+              ) : (
+                <>No medal yet — keep going!</>
+              )}
             </p>
-          ) : (
-            <p className="text-sm text-muted">No medal yet — keep climbing!</p>
-          )}
-          {medal.next ? (
-            <p className="text-sm text-muted">
-              <span className="font-bold text-navy">{medal.missionsToNext}</span> to the {medal.next.name} medal
-            </p>
-          ) : (
-            <p className="text-sm font-semibold text-green">All medals earned — amazing!</p>
-          )}
+          </div>
+          <span className="flex-none text-sm font-semibold text-blue">See all ›</span>
         </div>
-      </div>
 
-      {/* Medal row */}
-      <div className="mt-5 grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-11">
-        {MEDALS.map((m) => (
-          <Medal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
-        ))}
-      </div>
-    </Card>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {MEDALS.map((m) => (
+            <MiniMedal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
+          ))}
+        </div>
+
+        <div className="mt-4">
+          <div className="h-3 w-full overflow-hidden rounded-full bg-track">
+            <div
+              className="h-full rounded-full transition-[width] duration-700"
+              style={{ width: `${Math.max(2, Math.round((missionsTotal / 110) * 100))}%`, background: 'var(--grad-progress)' }}
+            />
+          </div>
+          <p className="mt-2 text-center text-xs font-semibold text-muted">
+            {medal.next ? (
+              <><span className="text-navy">{medal.missionsToNext}</span> to the <span style={{ color: medal.next.color }}>{medal.next.name}</span> medal</>
+            ) : (
+              <span className="text-green">All medals earned!</span>
+            )}
+          </p>
+        </div>
+      </Card>
+    </Link>
   )
 }
