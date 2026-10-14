@@ -341,6 +341,7 @@ export function getSchool(id) {
     return {
       id: cls.id,
       name: cls.name,
+      teacher: cls.teacher,
       grade: cls.grade,
       size,
       said,

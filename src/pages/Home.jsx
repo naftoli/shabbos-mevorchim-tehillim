@@ -160,7 +160,7 @@ function SchoolCard({ s, color }) {
           </div>
           <div className="mt-2 flex items-center justify-between text-[13px] font-semibold uppercase tracking-[0.04em]">
             <span className="text-green">{s.pct}% of quota</span>
-            <span className="text-muted">{fmt(s.kids)} soldiers</span>
+            <span className="text-muted" title="Soldiers who completed their quota">{fmt(s.metMonth)}/{fmt(s.kids)} completed</span>
           </div>
         </div>
       </Card>

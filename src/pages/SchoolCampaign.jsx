@@ -82,17 +82,29 @@ export default function SchoolCampaign() {
           </Card>
         ) : null}
 
-        {/* Perfect platoons */}
-        {perfect.length ? (
-          <div>
-            <h2 className="mb-3 font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
+        {/* Perfect platoons — classes where every soldier completed their quota */}
+        <Card className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h2 className="font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
+            <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(perfect.length)} this month</span>
+          </div>
+          <p className="mb-4 mt-1 text-[13px] font-semibold text-muted">
+            A platoon (class) is <span className="text-navy">perfect</span> when every single soldier completed their full quota.
+          </p>
+          {perfect.length ? (
             <div className="flex flex-wrap gap-2">
               {perfect.map((c) => (
-                <Pill key={c.id} className="!bg-green/10 !text-green !text-[13px]">★ {c.name} · {c.size} soldiers</Pill>
+                <div key={c.id} className="rounded-xl bg-green/10 px-4 py-2">
+                  <span className="font-display font-bold text-navy">★ {c.name}</span>
+                  {c.teacher ? <span className="text-sm font-semibold text-green"> · {c.teacher}</span> : null}
+                  <span className="text-sm text-muted"> · {c.size} soldiers</span>
+                </div>
               ))}
             </div>
-          </div>
-        ) : null}
+          ) : (
+            <p className="text-sm font-semibold text-navy">No perfect platoons yet this month — a class turns perfect when every soldier in it completes their quota. Keep going! 💪</p>
+          )}
+        </Card>
 
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Soldier leaderboard */}
