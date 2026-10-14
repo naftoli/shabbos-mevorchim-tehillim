@@ -114,9 +114,9 @@ export default function SchoolCampaign() {
           {/* Class leaderboard — toggle the metric like the home page race */}
           {(() => {
             const SEGMENTS = [
-              { key: 'finished', label: '% Finished', sub: 'soldiers done', icon: asset('design/icon-soldier-hat.png') },
-              { key: 'kapitlach', label: '% Kapitlach', sub: 'of goal said', emoji: '📖' },
-              { key: 'time', label: '% Time', sub: 'of minutes', icon: asset('design/icon-clock.png') },
+              { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
+              { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
+              { key: 'time', label: '% Time', sub: 'goal completed', icon: asset('design/icon-clock.png') },
             ]
             const metricOf = (c) => (classSort === 'finished' ? c.pctMet : classSort === 'kapitlach' ? c.pct : c.minutesPct)
             const ranked = [...classes].sort(

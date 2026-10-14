@@ -21,6 +21,7 @@ const RACE_FILLS = [
 ]
 const SCHOOL_COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
+const PERFECT_SHOWN = 12 // sample shown on the worldwide page; the rest live on school pages
 
 function Eyebrow({ icon, iconClass = 'h-5', className = '', children }) {
   return (
@@ -65,9 +66,9 @@ function SchoolsRace({ schools }) {
   const shown = ranked.slice(0, visible)
   const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined)
   const SEGMENTS = [
-    { key: 'finished', label: '% Finished', sub: 'soldiers done', icon: asset('design/icon-soldier-hat.png') },
-    { key: 'kapitlach', label: '% Kapitlach', sub: 'of goal said', emoji: '📖' },
-    { key: 'time', label: '% Time', sub: 'of minutes', icon: asset('design/icon-clock.png') },
+    { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
+    { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
+    { key: 'time', label: '% Time', sub: 'goal completed', icon: asset('design/icon-clock.png') },
   ]
   return (
     <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
@@ -172,7 +173,6 @@ export default function Home() {
   const totals = useMemo(() => getRunningTotals(), [])
   const schools = useMemo(() => getSchools(), [])
   const platoons = useMemo(() => getPerfectPlatoons(), [])
-  const [platoonLimit, setPlatoonLimit] = useState(12)
   const [query, setQuery] = useState('')
 
   const q = query.trim().toLowerCase()
@@ -252,15 +252,17 @@ export default function Home() {
       {/* Perfect Platoons */}
       {platoons.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
-          <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
-            Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
-            <span className="align-middle text-[18px] not-italic text-muted"> · {fmt(platoons.length)}</span>
-          </h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
+              Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
+            </h2>
+            <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(platoons.length)} this month</span>
+          </div>
           <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
             A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota this month.
           </p>
           <div className="flex flex-wrap gap-2">
-            {platoons.slice(0, platoonLimit).map((p) => (
+            {platoons.slice(0, PERFECT_SHOWN).map((p) => (
               <Link key={`${p.schoolId}-${p.className}`} to={`/s/${p.schoolId}`}>
                 <Card className="px-4 py-3 transition hover:shadow-hover">
                   <span className="font-display font-bold text-navy">{p.className}</span>
@@ -270,13 +272,10 @@ export default function Home() {
               </Link>
             ))}
           </div>
-          {platoons.length > platoonLimit ? (
-            <button
-              onClick={() => setPlatoonLimit(platoons.length)}
-              className="btn btn-o mt-4"
-            >
-              Show all {fmt(platoons.length)} perfect platoons
-            </button>
+          {platoons.length > PERFECT_SHOWN ? (
+            <p className="mt-4 text-sm font-semibold text-muted">
+              + {fmt(platoons.length - PERFECT_SHOWN)} more across the schools — open a school below to see its perfect platoons.
+            </p>
           ) : null}
         </section>
       ) : null}
