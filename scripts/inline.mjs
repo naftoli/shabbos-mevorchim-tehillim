@@ -42,7 +42,7 @@ html = html.replace(/<script[^>]*src="([^"]+\.js)"[^>]*><\/script>/g, (_m, src) 
 })
 
 // Favicon → data URI (so no external request)
-html = html.replace(/href="\/(th-logo\.png|favicon\.svg)"/g, (_m, f) => (assets[f] ? `href="${assets[f]}"` : _m))
+html = html.replace(/href="\/([\w./-]+\.(?:png|svg|jpg|jpeg|webp|gif))"/gi, (_m, f) => (assets[f] ? `href="${assets[f]}"` : _m))
 
 // Inject the asset map just before the first <script>.
 const mapTag = `<script>window.__WWTC_ASSETS__=${JSON.stringify(assets)}</script>\n`

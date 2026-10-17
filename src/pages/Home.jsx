@@ -182,6 +182,13 @@ export default function Home() {
 
   return (
     <div>
+      {/* Campaign banner — Tzivos Hashem */}
+      <img
+        src={asset('brand/tzivos-hashem.jpg')}
+        alt="Shabbos Mevorchim Tehillim · Tzivos Hashem"
+        className="mx-auto block w-full max-w-[1400px]"
+      />
+
       {/* Hero — royal-blue gradient with a glass panel (no Sukkos art). */}
       <section className="hero-navy relative isolate flex min-h-[380px] sm:min-h-[460px] md:min-h-[520px]">
         <div className="relative mx-auto flex w-full max-w-[1400px] flex-col items-start justify-center gap-2 px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
