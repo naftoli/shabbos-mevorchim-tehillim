@@ -1,12 +1,13 @@
 import { Card, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
+import { asset } from '@/lib/asset.js'
 import { MEDAL_THRESHOLDS } from '@/lib/medals.js'
 
 const STEPS = [
   {
     n: 1,
     title: 'Pick your ladder',
-    body: 'Choose the grade by which you’ll finish the whole Tehillim — that’s your ladder (Ladder 1 finishes by 5th grade, up to Ladder 8 by 12th). A steeper ladder climbs faster.',
+    body: 'Choose the grade by which you’ll finish the whole Tehillim — that’s your ladder (Ladder 5 finishes by 5th grade, up to Ladder 12 by 12th). A steeper ladder climbs faster.',
   },
   {
     n: 2,
@@ -21,7 +22,7 @@ const STEPS = [
   {
     n: 4,
     title: 'Earn medals',
-    body: `Missions add up to medals, awarded at ${MEDAL_THRESHOLDS.join(', ')} cumulative missions — eleven medals, each its own color, all the way to the Crown.`,
+    body: `Missions add up to medals, awarded at ${MEDAL_THRESHOLDS.join(', ')} cumulative missions — eleven medals, each its own color, all the way to Platinum.`,
   },
 ]
 
@@ -34,6 +35,13 @@ export default function HowTo() {
       </PageHero>
 
       <div className="mx-auto max-w-[1000px] space-y-10 px-4 py-10 sm:px-6 lg:px-10">
+        {/* The goal */}
+        <img
+          src={asset('brand/goal.jpg')}
+          alt="Goal: to say the entire Tehillim on Shabbos Mevorchim"
+          className="w-full rounded-[22px] shadow-sm sm:rounded-[28px]"
+        />
+
         <div className="grid gap-5 sm:grid-cols-2">
           {STEPS.map((s) => (
             <Card key={s.n} className="p-6">
@@ -44,6 +52,16 @@ export default function HowTo() {
               <p className="mt-3 text-navy/80">{s.body}</p>
             </Card>
           ))}
+        </div>
+
+        {/* The source — Hayom Yom, Chof Hei Shvat */}
+        <div>
+          <p className="sh mb-3">Why Shabbos Mevorchim Tehillim</p>
+          <img
+            src={asset('brand/hayom-yom.jpg')}
+            alt="One should be careful to say the whole Tehillim on Shabbos Mevorchim — Hayom Yom, Chof Hei Shvat"
+            className="w-full rounded-[22px] shadow-sm sm:rounded-[28px]"
+          />
         </div>
 
         <Card className="p-6 sm:p-8">
