@@ -2,18 +2,21 @@
 // quota). Eleven tiers, each its own color.
 export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95, 110]
 
+// Named by colour to match the Mashpia medal board. `ink` is the number colour
+// for contrast on light vs. dark medals. 5 / 95 / 110 were still locked in the
+// reference screenshots — best read; easy to adjust.
 export const MEDALS = [
-  { name: 'Copper', color: '#b87333' },
-  { name: 'Steel', color: '#8f9aa6' },
-  { name: 'Bronze', color: '#cd7f32' },
-  { name: 'Silver', color: '#9ca3af' },
-  { name: 'Gold', color: '#e0a21a' },
-  { name: 'Sapphire', color: '#2a5fb8' },
-  { name: 'Amethyst', color: '#8b5cf6' },
-  { name: 'Ruby', color: '#e11d48' },
-  { name: 'Emerald', color: '#10b981' },
-  { name: 'Topaz', color: '#0ea5e9' },
-  { name: 'Crown', color: '#0f2350' },
+  { name: 'Silver', color: '#c3c8d0', ink: '#1b2a4e' },
+  { name: 'Red', color: '#e23b3b', ink: '#ffffff' },
+  { name: 'Orange', color: '#ef8a2b', ink: '#ffffff' },
+  { name: 'Gold', color: '#efb11d', ink: '#1b2a4e' },
+  { name: 'Green', color: '#3aa64a', ink: '#ffffff' },
+  { name: 'Blue', color: '#3b5bdb', ink: '#ffffff' },
+  { name: 'Purple', color: '#9c36b5', ink: '#ffffff' },
+  { name: 'Bronze', color: '#a56a2e', ink: '#ffffff' },
+  { name: 'Gray', color: '#868e96', ink: '#ffffff' },
+  { name: 'Black', color: '#343a40', ink: '#ffffff' },
+  { name: 'Platinum', color: '#cfd4da', ink: '#1b2a4e' },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
 // Given a cumulative mission count, what's earned / current / next.

@@ -7,8 +7,8 @@ import { asset } from '@/lib/asset.js'
 function MiniMedal({ medal, earned, current }) {
   return (
     <span
-      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold text-white ${earned ? 'ring-2' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-white'}`}
-      style={{ background: medal.color }}
+      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold ${earned ? 'ring-2' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-white'}`}
+      style={{ background: medal.color, color: medal.ink }}
       title={`${medal.name} — ${medal.threshold} missions`}
     >
       {medal.threshold}

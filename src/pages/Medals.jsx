@@ -35,8 +35,8 @@ function Level({ medal, index, missionsTotal }) {
     <div className="flex flex-col gap-4 border-t border-line py-5 sm:flex-row sm:items-center sm:gap-6">
       <div className="flex w-28 flex-none flex-col items-center gap-1 text-center">
         <span
-          className={`grid h-16 w-16 place-items-center rounded-full font-cond text-2xl font-black text-white shadow-sm ${lit ? 'ring-2' : 'opacity-30 grayscale'} ${active ? 'ring-gold' : 'ring-white'}`}
-          style={{ background: medal.color }}
+          className={`grid h-16 w-16 place-items-center rounded-full font-cond text-2xl font-black shadow-sm ${lit ? 'ring-2' : 'opacity-30 grayscale'} ${active ? 'ring-gold' : 'ring-white'}`}
+          style={{ background: medal.color, color: medal.ink }}
         >
           {medal.threshold}
         </span>
