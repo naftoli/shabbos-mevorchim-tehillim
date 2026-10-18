@@ -17,7 +17,7 @@ export function Band({ className = '' }) {
 export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = false }) {
   return (
     <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
-      <img src={asset('brand/wwtc-shield.jpg')} alt="Worldwide Tehillim Club" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
+      <img src={asset('brand/wwtc-shield.png')} alt="Worldwide Tehillim Club" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
       <span className="flex flex-col leading-none">
         <span className="font-cond text-[1.35rem] uppercase leading-none tracking-[0.02em] sm:text-[2.1rem] 2xl:text-[2.25rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
