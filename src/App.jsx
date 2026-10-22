@@ -8,6 +8,7 @@ import Ladders from './pages/Ladders.jsx'
 import KidLogin from './pages/KidLogin.jsx'
 import KidDashboard from './pages/KidDashboard.jsx'
 import Medals from './pages/Medals.jsx'
+import PerfectPlatoons from './pages/PerfectPlatoons.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import Reports from './pages/Reports.jsx'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/ladders" element={<Ladders />} />
         <Route path="/me" element={<KidDashboard />} />
         <Route path="/medals" element={<Medals />} />
+        <Route path="/perfect-platoons" element={<PerfectPlatoons />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/reports" element={<Reports />} />

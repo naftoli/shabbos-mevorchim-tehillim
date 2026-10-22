@@ -304,13 +304,12 @@ export default function Home() {
               </Link>
             ))}
             {platoons.length > PERFECT_SHOWN ? (
-              <button
-                type="button"
-                onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
+              <Link
+                to="/perfect-platoons"
                 className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
               >
-                +{fmt(platoons.length - PERFECT_SHOWN)} more — see by school
-              </button>
+                +{fmt(platoons.length - PERFECT_SHOWN)} more — see all →
+              </Link>
             ) : null}
           </div>
         </section>
