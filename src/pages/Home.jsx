@@ -148,21 +148,26 @@ function SchoolCard({ s, color }) {
             <h3 className="font-display text-xl font-bold leading-tight text-navy">{s.name}</h3>
             <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.1em] text-green">{s.city}</p>
           </div>
-          {s.pct >= 100 ? <Pill className="!bg-green !text-white">🎉 Goal</Pill> : null}
+          {s.pctMet >= 100 ? <Pill className="!bg-green !text-white">🎉 Goal</Pill> : null}
         </div>
         <div className="px-5 pb-5 pt-4">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="font-display text-[28px] font-black leading-none tabular-nums text-navy">{fmt(s.saidMonth)}</span>
-            <span className="text-sm font-semibold text-muted">of {fmt(s.quotaMonth)} kapitlach</span>
+            <span className="inline-flex items-baseline gap-2">
+              <span className="font-display text-[28px] font-black leading-none tabular-nums text-navy">{fmt(s.metMonth)}</span>
+              <span className="text-sm font-semibold text-muted">of {fmt(s.kids)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-muted" title="Soldiers who completed their quota">
+              <img src={asset('design/icon-soldier-hat.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto" />
+              completed
+            </span>
           </div>
           <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-track">
-            <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(s.pct, 3))}%`, background: color }} />
+            <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(s.pctMet, 3))}%`, background: color }} />
           </div>
           <div className="mt-2 flex items-center justify-between text-[13px] font-semibold uppercase tracking-[0.04em]">
-            <span className="text-green">{s.pct}% of quota</span>
-            <span className="inline-flex items-center gap-1 text-muted" title="Soldiers who completed their quota">
-              <img src={asset('design/icon-soldier-hat.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto" />
-              {fmt(s.metMonth)}/{fmt(s.kids)} completed
+            <span className="text-green">{s.pctMet}% completed quota</span>
+            <span className="inline-flex items-center gap-1 text-muted" title="Kapitlach said this month">
+              <span aria-hidden="true">📖</span> {fmt(s.saidMonth)}
             </span>
           </div>
         </div>
