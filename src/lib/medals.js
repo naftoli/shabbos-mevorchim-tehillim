@@ -19,6 +19,15 @@ export const MEDALS = [
   { name: 'Platinum', color: '#cfd4da', ink: '#1b2a4e' },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
+// A medal's own colour can be too light to read as text on a light card
+// (White, Platinum, Gray). Fall back to navy for those so the name stays legible.
+export function legibleInk(hex) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+  const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return L > 0.62 ? '#1b2a4e' : hex
+}
+
 // Given a cumulative mission count, what's earned / current / next.
 export function medalState(missions) {
   const earned = MEDAL_THRESHOLDS.filter((t) => missions >= t).length

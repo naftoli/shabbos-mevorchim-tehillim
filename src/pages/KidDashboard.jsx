@@ -9,7 +9,7 @@ import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, MONTHS, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
@@ -273,23 +273,58 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        {/* This year's months — done / current / missed */}
-        <Card className="p-5 sm:p-6">
-          <p className="sh mb-2">This Year</p>
-          <div className="flex flex-wrap gap-2">
-            {progress.months.map((m) => (
-              <span
-                key={m.month}
-                className={`rounded-lg px-2.5 py-1 text-sm font-semibold ${
-                  m.met ? 'bg-green/10 text-green' : 'bg-track text-muted line-through'
-                } ${m.isCurrent ? 'ring-2 ring-gold' : ''}`}
-                title={m.met ? 'Done' : 'Not done'}
-              >
-                {MONTH_HEB[m.month]}
-              </span>
-            ))}
-          </div>
-        </Card>
+        {/* This year's months — the whole Hebrew year at a glance:
+            done / current / missed / still ahead. */}
+        {(() => {
+          const byMonth = Object.fromEntries(progress.months.map((m) => [m.month, m]))
+          const doneCount = progress.months.filter((m) => m.met).length
+          return (
+            <Card className="relative overflow-hidden p-5 sm:p-6">
+              {/* faint decorative flag so the panel isn't a plain box */}
+              <img
+                src={asset('design/flag.png')}
+                alt=""
+                aria-hidden="true"
+                draggable="false"
+                className="pointer-events-none absolute -right-6 -top-6 h-36 w-auto rotate-6 opacity-[0.06]"
+              />
+              <div className="relative flex flex-wrap items-end justify-between gap-2">
+                <p className="sh">This Year · <span className="font-heb">{CAMPAIGN_YEAR}</span></p>
+                <p className="font-cond text-sm uppercase tracking-wide text-green">{doneCount}/12 months done</p>
+              </div>
+              <div className="relative mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {MONTHS.map((mo) => {
+                  const m = byMonth[mo]
+                  const met = m?.met
+                  const current = m?.isCurrent
+                  const past = !!m && !met && !current // elapsed and not done
+                  const state = met ? 'done' : current ? 'now' : past ? 'missed' : 'ahead'
+                  const cls = {
+                    done: 'bg-green/12 text-green ring-1 ring-green/30',
+                    now: 'bg-gold/15 text-navy ring-2 ring-gold',
+                    missed: 'bg-race-red/10 text-race-red/80 ring-1 ring-race-red/25',
+                    ahead: 'bg-track text-muted',
+                  }[state]
+                  return (
+                    <span
+                      key={mo}
+                      className={`flex flex-col items-center gap-0.5 rounded-xl px-1 py-2 ${cls}`}
+                      title={{ done: 'Done', now: 'This month', missed: 'Not done', ahead: 'Still ahead' }[state]}
+                    >
+                      <span className="font-heb text-[17px] font-bold leading-none">{MONTH_HEB[mo]}</span>
+                      <span className="text-[13px] leading-none">{met ? '✓' : current ? '●' : past ? '–' : '·'}</span>
+                    </span>
+                  )
+                })}
+              </div>
+              <div className="relative mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-green" /> Done</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gold" /> This month</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-track ring-1 ring-line" /> Still ahead</span>
+              </div>
+            </Card>
+          )
+        })()}
 
         {/* Medal board — cumulative missions earn medals */}
         <MedalBoard progress={progress} />

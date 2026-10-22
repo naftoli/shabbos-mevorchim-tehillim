@@ -94,10 +94,13 @@ export default function SchoolCampaign() {
           {perfect.length ? (
             <div className="flex flex-wrap gap-2">
               {perfect.map((c) => (
-                <Card key={c.id} className="px-4 py-3">
-                  <span className="font-display font-bold text-navy">{c.name}</span>
-                  {c.teacher ? <span className="text-sm font-semibold text-green"> · {c.teacher}</span> : null}
-                  <span className="text-sm text-muted"> · {c.size} soldiers</span>
+                <Card key={c.id} className="flex items-center gap-2.5 px-4 py-3">
+                  <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto flex-none" />
+                  <span>
+                    <span className="font-display font-bold text-navy">{c.name}</span>
+                    {c.teacher ? <span className="text-sm font-semibold text-green"> · {c.teacher}</span> : null}
+                    <span className="text-sm text-muted"> · {c.size} soldiers</span>
+                  </span>
                 </Card>
               ))}
             </div>

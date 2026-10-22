@@ -250,8 +250,22 @@ export default function Home() {
       <section className="mx-auto mt-8 max-w-[1400px] px-4 sm:px-6 lg:px-10">
         <p className="sh mb-3">Kapitlach Said</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.thisYear)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">{stats.year}</div><div className="text-xs text-muted">this year</div></Card>
-          <Card className="p-5"><div className="font-display text-[26px] font-black tabular-nums text-navy">{fmt(totals.allTime)}</div><div className="text-sm font-semibold uppercase tracking-wide text-green">All-Time</div><div className="text-xs text-muted">every year</div></Card>
+          {[
+            { value: totals.thisYear, label: stats.year, sub: 'this year', heb: true, emoji: '📖' },
+            { value: totals.allTime, label: 'All-Time', sub: 'every year', heb: false, emoji: '🌍' },
+          ].map((c) => (
+            <Card key={c.sub} className="relative overflow-hidden p-5 sm:p-6">
+              <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{c.emoji}</span>
+              <div className="relative flex items-center gap-4">
+                <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
+                <div className="min-w-0">
+                  <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">{fmt(c.value)}</div>
+                  <div className={`mt-1.5 text-sm font-semibold uppercase tracking-wide text-green ${c.heb ? 'font-heb text-base' : ''}`}>{c.label}</div>
+                  <div className="text-xs text-muted">{c.sub}</div>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       </section>
 
@@ -274,10 +288,13 @@ export default function Home() {
           <div className="flex flex-wrap gap-2">
             {platoons.slice(0, PERFECT_SHOWN).map((p) => (
               <Link key={`${p.schoolId}-${p.className}`} to={`/s/${p.schoolId}`}>
-                <Card className="px-4 py-3 transition hover:shadow-hover">
-                  <span className="font-display font-bold text-navy">{p.className}</span>
-                  {p.teacher ? <span className="text-sm font-semibold text-green"> · {p.teacher}</span> : null}
-                  <span className="text-sm text-muted"> · {p.school} · {p.size} soldiers</span>
+                <Card className="flex items-center gap-2.5 px-4 py-3 transition hover:shadow-hover">
+                  <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto flex-none" />
+                  <span>
+                    <span className="font-display font-bold text-navy">{p.className}</span>
+                    {p.teacher ? <span className="text-sm font-semibold text-green"> · {p.teacher}</span> : null}
+                    <span className="text-sm text-muted"> · {p.school} · {p.size} soldiers</span>
+                  </span>
                 </Card>
               </Link>
             ))}

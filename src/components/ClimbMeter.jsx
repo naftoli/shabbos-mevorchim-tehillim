@@ -27,20 +27,21 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
   const pct = (n) => (n / TOTAL) * 100
   const done = r >= TOTAL
   const climbingTo = t > r ? t : null
-  // Place each grade-finish mark, stacking labels onto higher rows when they sit
-  // too close together (high ladders finish the early grades near kapitel 0), so
-  // nothing overlaps.
-  const MIN_GAP = 6 // percent of the bar
+  // Place each grade-finish mark, packing labels onto as many stacked rows as it
+  // takes so none ever overlap (high ladders finish the early grades bunched near
+  // kapitel 0). Each label drops into the first row still clear at its position.
+  const MIN_GAP = 7 // percent of the bar two labels need between them on a row
   const ROW = 1.45 // rem per stacked row
   const BASE_TOP = 1.65 // rem below the track
-  let _prev = -Infinity
-  let _level = 0
+  const lanes = [] // last position used on each row, in order
   const placed = (ladder ? gradeMarks(ladder) : []).map((m) => {
     const pos = pct(m.v)
-    _level = pos - _prev < MIN_GAP ? (_level + 1) % 3 : 0
-    _prev = pos
-    return { ...m, pos, top: BASE_TOP + _level * ROW }
+    let lane = lanes.findIndex((last) => pos - last >= MIN_GAP)
+    if (lane === -1) { lane = lanes.length; lanes.push(pos) } else { lanes[lane] = pos }
+    return { ...m, pos, top: BASE_TOP + lane * ROW }
   })
+  // Reserve enough space below the track for the deepest label row.
+  const labelSpace = `${BASE_TOP + Math.max(1, lanes.length) * ROW + 0.4}rem`
 
   return (
     <div className="rounded-2xl bg-paper/70 p-5 sm:p-6">
@@ -67,7 +68,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
       </div>
 
       {/* The climb track */}
-      <div className="relative mt-7 mb-20 h-6">
+      <div className="relative mt-7 h-6" style={{ marginBottom: labelSpace }}>
         <div className="absolute inset-0 overflow-hidden rounded-full bg-track">
           {/* ghost fill to this month's target */}
           {climbingTo ? (

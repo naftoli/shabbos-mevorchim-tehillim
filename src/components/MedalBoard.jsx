@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MEDALS } from '@/lib/medals.js'
+import { MEDALS, legibleInk } from '@/lib/medals.js'
 import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
 
@@ -7,7 +7,7 @@ import { asset } from '@/lib/asset.js'
 function MiniMedal({ medal, earned, current }) {
   return (
     <span
-      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold ${earned ? 'ring-2' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-white'}`}
+      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold ring-2 ${earned ? '' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-black/10'}`}
       style={{ background: medal.color, color: medal.ink }}
       title={`${medal.name} — ${medal.threshold} missions`}
     >
@@ -32,7 +32,7 @@ export default function MedalBoard({ progress }) {
             </h3>
             <p className="text-sm text-muted">
               {medal.current ? (
-                <>Current medal: <span className="font-bold" style={{ color: medal.current.color }}>{medal.current.name}</span></>
+                <>Current medal: <span className="font-bold" style={{ color: legibleInk(medal.current.color) }}>{medal.current.name}</span></>
               ) : (
                 <>No medal yet — keep going!</>
               )}
@@ -56,7 +56,7 @@ export default function MedalBoard({ progress }) {
           </div>
           <p className="mt-2 text-center text-xs font-semibold text-muted">
             {medal.next ? (
-              <><span className="text-navy">{medal.missionsToNext}</span> to the <span style={{ color: medal.next.color }}>{medal.next.name}</span> medal</>
+              <><span className="text-navy">{medal.missionsToNext}</span> to the <span style={{ color: legibleInk(medal.next.color) }}>{medal.next.name}</span> medal</>
             ) : (
               <span className="text-green">All medals earned!</span>
             )}

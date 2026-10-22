@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import { Card } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
-import { MEDALS, MEDAL_THRESHOLDS } from '@/lib/medals.js'
+import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -35,13 +35,13 @@ function Level({ medal, index, missionsTotal }) {
     <div className="flex flex-col gap-4 border-t border-line py-5 sm:flex-row sm:items-center sm:gap-6">
       <div className="flex w-28 flex-none flex-col items-center gap-1 text-center">
         <span
-          className={`grid h-16 w-16 place-items-center rounded-full font-cond text-2xl font-black shadow-sm ${lit ? 'ring-2' : 'opacity-30 grayscale'} ${active ? 'ring-gold' : 'ring-white'}`}
+          className={`grid h-16 w-16 place-items-center rounded-full font-cond text-2xl font-black shadow-sm ring-2 ${lit ? '' : 'opacity-30 grayscale'} ${active ? 'ring-gold' : 'ring-black/10'}`}
           style={{ background: medal.color, color: medal.ink }}
         >
           {medal.threshold}
         </span>
         <span className="font-cond text-[11px] uppercase tracking-wide text-muted">Level {index + 1}</span>
-        <span className="text-[13px] font-bold" style={{ color: lit ? medal.color : 'var(--color-muted)' }}>{medal.name}</span>
+        <span className="text-[13px] font-bold" style={{ color: lit ? legible(medal.color) : 'var(--color-muted)' }}>{medal.name}</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {coins.map((n) => <Coin key={n} n={n} earned={n <= missionsTotal} />)}
@@ -90,7 +90,7 @@ export default function Medals() {
             </div>
             <p className="mt-3 text-center text-sm font-semibold text-navy">
               {medal.next ? (
-                <>You’re <span className="text-green">{medal.missionsToNext}</span> mission{medal.missionsToNext === 1 ? '' : 's'} from the <span style={{ color: medal.next.color }}>{medal.next.name}</span> medal — don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>!</>
+                <>You’re <span className="text-green">{medal.missionsToNext}</span> mission{medal.missionsToNext === 1 ? '' : 's'} from the <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span> medal — don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>!</>
               ) : (
                 <>Every medal earned — amazing! 👑</>
               )}
