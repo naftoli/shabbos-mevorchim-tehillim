@@ -12,6 +12,7 @@ import {
   ELAPSED_MONTHS,
   CAMPAIGN_YEAR,
   PRIOR_YEARS_KAPITLACH,
+  YEAR_KAPITLACH,
   DEMO_ADMINS,
   DEMO_ADMIN_PASSWORD,
   ARMY_DEDICATION,
@@ -110,7 +111,8 @@ export function getGlobalStats() {
 export function getRunningTotals() {
   const s = schools()
   const thisMonth = s.reduce((a, x) => a + x.saidMonth, 0)
-  const thisYear = s.reduce((a, x) => a + x.saidYear, 0)
+  // Headline worldwide total is a fixed demo figure (see YEAR_KAPITLACH).
+  const thisYear = YEAR_KAPITLACH
   return { thisMonth, thisYear, allTime: thisYear + PRIOR_YEARS_KAPITLACH }
 }
 

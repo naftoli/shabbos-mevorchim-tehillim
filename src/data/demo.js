@@ -27,6 +27,11 @@ export const CAMPAIGN_YEAR = _current ? currentHebrewYear() : '5786'
 // Tehillim said in prior years (so "all-time" reads bigger than this year).
 const PRIOR_YEARS_KAPITLACH = 1_240_000
 
+// The worldwide "Kapitlach Said · this year" headline total (demo figure). Kept
+// as a fixed number so the running totals read exactly this; all-time adds the
+// prior years on top (71,843 + 1,240,000 = 1,311,843).
+const YEAR_KAPITLACH = 71_843
+
 // Demo persistence: the roster is synthetic and rebuilt on every page load, so a
 // soldier's own ladder + monthly reports are kept in localStorage and overlaid
 // back on, making the demo feel real (what you entered is still there on reload).
@@ -244,4 +249,4 @@ export function schoolDedication(schoolId) {
   }
 }
 
-export { PRIOR_YEARS_KAPITLACH }
+export { PRIOR_YEARS_KAPITLACH, YEAR_KAPITLACH }
