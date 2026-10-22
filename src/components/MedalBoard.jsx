@@ -1,66 +1,73 @@
 import { Link } from 'react-router-dom'
-import { MEDALS, legibleInk } from '@/lib/medals.js'
+import { MEDALS } from '@/lib/medals.js'
 import { Card } from './ui.jsx'
+import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 
-// Small medal chip (just the threshold number); greyed until earned.
-function MiniMedal({ medal, earned, current }) {
+// One medal in the strip: an earned tier shows its colour + number; a locked
+// tier is a flat grey coin. Mirrors the Mashpia medal board's medal row.
+function StripMedal({ medal, earned, current }) {
   return (
     <span
-      className={`grid h-9 w-9 flex-none place-items-center rounded-full font-cond text-[12px] font-bold ring-2 ${earned ? '' : 'opacity-30 grayscale'} ${current ? 'ring-gold' : 'ring-black/10'}`}
-      style={{ background: medal.color, color: medal.ink }}
-      title={`${medal.name} — ${medal.threshold} missions`}
+      className="relative grid h-11 w-11 flex-none place-items-center rounded-full font-cond text-[13px] font-bold tabular-nums sm:h-12 sm:w-12 sm:text-[14px]"
+      style={
+        earned
+          ? {
+              background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
+              color: medal.ink,
+              boxShadow: current ? '0 0 0 3px var(--color-gold), 0 1px 3px rgba(0,0,0,.25)' : '0 1px 3px rgba(0,0,0,.25)',
+            }
+          : { background: '#c7ccd6', color: '#7e8795' }
+      }
+      title={`${medal.name} — ${medal.threshold} missions${earned ? ' · earned' : ''}`}
     >
       {medal.threshold}
     </span>
   )
 }
 
-// Compact medal summary on the dashboard — tap to open the full levels page.
+// Compact medal board on the dashboard — tap to open the full levels page.
 export default function MedalBoard({ progress }) {
   const { medal, missionsTotal } = progress
   const earnedCount = medal.earnedCount
+  const next = medal.next
+  const pct = Math.max(2, Math.round((missionsTotal / 110) * 100))
+
   return (
     <Link to="/medals" className="block">
       <Card className="p-5 transition hover:shadow-hover sm:p-6">
-        <div className="flex items-center gap-4">
-          <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto flex-none" />
+        {/* Header: current medal + count, with the "don't miss" nudge top-right */}
+        <div className="flex flex-wrap items-start gap-4">
+          <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-14 w-auto flex-none drop-shadow sm:h-16" />
           <div className="min-w-0 flex-1">
-            <p className="sh">Medal Board</p>
-            <h3 className="font-display text-xl font-black text-navy">
-              {missionsTotal} monthly mission{missionsTotal === 1 ? '' : 's'} earned
-            </h3>
-            <p className="text-sm text-muted">
-              {medal.current ? (
-                <>Current medal: <span className="font-bold" style={{ color: legibleInk(medal.current.color) }}>{medal.current.name}</span></>
-              ) : (
-                <>No medal yet — keep going!</>
-              )}
+            <h3 className="font-display text-2xl font-black leading-none text-navy">Tehillim</h3>
+            <p className="mt-1.5 text-sm text-muted">
+              <span className="font-display text-xl font-black text-navy">{fmt(missionsTotal)}</span> monthly mission{missionsTotal === 1 ? '' : 's'} earned
             </p>
           </div>
-          <span className="flex-none text-sm font-semibold text-blue">See all ›</span>
+          {next ? (
+            <div className="w-full rounded-xl bg-[#4358a2] px-3.5 py-2 text-center text-[13px] font-semibold leading-snug text-white sm:w-auto sm:max-w-[230px]">
+              Don’t miss a month to earn your <span className="font-bold text-gold">{next.name}</span> medal!
+            </div>
+          ) : null}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        {/* Medal strip */}
+        <div className="mt-5 flex flex-wrap items-center gap-2 sm:justify-between">
           {MEDALS.map((m) => (
-            <MiniMedal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
+            <StripMedal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
           ))}
         </div>
 
-        <div className="mt-4">
-          <div className="h-3 w-full overflow-hidden rounded-full bg-track">
-            <div
-              className="h-full rounded-full transition-[width] duration-700"
-              style={{ width: `${Math.max(2, Math.round((missionsTotal / 110) * 100))}%`, background: 'var(--grad-progress)' }}
-            />
-          </div>
-          <p className="mt-2 text-center text-xs font-semibold text-muted">
-            {medal.next ? (
-              <><span className="text-navy">{medal.missionsToNext}</span> to the <span style={{ color: legibleInk(medal.next.color) }}>{medal.next.name}</span> medal</>
-            ) : (
-              <span className="text-green">All medals earned!</span>
-            )}
-          </p>
+        {/* Progress bar — grey track, next-medal fill, centred label */}
+        <div className="relative mt-4 h-6 w-full overflow-hidden rounded-full" style={{ background: '#c5cbd9' }}>
+          <div
+            className="h-full rounded-full transition-[width] duration-700"
+            style={{ width: `${pct}%`, background: next ? next.color : 'var(--color-green)' }}
+          />
+          <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-[11px] font-bold uppercase tracking-wide text-white">
+            {next ? <>{medal.missionsToNext} Mission{medal.missionsToNext === 1 ? '' : 's'} To {next.name}!</> : <>Campaign complete! 👑</>}
+          </span>
         </div>
       </Card>
     </Link>

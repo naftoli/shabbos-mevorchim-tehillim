@@ -90,7 +90,7 @@ export default function Medals() {
             </div>
             <p className="mt-3 text-center text-sm font-semibold text-navy">
               {medal.next ? (
-                <>You’re <span className="text-green">{medal.missionsToNext}</span> mission{medal.missionsToNext === 1 ? '' : 's'} from the <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span> medal — don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>!</>
+                <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>.</span></>
               ) : (
                 <>Every medal earned — amazing! 👑</>
               )}
