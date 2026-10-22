@@ -21,7 +21,7 @@ const RACE_FILLS = [
 ]
 const SCHOOL_COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
-const PERFECT_SHOWN = 12 // sample shown on the worldwide page; the rest live on school pages
+const PERFECT_SHOWN = 24 // compact sample on the worldwide page; the rest live on school pages
 
 function Eyebrow({ icon, iconClass = 'h-5', className = '', children }) {
   return (
@@ -287,23 +287,27 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap gap-2">
             {platoons.slice(0, PERFECT_SHOWN).map((p) => (
-              <Link key={`${p.schoolId}-${p.className}`} to={`/s/${p.schoolId}`}>
-                <Card className="flex items-center gap-2.5 px-4 py-3 transition hover:shadow-hover">
-                  <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto flex-none" />
-                  <span>
-                    <span className="font-display font-bold text-navy">{p.className}</span>
-                    {p.teacher ? <span className="text-sm font-semibold text-green"> · {p.teacher}</span> : null}
-                    <span className="text-sm text-muted"> · {p.school} · {p.size} soldiers</span>
-                  </span>
-                </Card>
+              <Link
+                key={`${p.schoolId}-${p.className}`}
+                to={`/s/${p.schoolId}`}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20"
+                title={`${p.className} · ${p.school} · ${p.size} soldiers`}
+              >
+                <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
+                <span className="font-display font-bold text-navy">{p.className}</span>
+                <span className="text-navy/55">· {p.school}</span>
               </Link>
             ))}
+            {platoons.length > PERFECT_SHOWN ? (
+              <button
+                type="button"
+                onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
+                className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
+              >
+                +{fmt(platoons.length - PERFECT_SHOWN)} more — see by school
+              </button>
+            ) : null}
           </div>
-          {platoons.length > PERFECT_SHOWN ? (
-            <p className="mt-4 text-sm font-semibold text-muted">
-              + {fmt(platoons.length - PERFECT_SHOWN)} more across the schools — open a school below to see its perfect platoons.
-            </p>
-          ) : null}
         </section>
       ) : null}
 
