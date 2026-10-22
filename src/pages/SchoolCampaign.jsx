@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { Card, Pill, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
@@ -46,6 +46,7 @@ export default function SchoolCampaign() {
   }
 
   const perfect = classes.filter((c) => c.perfect)
+  const PERFECT_SHOWN = 24 // compact sample; the rest open on the school's own page
 
   return (
     <>
@@ -93,7 +94,7 @@ export default function SchoolCampaign() {
           </p>
           {perfect.length ? (
             <div className="flex flex-wrap gap-2">
-              {perfect.map((c) => (
+              {perfect.slice(0, PERFECT_SHOWN).map((c) => (
                 <span
                   key={c.id}
                   className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
@@ -104,6 +105,14 @@ export default function SchoolCampaign() {
                   {c.teacher ? <span className="text-navy/55">· {c.teacher}</span> : null}
                 </span>
               ))}
+              {perfect.length > PERFECT_SHOWN ? (
+                <Link
+                  to={`/perfect-platoons?school=${schoolId}`}
+                  className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
+                >
+                  +{fmt(perfect.length - PERFECT_SHOWN)} more — see all →
+                </Link>
+              ) : null}
             </div>
           ) : (
             <p className="text-sm font-semibold text-navy">No perfect platoons yet this month — a class turns perfect when every soldier in it completes their quota. Keep going! 💪</p>
