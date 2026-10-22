@@ -3,10 +3,11 @@
 // GENERATED from the campaign's "Master" sheet (13 grades x 12 months x up to
 // 8 ladders). Do not hand-edit cells; regenerate from the source sheet.
 //
-// A child picks a LADDER (1-8). Ladder N reaches the whole Tehillim (kapitel
-// 150) exactly in grade N+4, so Ladder 1 = finish by 5th grade ... Ladder 8 =
+// A child picks a LADDER (5-12), numbered by the grade in which they finish the
+// whole Tehillim (kapitel 150): Ladder 5 = finish by 5th grade ... Ladder 12 =
 // finish by 12th grade. The child stays on their ladder number every year.
-// Grade G offers ladders max(1, G-4)..8.
+// Grade G offers ladders max(5, G)..12. (The raw table below is still keyed by
+// the internal pace 1-8 = finish grade - 4, and re-keyed to 5-12 at load.)
 //
 // Each cell is the CUMULATIVE Shabbos-Mevorchim target for that grade + month +
 // ladder: { k: Hebrew range label ("א-נד"), v: numeric kapitel value, m:

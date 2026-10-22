@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Card, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
+import { LADDERS, GRADE_LABEL } from '@/data/ladders.js'
 
 const WHATSAPP = [
   {
@@ -61,7 +62,7 @@ export default function Resources() {
               a blank set for the whole class from here.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Pll>Ladder 1 → finish by 5th</Pll>
+              {LADDERS.map((L) => <Pll key={L}>Ladder {L} → finish by {GRADE_LABEL[String(L)]}</Pll>)}
             </div>
           </Card>
         </section>

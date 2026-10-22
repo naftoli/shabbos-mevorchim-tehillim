@@ -96,7 +96,7 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
         <StatTile icon={asset('design/icon-soldier-hat.png')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
         <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Schools" sub={`${fmt(totals.registered)} soldiers`} />
         <StatTile icon={asset('design/flag.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
-        <StatTile icon={asset('design/medal-gold.png')} value={`${pctMet}%`} label="Met Quota" sub={`${fmt(totals.met)} soldiers`} />
+        <StatTile icon={asset('design/medal-gold.png')} value={`${pctMet}%`} label="Completed Quota" sub={`${fmt(totals.met)} soldiers`} />
       </section>
 
       <Card className="mt-6 overflow-hidden">
@@ -167,7 +167,7 @@ function BaseReport({ schoolId, monthIdx, monthHeb, onPickClass }) {
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile icon={asset('design/icon-soldier-hat.png')} value={fmt(t.accomplished)} label="Kapitlach" sub={`of ${fmt(t.goal)} · ${t.goal ? Math.round((t.accomplished / t.goal) * 100) : 0}%`} />
         <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Classes" sub={`${fmt(t.size)} soldiers`} />
-        <StatTile icon={asset('design/medal-gold.png')} value={`${t.size ? Math.round((t.completed / t.size) * 100) : 0}%`} label="Met Quota" sub={`${fmt(t.completed)} soldiers`} />
+        <StatTile icon={asset('design/medal-gold.png')} value={`${t.size ? Math.round((t.completed / t.size) * 100) : 0}%`} label="Completed Quota" sub={`${fmt(t.completed)} soldiers`} />
         <StatTile icon={asset('design/flag.png')} value={fmt(t.perfect)} label="Perfect Platoons" sub="classes at 100%" />
       </section>
 
