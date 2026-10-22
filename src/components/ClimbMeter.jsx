@@ -27,21 +27,33 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
   const pct = (n) => (n / TOTAL) * 100
   const done = r >= TOTAL
   const climbingTo = t > r ? t : null
-  // Place each grade-finish mark, packing labels onto as many stacked rows as it
-  // takes so none ever overlap (high ladders finish the early grades bunched near
-  // kapitel 0). Each label drops into the first row still clear at its position.
+  // Place each grade-finish mark. High ladders finish the early grades bunched
+  // near kapitel 0, so instead of stacking every label below the track we spread
+  // them onto BOTH sides — some above, some below — and only stack when a side is
+  // still crowded. Each mark takes whichever side keeps it on the lowest row.
   const MIN_GAP = 7 // percent of the bar two labels need between them on a row
-  const ROW = 1.45 // rem per stacked row
-  const BASE_TOP = 1.65 // rem below the track
-  const lanes = [] // last position used on each row, in order
-  const placed = (ladder ? gradeMarks(ladder) : []).map((m) => {
+  const ROW = 1.4 // rem per stacked row
+  const ABOVE_BASE = 0.55 // rem above the track to the first row
+  const BELOW_BASE = 1.65 // rem below the track to the first row
+  const sides = { above: [], below: [] } // last position used on each row per side
+  const laneFor = (rows, pos) => {
+    const i = rows.findIndex((last) => pos - last >= MIN_GAP)
+    return i === -1 ? rows.length : i
+  }
+  const placed = (ladder ? gradeMarks(ladder) : []).map((m, idx) => {
     const pos = pct(m.v)
-    let lane = lanes.findIndex((last) => pos - last >= MIN_GAP)
-    if (lane === -1) { lane = lanes.length; lanes.push(pos) } else { lanes[lane] = pos }
-    return { ...m, pos, top: BASE_TOP + lane * ROW }
+    const lb = laneFor(sides.below, pos)
+    const la = laneFor(sides.above, pos)
+    // Lower row wins; on a tie, alternate sides to keep them balanced.
+    const side = lb !== la ? (lb < la ? 'below' : 'above') : idx % 2 === 0 ? 'below' : 'above'
+    const rows = sides[side]
+    const lane = laneFor(rows, pos)
+    if (lane === rows.length) rows.push(pos); else rows[lane] = pos
+    return { ...m, pos, side, offset: (side === 'above' ? ABOVE_BASE : BELOW_BASE) + lane * ROW }
   })
-  // Reserve enough space below the track for the deepest label row.
-  const labelSpace = `${BASE_TOP + Math.max(1, lanes.length) * ROW + 0.4}rem`
+  // Reserve enough room on each side for its deepest label row.
+  const topSpace = `${sides.above.length ? ABOVE_BASE + sides.above.length * ROW + 1.1 : 1.3}rem`
+  const bottomSpace = `${sides.below.length ? BELOW_BASE + sides.below.length * ROW + 0.4 : 0.6}rem`
 
   return (
     <div className="rounded-2xl bg-paper/70 p-5 sm:p-6">
@@ -68,7 +80,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
       </div>
 
       {/* The climb track */}
-      <div className="relative mt-7 h-6" style={{ marginBottom: labelSpace }}>
+      <div className="relative h-6" style={{ marginTop: topSpace, marginBottom: bottomSpace }}>
         <div className="absolute inset-0 overflow-hidden rounded-full bg-track">
           {/* ghost fill to this month's target */}
           {climbingTo ? (
@@ -85,21 +97,32 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
         </div>
 
         {/* A tick where this ladder finishes each grade: divider + Aleph-Beis
-            kapitel + grade, stacked onto rows so nothing overlaps. */}
+            kapitel + grade. Marks sit above or below the track so the bunched
+            early grades don't pile up on one side. */}
         {placed.map((m) => {
           const finish = m.v >= TOTAL
           const left = `${m.pos}%`
+          const heb = (
+            <span className={`font-heb text-[12px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>{finish ? '👑' : m.heb}</span>
+          )
+          const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
+          if (m.side === 'above') {
+            return (
+              <span key={m.grade}>
+                <span className="absolute w-px bg-white/70" style={{ left, bottom: '100%', height: `${m.offset - 0.15}rem` }} aria-hidden="true" />
+                <span className="absolute flex -translate-x-1/2 flex-col items-center leading-tight" style={{ left, bottom: `calc(100% + ${m.offset}rem)` }}>
+                  {grade}
+                  {heb}
+                </span>
+              </span>
+            )
+          }
           return (
             <span key={m.grade}>
-              <span className="absolute top-0 w-px bg-white/70" style={{ left, height: `${m.top - 0.15}rem` }} aria-hidden="true" />
-              <span
-                className="absolute flex -translate-x-1/2 flex-col items-center leading-tight"
-                style={{ left, top: `${m.top}rem` }}
-              >
-                <span className={`font-heb text-[12px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>
-                  {finish ? '👑' : m.heb}
-                </span>
-                <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
+              <span className="absolute top-0 w-px bg-white/70" style={{ left, height: `${m.offset - 0.15}rem` }} aria-hidden="true" />
+              <span className="absolute flex -translate-x-1/2 flex-col items-center leading-tight" style={{ left, top: `${m.offset}rem` }}>
+                {heb}
+                {grade}
               </span>
             </span>
           )
