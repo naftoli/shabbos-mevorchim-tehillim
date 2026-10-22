@@ -2,21 +2,21 @@
 // quota). Eleven tiers, each its own color.
 export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95, 110]
 
-// Named by colour to match the Mashpia medal board. `ink` is the number colour
-// for contrast on light vs. dark medals. 5 / 95 / 110 were still locked in the
-// reference screenshots — best read; easy to adjust.
+// Names and colours taken straight from the Mashpia medal board source
+// (לבן/אדום/כתום/צהוב/ירוק/כחול/סגול/חום/אפור/שחור/ברונזה). `ink` is the number
+// colour for contrast on light vs. dark medals.
 export const MEDALS = [
-  { name: 'White', color: '#eef1f6', ink: '#1b2a4e' },
-  { name: 'Red', color: '#e23b3b', ink: '#ffffff' },
-  { name: 'Orange', color: '#ef8a2b', ink: '#ffffff' },
-  { name: 'Gold', color: '#efb11d', ink: '#1b2a4e' },
-  { name: 'Green', color: '#3aa64a', ink: '#ffffff' },
-  { name: 'Blue', color: '#3b5bdb', ink: '#ffffff' },
-  { name: 'Purple', color: '#9c36b5', ink: '#ffffff' },
-  { name: 'Bronze', color: '#a56a2e', ink: '#ffffff' },
-  { name: 'Gray', color: '#868e96', ink: '#ffffff' },
-  { name: 'Black', color: '#343a40', ink: '#ffffff' },
-  { name: 'Platinum', color: '#cfd4da', ink: '#1b2a4e' },
+  { name: 'White', color: '#d8dbde', ink: '#1b2a4e' },
+  { name: 'Red', color: '#aa2834', ink: '#ffffff' },
+  { name: 'Orange', color: '#d55027', ink: '#ffffff' },
+  { name: 'Yellow', color: '#d29020', ink: '#ffffff' },
+  { name: 'Green', color: '#23914b', ink: '#ffffff' },
+  { name: 'Blue', color: '#2b3078', ink: '#ffffff' },
+  { name: 'Purple', color: '#4d297b', ink: '#ffffff' },
+  { name: 'Brown', color: '#6d4c38', ink: '#ffffff' },
+  { name: 'Gray', color: '#71707b', ink: '#ffffff' },
+  { name: 'Black', color: '#0a0515', ink: '#ffffff' },
+  { name: 'Bronze', color: '#bcaaa4', ink: '#1b2a4e' },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
 // A medal's own colour can be too light to read as text on a light card
