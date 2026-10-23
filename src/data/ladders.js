@@ -27,7 +27,8 @@ export const GRADE_LABEL = {"1":"1st","2":"2nd","3":"3rd","4":"4th","5":"5th","6
 
 // A ladder IS numbered by the grade a child finishes the whole Tehillim in:
 // Ladder 5 finishes in 5th grade … Ladder 12 finishes in 12th grade.
-export const LADDERS = [5, 6, 7, 8, 9, 10, 11, 12]
+// Listed high → low so the steepest ladder (12) shows first everywhere.
+export const LADDERS = [12, 11, 10, 9, 8, 7, 6, 5]
 
 // The grade in which a ladder reaches the full 150 kapitlach — the ladder number.
 export const finishGrade = (ladder) => ladder
