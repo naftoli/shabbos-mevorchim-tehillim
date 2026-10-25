@@ -1,5 +1,5 @@
 // Resolve a file from public/ under the deploy sub-path.
-// The site is served at /mivtzoim/tehillim/ (vite.config.js `base`), so nothing
+// The site is served at /shabbos-mevorchim-tehillim/ (vite.config.js `base`), so nothing
 // may hard-code a root-absolute path like "/th-logo.png" — always go through
 // asset('th-logo.png') / asset('design/flag.png').
 // import.meta.env.BASE_URL always ends with "/", so a leading slash is dropped.

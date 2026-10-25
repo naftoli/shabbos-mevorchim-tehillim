@@ -16,9 +16,9 @@ RewriteRule ^api/index\.php$ - [L]
 RewriteRule ^api(/.*)?$ api/index.php [L,QSA]
 
 # Serve Vite's generated files from dist while keeping the public URL at
-# /mivtzoim/tehillim/.
+# /shabbos-mevorchim-tehillim/.
 RewriteRule ^dist(/.*)?$ - [L]
-RewriteCond %{DOCUMENT_ROOT}/mivtzoim/tehillim/dist/$1 -f
+RewriteCond %{DOCUMENT_ROOT}/shabbos-mevorchim-tehillim/dist/$1 -f
 RewriteRule ^(.+)$ dist/$1 [L]
 
 # React Router handles application routes such as /admin and /s/example.

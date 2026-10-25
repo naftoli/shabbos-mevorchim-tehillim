@@ -7,7 +7,7 @@ const WHATSAPP = [
   {
     title: 'Sign-up message',
     text:
-      '🎖️ Our class joined the Worldwide Tehillim Club! Every Shabbos Mevorchim your child says Tehillim and climbs toward finishing the whole Sefer Tehillim. Please help them pick a ladder and report each month. Join: https://mashpia.com/mivtzoim/tehillim/',
+      '🎖️ Our class joined the Worldwide Tehillim Club! Every Shabbos Mevorchim your child says Tehillim and climbs toward finishing the whole Sefer Tehillim. Please help them pick a ladder and report each month. Join: https://mashpia.com/shabbos-mevorchim-tehillim/',
   },
   {
     title: 'Monthly reminder',

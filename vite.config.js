@@ -29,7 +29,7 @@ function rosterGuard() {
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/mivtzoim/tehillim/',
+  base: '/shabbos-mevorchim-tehillim/',
   plugins: [rosterGuard(), react(), tailwindcss()],
   // `@/…` is what shadcn components import themselves by (see components.json).
   resolve: {
@@ -37,7 +37,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/mivtzoim/tehillim/api': {
+      '/shabbos-mevorchim-tehillim/api': {
         target: process.env.WWTC_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
       },
