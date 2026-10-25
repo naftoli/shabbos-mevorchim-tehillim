@@ -245,36 +245,11 @@ if ($method === 'GET' && $path === '/stats') {
     $quota = (int) ($army['Kapitelach'][$current] ?? 0);
     $done = (int) ($armyDone['Kapitelach'][$current] ?? 0);
 
-    // Minutes aren't computed by setArmyResults(); one direct pair of queries,
-    // mirroring that method's SQL with the Minutes grid id (8002).
-    $tasks = $report->getTasks();
-    $minutesGrid = (int) ($tasks['Minutes'] ?? 8002);
-    $qStmt = $MASHPIA_DB->prepare(
-        'SELECT SUM(dt.quantity) AS total
-           FROM date_tasks dt
-           JOIN date_tasks_missions dtm USING (date_tasks_mission_id)
-           JOIN user_tracks ut USING (track_id, level, subject_id)
-           JOIN users u USING (user_id)
-           JOIN schools s USING (school_id)
-           JOIN classes c USING (class_id)
-          WHERE ut.subject_id = :subj AND ut.enrolled = 1
-            AND dtm.start_date = :d AND dtm.end_date = :d
-            AND dtm.school_type_id = u.school_type_id AND dt.grid_id = :grid
-            AND s.school_era IS NULL AND c.class_era = 0
-            AND u.user_registered > 0 AND u.school_id != 612
-            AND u.lang_id = dtm.lang_id'
-    );
-    $qStmt->execute([':subj' => WWTC_SUBJECT_ID, ':d' => $current, ':grid' => $minutesGrid]);
-    $minutesQuota = (int) ($qStmt->fetchColumn() ?: 0);
-    $dStmt = $MASHPIA_DB->prepare(
-        'SELECT SUM(dtm.done_qty) AS total
-           FROM date_tasks_marks dtm
-           JOIN date_tasks dt USING (date_task_id)
-           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
-          WHERE dtmm.start_date = :d AND dtmm.end_date = :d AND dt.grid_id = :grid'
-    );
-    $dStmt->execute([':d' => $current, ':grid' => $minutesGrid]);
-    $minutes = (int) ($dStmt->fetchColumn() ?: 0);
+    // Minutes: setArmyResults() covers Kapitelach only, so read the Minutes task
+    // off setASR() — the same per-school figures the summary's Minutes chart uses.
+    $report->setASR($current);
+    $minutesQuota = (int) array_sum($report->getArmySchoolsResults()['Minutes'] ?? []);
+    $minutes = (int) array_sum($report->getArmySchoolsDoneResults()['Minutes'] ?? []);
 
     // Counts, with the same roster filters the army query uses.
     $soldiers = (int) $MASHPIA_DB->query(
@@ -285,12 +260,7 @@ if ($method === 'GET' && $path === '/stats') {
            JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
           WHERE u.user_registered > 0 AND s.school_era IS NULL AND c.class_era = 0 AND u.school_id != 612'
     )->fetchColumn();
-    $schools = (int) $MASHPIA_DB->query(
-        'SELECT COUNT(*) FROM schools s
-           JOIN school_subjects ss USING (school_id)
-          WHERE s.school_era IS NULL AND ss.subject_id = ' . WWTC_SUBJECT_ID . '
-            AND s.chayolei = 1 AND s.test_school = 0 AND s.school_id NOT IN (82, 612)'
-    )->fetchColumn();
+    $schools = count($report->getSchools()); // setASR()'s school roster
     $classes = (int) $MASHPIA_DB->query(
         'SELECT COUNT(DISTINCT c.class_id)
            FROM classes c
@@ -319,52 +289,23 @@ if ($method === 'GET' && $path === '/stats') {
 
 if ($method === 'GET' && $path === '/schools') {
     $current = wwtcCurrentDate();
-    $names = wwtcEligibleSchools();
-
-    $quota = $MASHPIA_DB->prepare(
-        'SELECT u.school_id, SUM(dt.quantity) total
-           FROM date_tasks dt
-           JOIN date_tasks_missions dtm USING (date_tasks_mission_id)
-           JOIN user_tracks ut USING (track_id, level, subject_id)
-           JOIN users u USING (user_id)
-           JOIN classes c ON c.class_id = u.class_id
-          WHERE ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
-            AND dtm.start_date = :d AND dtm.end_date = :d AND dt.grid_id = 8001
-            AND dtm.school_type_id = u.school_type_id AND u.user_registered > 0
-            AND c.class_era = 0 AND u.lang_id = dtm.lang_id
-          GROUP BY u.school_id'
-    );
-    $quota->execute([':d' => $current]);
-    $quotaBy = $quota->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $done = $MASHPIA_DB->prepare(
-        'SELECT u.school_id, SUM(dtm.done_qty) total
-           FROM date_tasks_marks dtm
-           JOIN date_tasks dt USING (date_task_id)
-           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
-           JOIN users u USING (user_id)
-          WHERE dtmm.start_date = :d AND dtmm.end_date = :d AND dt.grid_id = 8001
-          GROUP BY u.school_id'
-    );
-    $done->execute([':d' => $current]);
-    $doneBy = $done->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $kids = $MASHPIA_DB->query(
-        'SELECT u.school_id, COUNT(DISTINCT u.user_id) total
-           FROM users u
-           JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
-          WHERE u.user_registered > 0
-          GROUP BY u.school_id'
-    )->fetchAll(PDO::FETCH_KEY_PAIR);
+    // Same computation the WWTC summary report uses (shabbos_mevorchim_summary.php):
+    // setASR() fills the per-school goal/done arrays that generateArmyAccomplishedReport
+    // renders — backup-first done, id 61 included — so these match the report exactly.
+    $sm = wwtcReport($current);
+    $sm->setArmyResults();
+    $sm->setASR($current);
+    $names = $sm->getSchools();                                   // [id => name]
+    $goal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];     // [id => goal]
+    $done = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? []; // [id => done]
 
     $rows = [];
     foreach ($names as $id => $name) {
-        $said = (int) ($doneBy[$id] ?? 0);
-        $q = (int) ($quotaBy[$id] ?? 0);
+        $q = (int) ($goal[$id] ?? 0);
+        $said = (int) ($done[$id] ?? 0);
         $rows[] = [
             'id' => (int) $id,
-            'name' => $name,
-            'kids' => (int) ($kids[$id] ?? 0),
+            'name' => (string) $name,
             'saidMonth' => $said,
             'quotaMonth' => $q,
             'pct' => wwtcPct($said, $q),
@@ -485,67 +426,34 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
 // ---- reports ----------------------------------------------------------------
 
 if ($method === 'GET' && $path === '/reports/army') {
+    // The army accomplishment report (generateArmyAccomplishedReport): one row
+    // per school, Goal / Accomplished / More Than Goal / Less Than Goal, from
+    // setASR() — identical to shabbos_mevorchim_summary.php.
     $current = wwtcCurrentDate();
-    $names = wwtcEligibleSchools();
-
-    // One row per user: their quota for the month and their done, then aggregate
-    // per school in PHP (avoids a per-school query loop).
-    $uQuota = $MASHPIA_DB->prepare(
-        'SELECT u.user_id, u.school_id, dt.quantity q
-           FROM date_tasks dt
-           JOIN date_tasks_missions dtm USING (date_tasks_mission_id)
-           JOIN user_tracks ut USING (track_id, level, subject_id)
-           JOIN users u USING (user_id)
-           JOIN classes c ON c.class_id = u.class_id
-          WHERE ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
-            AND dtm.start_date = :d AND dtm.end_date = :d AND dt.grid_id = 8001
-            AND dtm.school_type_id = u.school_type_id AND u.user_registered > 0
-            AND c.class_era = 0 AND u.lang_id = dtm.lang_id'
-    );
-    $uQuota->execute([':d' => $current]);
-
-    $uDone = $MASHPIA_DB->prepare(
-        'SELECT dtm.user_id, MAX(dtm.done_qty) d
-           FROM date_tasks_marks dtm
-           JOIN date_tasks dt USING (date_task_id)
-           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
-          WHERE dtmm.start_date = :d AND dtmm.end_date = :d AND dt.grid_id = 8001
-          GROUP BY dtm.user_id'
-    );
-    $uDone->execute([':d' => $current]);
-    $doneByUser = $uDone->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $agg = [];
-    foreach ($uQuota->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $sid = (int) $r['school_id'];
-        if (!isset($names[$sid])) {
-            continue;
-        }
-        $q = (int) $r['q'];
-        $d = (int) ($doneByUser[$r['user_id']] ?? 0);
-        $a = &$agg[$sid];
-        $a['registered'] = ($a['registered'] ?? 0) + 1;
-        $a['goal'] = ($a['goal'] ?? 0) + $q;
-        $a['accomplished'] = ($a['accomplished'] ?? 0) + $d;
-        $a['participated'] = ($a['participated'] ?? 0) + ($d > 0 ? 1 : 0);
-        $a['met'] = ($a['met'] ?? 0) + ($q > 0 && $d >= $q ? 1 : 0);
-        unset($a);
-    }
+    $sm = wwtcReport($current);
+    $sm->setArmyResults();
+    $sm->setASR($current);
+    $names = $sm->getSchools();
+    $goal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];
+    $done = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
 
     $rows = [];
     foreach ($names as $id => $name) {
-        $a = $agg[$id] ?? ['registered' => 0, 'goal' => 0, 'accomplished' => 0, 'participated' => 0, 'met' => 0];
-        $reg = (int) $a['registered'];
+        $g = (int) ($goal[$id] ?? 0);
+        $d = (int) ($done[$id] ?? 0);
         $rows[] = [
             'id' => (int) $id,
-            'name' => $name,
-            'registered' => $reg,
-            'goal' => (int) $a['goal'],
-            'accomplished' => (int) $a['accomplished'],
-            'pctParticipated' => $reg ? (int) round($a['participated'] / $reg * 100) : 0,
-            'pctMet' => $reg ? (int) round($a['met'] / $reg * 100) : 0,
+            'name' => (string) $name,
+            'goal' => $g,
+            'accomplished' => $d,
+            'pct' => wwtcPct($d, $g),
+            'moreThanGoal' => max(0, $d - $g),
+            'lessThanGoal' => max(0, $g - $d),
         ];
     }
+    usort($rows, static function ($a, $b) {
+        return $b['pct'] <=> $a['pct'] ?: $b['accomplished'] <=> $a['accomplished'];
+    });
     wwtcJson(['month' => wwtcMonthForDate($current), 'rows' => $rows]);
 }
 
@@ -675,22 +583,15 @@ if ($method === 'GET' && $path === '/me/social') {
         }
     }
 
-    // School standing nationwide, by kapitlach this month.
+    // School standing nationwide, by kapitlach this month (same source as /schools).
     $current = wwtcCurrentDate();
-    $done = $MASHPIA_DB->prepare(
-        'SELECT u.school_id, SUM(dtm.done_qty) total
-           FROM date_tasks_marks dtm
-           JOIN date_tasks dt USING (date_task_id)
-           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
-           JOIN users u USING (user_id)
-          WHERE dtmm.start_date = :d AND dtmm.end_date = :d AND dt.grid_id = 8001
-          GROUP BY u.school_id'
-    );
-    $done->execute([':d' => $current]);
-    $doneBy = $done->fetchAll(PDO::FETCH_KEY_PAIR);
+    $rankSm = wwtcReport($current);
+    $rankSm->setArmyResults();
+    $rankSm->setASR($current);
+    $rankDone = $rankSm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
     $ranked = [];
-    foreach (wwtcEligibleSchools() as $sid => $name) {
-        $ranked[$sid] = (int) ($doneBy[$sid] ?? 0);
+    foreach ($rankSm->getSchools() as $sid => $name) {
+        $ranked[$sid] = (int) ($rankDone[$sid] ?? 0);
     }
     arsort($ranked);
     $schoolRank = array_search($schoolId, array_keys($ranked), true);
