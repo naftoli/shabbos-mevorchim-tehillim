@@ -116,7 +116,13 @@ function buildReply(text, ctx) {
   if (has('how does it work', 'how it work', 'how do i', 'explain', 'what is this', 'what do i do', 'understand')) {
     return `It's simple, ${firstName}: every Shabbos Mevorchim you say your Tehillim and mark it done here. You pick a “ladder” — your training plan for the grade you'll finish training to say the whole Tehillim by — and each month it tells you exactly what to say. Little by little, you train up to all 150 kapitlach! 📖`
   }
-  if (has('pick', 'choose', 'which ladder', 'what ladder', 'help me pick')) {
+  // Which ladder am I on? — check before "pick a ladder" so it isn't mistaken
+  // for a help-choosing question.
+  if (has('am i on', 'currently on', 'ladder am i', 'which ladder am i', 'what ladder am i', 'which one am i', 'what one am i', 'my ladder', 'my current', 'on now', "i'm on", 'im on', 'which number am i', 'what number am i', 'am i currently')) {
+    if (!ladder) return `You haven't picked your ladder yet, ${firstName} — want help choosing one? 🪜`
+    return `You're on Ladder ${ladder} — you're training to say the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
+  }
+  if (has('help me pick', 'help me choose', 'help pick', 'help choose', 'pick', 'choose', 'which ladder', 'what ladder', 'recommend', 'should i be on')) {
     return `A ladder is your training plan — the grade you'll finish training to say the whole Tehillim by. A lower number means a little more each month, a higher number is a gentler climb. Pick whatever feels right for you; you can always change it later. Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page and I'll be right here. 🪜`
   }
   if (has('challenge', 'harder', 'move up', 'switch', 'change', 'tell me about ladder', 'bigger')) {
