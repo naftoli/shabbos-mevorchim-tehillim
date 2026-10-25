@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Button, Card, Avatar, Field, Input } from '@/components/ui.jsx'
@@ -16,6 +16,19 @@ import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 
+// Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
+// component identity across renders.
+function LadderGlyph(props) {
+  return (
+    <svg viewBox="0 0 26 40" aria-hidden="true" {...props}>
+      <g stroke="#ffd54a" strokeWidth="3" strokeLinecap="round">
+        <line x1="7" y1="38" x2="7" y2="3" /><line x1="19" y1="38" x2="19" y2="3" />
+        <line x1="7" y1="30" x2="19" y2="30" /><line x1="7" y1="21" x2="19" y2="21" /><line x1="7" y1="12" x2="19" y2="12" />
+      </g>
+    </svg>
+  )
+}
+
 export default function KidDashboard() {
   const { kid, logoutKid } = useAuth()
   const navigate = useNavigate()
@@ -26,9 +39,14 @@ export default function KidDashboard() {
     // with the session's chosen ladder before reading progress.
     if (kid.ladder) setKidLadder(kid.id, kid.ladder)
     return getKidProgress(kid.id)
+    // `tick` is a deliberate recompute key: saveReport mutates the in-memory
+    // demo store and bumps it. It isn't read in the body, so the heuristic calls
+    // it unnecessary, but dropping it would stop the re-read after a save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kid, tick])
 
   const cur = progress?.current
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `tick` recompute key; see progress above
   const social = useMemo(() => (kid?.ladder ? getKidSocial(kid.id) : null), [kid, tick])
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
   // Furthest kapitel actually climbed this year = highest completed month's target.
@@ -39,11 +57,17 @@ export default function KidDashboard() {
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
   const [welcomeOpen, setWelcomeOpen] = useState(true)
-  // Keep the report inputs showing what's currently on record for this month.
-  useEffect(() => {
+  // Seed the report inputs from what's on record, re-seeding whenever the month
+  // or its recorded values change. Adjusted during render (not in an effect) per
+  // React's "adjusting state when a prop changes" guidance; typing into the
+  // inputs doesn't change seedKey, so edits aren't clobbered.
+  const [seeded, setSeeded] = useState(null)
+  const seedKey = cur ? `${cur.month}|${cur.said}|${cur.saidMinutes}` : null
+  if (seedKey !== seeded) {
     setSaid(cur && cur.said ? String(cur.said) : '')
     setMins(cur && cur.saidMinutes ? String(cur.saidMinutes) : '')
-  }, [cur?.month, cur?.said, cur?.saidMinutes])
+    setSeeded(seedKey)
+  }
 
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) return <Navigate to="/login" replace />
@@ -83,16 +107,6 @@ export default function KidDashboard() {
     setTick((t) => t + 1)
     if (prog?.current?.met && !wasMet) celebrate()
   }
-
-  // Shared ladder glyph (gold on navy).
-  const LadderGlyph = (props) => (
-    <svg viewBox="0 0 26 40" aria-hidden="true" {...props}>
-      <g stroke="#ffd54a" strokeWidth="3" strokeLinecap="round">
-        <line x1="7" y1="38" x2="7" y2="3" /><line x1="19" y1="38" x2="19" y2="3" />
-        <line x1="7" y1="30" x2="19" y2="30" /><line x1="7" y1="21" x2="19" y2="21" /><line x1="7" y1="12" x2="19" y2="12" />
-      </g>
-    </svg>
-  )
 
   return (
     <>

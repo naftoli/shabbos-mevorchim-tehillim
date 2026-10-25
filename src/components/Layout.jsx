@@ -22,7 +22,14 @@ export default function Layout({ children }) {
   const menuId = useId()
   const menuBtn = useRef(null)
 
-  useEffect(() => { setMenuOpen(false) }, [pathname])
+  // Close the mobile menu on navigation. Adjusted during render (per React's
+  // "adjusting state when a prop changes" guidance) rather than in an effect.
+  const [lastPath, setLastPath] = useState(pathname)
+  if (pathname !== lastPath) {
+    setLastPath(pathname)
+    setMenuOpen(false)
+  }
+
   useEffect(() => {
     if (!menuOpen) return
     const onKey = (e) => {

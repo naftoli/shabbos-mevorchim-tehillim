@@ -34,8 +34,11 @@ export function AuthProvider({ children }) {
   // shouldn't log a ghost in). Also sync the session's chosen ladder back into
   // the (in-memory) demo roster, which rebuilds ladderless on every page load —
   // otherwise the dashboard reads a ladderless record and shows 0 / —.
+  // This synchronizes React with an external system (the roster + localStorage),
+  // the sanctioned use of an effect, so set-state-in-effect is a false positive.
   useEffect(() => {
     if (!kid) return
+    // eslint-disable-next-line react/set-state-in-effect
     if (!getKid(kid.id)) { setKid(null); save(KID_KEY, null); return }
     if (kid.ladder) setKidLadder(kid.id, kid.ladder)
   }, [kid])
@@ -88,6 +91,7 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react/only-export-components -- the hook is colocated with its provider; the fast-refresh hint doesn't apply to a context module
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
