@@ -1,22 +1,58 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
-import { asset } from '@/lib/asset.js'
 
-// A friendly Tzivos Hashem commander who greets the soldier and answers from
-// what the site already knows about them. Scripted (no API / no cost / safe for
-// kids) — it matches keywords in the child's question to the data on record.
-// Rename the mascot here.
-const BOT_NAME = 'Commander Mendy'
+// A warm, caring Tehillim helper (NOT a commander). It greets the child by name
+// and opens with a nudge that fits how they're actually doing — behind on quota,
+// way ahead, or still finding their feet — then chats from the data on record.
+// Scripted, client-side, kid-safe. Rename the helper here:
+const BOT_NAME = 'Tzviki'
 
-const QUICK_REPLIES = [
-  'My mission this month',
-  'How am I doing?',
-  'My next medal',
-  'When’s the next Shabbos Mevorchim?',
-]
+// Which situation is the child in right now? Drives the opening greeting.
+function readSituation(ctx) {
+  const { ladder, progress } = ctx
+  if (!ladder) return 'pick'
+  const prior = (progress?.months ?? []).filter((m) => !m.isCurrent)
+  const last = prior[prior.length - 1]
+  if (last && !last.met) return 'behind'
+  const last3 = prior.slice(-3)
+  if (last3.length >= 3 && last3.every((m) => m.said > m.quota) && ladder > 5) return 'ahead'
+  return 'ontrack'
+}
+
+function openingGreeting(ctx) {
+  const { firstName, ladder, progress } = ctx
+  switch (ctx.situation) {
+    case 'pick':
+      return `Hi ${firstName}! 👋 Do you need help picking your ladder, or understanding how the Tehillim Club works? I'm here for you.`
+    case 'behind': {
+      const prior = progress.months.filter((m) => !m.isCurrent)
+      const last = prior[prior.length - 1]
+      const heb = last ? MONTH_HEB[last.month] : ''
+      return `Hi ${firstName}. I noticed you didn't finish your Tehillim${heb ? ` for ${heb}` : ' last month'} — is everything okay? Your class, your school, and the whole army are counting on you. Even a little gets you right back on track. 💙`
+    }
+    case 'ahead':
+      return `Hi ${firstName}! 🌟 You've been doing even more than your quota 3 months running — amazing! Ready for a bigger challenge? You could move up to Ladder ${ladder - 1}. Want to hear about it?`
+    default:
+      return `Hi ${firstName}! 👋 So good to see you — you're doing beautifully, ${progress?.missionsTotal ?? 0} missions done. Need anything? I can show your mission this month or how you're doing.`
+  }
+}
+
+function quickRepliesFor(ctx) {
+  switch (ctx.situation) {
+    case 'pick':
+      return ['Help me pick my ladder', 'How does it work?']
+    case 'behind':
+      return ['What do I say this month?', 'How does it work?']
+    case 'ahead':
+      return [`Tell me about Ladder ${ctx.ladder - 1}`, 'How am I doing?']
+    default:
+      return ['My mission this month', 'How am I doing?', 'My medals']
+  }
+}
 
 function buildReply(text, ctx) {
   const t = ` ${text.toLowerCase()} `
@@ -26,61 +62,75 @@ function buildReply(text, ctx) {
   const medal = progress?.medal
   const plural = (n) => (n === 1 ? '' : 's')
 
-  if (has('help', 'what can you', 'what do you')) {
-    return `I'm your commander, ${firstName}! 🫡 Ask me about:\n• your mission this month\n• how you're doing\n• your medals\n• your ladder\n• your rank\n• the next Shabbos Mevorchim`
+  if (has('how does it work', 'how it work', 'how do i', 'explain', 'what is this', 'what do i do', 'understand')) {
+    return `It's simple, ${firstName}: every Shabbos Mevorchim you say your Tehillim and mark it done here. You pick a “ladder” — the grade you want to finish the whole Sefer Tehillim by — and each month it tells you exactly what to say. Little by little, you climb to all 150 kapitlach! 📖`
   }
-  if (!ladder && has('mission', 'say', 'kapitl', 'kapitel', 'quota', 'month', 'ladder', 'doing')) {
-    return `First pick your ladder, soldier — then I'll tell you exactly what to say each month. Tap “Pick my ladder”! 🪜`
+  if (has('pick', 'choose', 'which ladder', 'what ladder', 'help me pick')) {
+    return `A ladder is the grade you'll finish the whole Tehillim by — a lower number means a little more each month, a higher number is a gentler climb. Pick whatever feels right for you; you can always change it later. Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page and I'll be right here. 🪜`
+  }
+  if (has('challenge', 'harder', 'move up', 'switch', 'change', 'tell me about ladder', 'bigger')) {
+    const target = ladder && ladder > 5 ? ladder - 1 : ladder
+    if (ladder && ladder > 5) return `Ladder ${target} finishes the whole Tehillim by ${GRADE_LABEL[String(target)]} grade — a bit more each month than Ladder ${ladder}. If you're saying more than your quota already, you'd do great! Tap “Switch my ladder” whenever you're ready. 🌟`
+    return `You're already on the steepest ladder — that's the fastest climb there is! Incredible, ${firstName}. 🌟`
   }
   if (has('mission', ' say', 'kapitl', 'kapitel', 'quota', 'this month')) {
-    if (!cur) return `Pick your ladder first and I'll give you your mission, soldier! 🪜`
+    if (!cur || !ladder) return `Pick your ladder first and I'll tell you exactly what to say each month. Want help choosing? 🪜`
     const mins = cur.minutes ? ` (about ${cur.minutes} minutes)` : ''
-    const status = cur.met
-      ? `You already reported it — mission complete! 👑`
-      : `Say it this Shabbos Mevorchim and mark it done on your dashboard. 💪`
-    return `This month — Shabbos Mevorchim ${monthHeb} — your mission is to say up to ${cur.quotaLabel}, that's ${cur.quota} kapitlach${mins}. ${status}`
+    const status = cur.met ? `And you already did it — wonderful! 🌟` : `Say it this Shabbos Mevorchim and mark it done here. You've got this! 💪`
+    return `This month — Shabbos Mevorchim ${monthHeb} — you say up to ${cur.quotaLabel}, that's ${cur.quota} kapitlach${mins}. ${status}`
   }
   if (has('medal')) {
-    if (!medal) return `Finish a month's Tehillim and you earn a mission — missions earn medals! 🎖️`
+    if (!medal) return `Finishing a month's Tehillim earns you a mission — and missions earn you medals! 🎖️`
     const current = medal.current ? `You've earned the ${medal.current.name} medal 🎖️.` : `No medal yet — your first is ${medal.next?.name} at ${medal.next?.threshold} missions.`
-    const next = medal.next ? ` You're just ${medal.missionsToNext} mission${plural(medal.missionsToNext)} from ${medal.next.name}!` : ` You've earned every medal — incredible! 👑`
+    const next = medal.next ? ` You're just ${medal.missionsToNext} mission${plural(medal.missionsToNext)} from ${medal.next.name}!` : ` You've earned every single medal — wow! 👑`
     return `${current}${next}`
   }
   if (has('how am i', 'how i am', 'doing', 'progress', 'am i doing')) {
     const m = progress?.missionsTotal ?? 0
-    const medalLine = medal?.current ? `You're a ${medal.current.name}-medal soldier` : `You're on your way to your first medal`
+    const medalLine = medal?.current ? `You've earned the ${medal.current.name} medal` : `You're on your way to your first medal`
     const nextLine = medal?.next ? ` — ${medal.missionsToNext} mission${plural(medal.missionsToNext)} to ${medal.next.name}.` : '.'
-    return `You've completed ${m} mission${plural(m)}. ${medalLine}${nextLine} Keep climbing! 💪`
+    return `You've completed ${m} mission${plural(m)}. ${medalLine}${nextLine} Keep it up, ${firstName}! 💪`
   }
   if (has('ladder')) {
-    return `You're on Ladder ${ladder} — climbing to finish the whole Sefer Tehillim by ${gradeLabel} grade. 🪜 One step every Shabbos Mevorchim!`
+    if (!ladder) return `You haven't picked a ladder yet — want help choosing one? 🪜`
+    return `You're on Ladder ${ladder} — climbing to finish the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
   }
   if (has('mevorchim', 'next shabbos', 'when', 'bentch', 'bench')) {
-    if (!sMevorchim) return `Keep an eye on your dashboard for the next Shabbos Mevorchim, soldier! 🎖️`
+    if (!sMevorchim) return `Keep an eye on your page for the next Shabbos Mevorchim! 💙`
     const when = sMevorchim.daysUntil <= 0 ? 'this Shabbos!' : sMevorchim.daysUntil === 1 ? 'tomorrow' : `in ${sMevorchim.daysUntil} days`
-    return `The next Shabbos Mevorchim bentches ${MONTH_HEB[sMevorchim.monthEn] ?? sMevorchim.monthEn} — that's ${when}${sMevorchim.hebDateLabel ? ` (${sMevorchim.hebDateLabel})` : ''}. Get ready! 🎖️`
+    return `The next Shabbos Mevorchim bentches ${MONTH_HEB[sMevorchim.monthEn] ?? sMevorchim.monthEn} — that's ${when}${sMevorchim.hebDateLabel ? ` (${sMevorchim.hebDateLabel})` : ''}. Get ready! 💙`
   }
-  if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard', 'first place')) {
-    if (!social) return `Say your Tehillim and you lift your whole class and school up the ranks! 🏆`
-    const tail = social.classRank === 1 ? `Your class is in first place — keep it on top! 🏆` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every soldier counts — say your Tehillim!`
-    return `Your class ${social.className} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail}`
+  if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard')) {
+    if (!social) return `Every time you say your Tehillim, you lift your whole class and school up! 🏆`
+    const tail = social.classRank === 1 ? `Your class is in first place — amazing!` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every child counts — keep saying your Tehillim!`
+    return `Your class ${social.className} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
   }
   if (has('perfect platoon', 'platoon')) {
-    return `A platoon is a class — it becomes a Perfect Platoon when every single soldier finishes their quota that month. Do your part, soldier! 🎖️`
+    return `A platoon is a class — it becomes a Perfect Platoon when every single child finishes their quota that month. Your part matters! 🎖️`
   }
-  if (has('thank', 'thx', 'todah')) return `Anytime, soldier ${firstName}! 🫡`
+  if (has('behind', "didn't", 'didnt', 'missed', 'forgot', 'late', 'catch up')) {
+    return `It's okay, ${firstName} — every kapitel counts, and you can always catch up. Say what you can this Shabbos Mevorchim and mark it done. I believe in you! 💙`
+  }
   if (has('tired', ' hard', "can't", 'cant', "don't want", 'dont want', 'boring', 'too much', 'give up')) {
-    return `Every kapitel counts, soldier — even a little Tehillim is a big mission. I'm counting on you, and so is the whole army! 💪`
+    return `I hear you, ${firstName}. Even a little Tehillim is big — start with just a few kapitlach and see how it feels. I'm right here cheering you on. 💙`
   }
-  if (has('bye', 'goodbye', 'good shabbos', 'gut shabbos', 'good shabbat')) return `Gut Shabbos, soldier ${firstName}! Don't forget your Tehillim. 🎖️`
-  if (has('hi ', 'hello', 'hey', 'shalom', 'sholom', 'yo ', 'heya')) return `Attention, soldier ${firstName}! 🫡 Ready for your next mission?`
+  if (has('thank', 'thx', 'todah')) return `Anytime, ${firstName}! 💙`
+  if (has('yes', 'sure', 'okay', 'ok ', "let's", 'lets')) return `Love it! 🌟 Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page, or ask me anything else.`
+  if (has('bye', 'goodbye', 'good shabbos', 'gut shabbos', 'good shabbat')) return `Gut Shabbos, ${firstName}! Don't forget your Tehillim. 💙`
+  if (has('hi ', 'hello', 'hey', 'shalom', 'sholom', 'heya')) return `Hi ${firstName}! 👋 How can I help you today?`
 
-  return `I'm not sure about that one, soldier — but I can tell you about your mission this month, your medals, your ladder, your rank, or the next Shabbos Mevorchim. Tap a button below! 🎖️`
+  return `I'm not sure about that one, ${firstName} — but I can help with picking your ladder, how it all works, your mission this month, your medals, or how you're doing. Tap a button below! 💙`
+}
+
+function Avatar({ size = 'h-10 w-10', text = 'text-2xl' }) {
+  return <span className={`grid ${size} flex-none place-items-center rounded-full bg-gold/90 ${text}`} aria-hidden="true">📖</span>
 }
 
 export default function ChatBuddy() {
   const { kid } = useAuth()
+  const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  const [peekClosed, setPeekClosed] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
@@ -91,8 +141,8 @@ export default function ChatBuddy() {
     if (!kid) return null
     const progress = getKidProgress(kid.id)
     const social = kid.ladder ? getKidSocial(kid.id) : null
-    return {
-      firstName: (kid.name || 'Soldier').split(' ')[0],
+    const base = {
+      firstName: (kid.name || 'friend').split(' ')[0],
       ladder: kid.ladder,
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
       progress,
@@ -100,18 +150,16 @@ export default function ChatBuddy() {
       sMevorchim: nextShabbosMevorchim(),
       monthHeb: progress?.current ? MONTH_HEB[progress.current.month] : '',
     }
+    return { ...base, situation: readSituation(base) }
   }, [kid])
 
-  // Greet once per login when the panel is first opened.
+  const greeting = useMemo(() => (ctx ? openingGreeting(ctx) : ''), [ctx])
+  const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
+
+  // Seed the opening greeting the first time the panel opens.
   useEffect(() => {
-    if (!open || messages.length || !ctx) return
-    const { firstName, ladder, gradeLabel, progress } = ctx
-    const line1 = `Attention, soldier ${firstName}! 🫡 I'm ${BOT_NAME}.`
-    const line2 = ladder
-      ? `You're on Ladder ${ladder}, climbing to finish the whole Tehillim by ${gradeLabel} grade — ${progress?.missionsTotal ?? 0} missions done so far.`
-      : `Let's get you started — pick your ladder and you're on your way up!`
-    setMessages([{ id: 'w', from: 'bot', text: `${line1}\n${line2}\nHow can I help?` }])
-  }, [open, messages.length, ctx])
+    if (open && !messages.length && greeting) setMessages([{ id: 'w', from: 'bot', text: greeting }])
+  }, [open, messages.length, greeting])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -120,6 +168,7 @@ export default function ChatBuddy() {
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
   if (!kid) return null
+  const showPeek = !open && !peekClosed && pathname === '/me' && !!greeting
 
   function send(raw) {
     const text = (raw ?? input).trim()
@@ -137,6 +186,25 @@ export default function ChatBuddy() {
 
   return (
     <>
+      {/* Proactive greeting peek — only on the child's own page */}
+      {showPeek ? (
+        <div className="fixed bottom-20 right-4 z-50 w-[19rem] max-w-[calc(100vw-2rem)] sm:bottom-24 sm:right-6">
+          <div className="relative rounded-2xl rounded-br-md bg-card p-3.5 pr-8 text-[14px] leading-snug text-navy shadow-hover ring-1 ring-line">
+            <button type="button" onClick={() => setPeekClosed(true)} aria-label="Dismiss" className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-muted transition hover:bg-track">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <button type="button" onClick={() => setOpen(true)} className="block text-left">
+              <span className="mb-1 flex items-center gap-2">
+                <Avatar size="h-7 w-7" text="text-base" />
+                <span className="font-display text-[14px] font-black text-navy">{BOT_NAME}</span>
+              </span>
+              {greeting}
+              <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Launcher */}
       {!open ? (
         <button
@@ -145,39 +213,29 @@ export default function ChatBuddy() {
           className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-navy py-2.5 pl-2.5 pr-4 text-white shadow-hover ring-1 ring-white/15 transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
           aria-label={`Chat with ${BOT_NAME}`}
         >
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-gold">
-            <img src={asset('design/icon-soldier-hat.png')} alt="" aria-hidden="true" draggable="false" className="h-6 w-auto" />
-          </span>
-          <span className="font-cond text-[15px] uppercase tracking-wide">Ask your commander</span>
+          <Avatar size="h-9 w-9" text="text-xl" />
+          <span className="font-cond text-[15px] uppercase tracking-wide">Hi! Need help?</span>
         </button>
       ) : null}
 
       {/* Panel */}
       {open ? (
         <div className="fixed bottom-4 right-4 z-50 flex h-[32rem] max-h-[80vh] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[22px] bg-card shadow-hover ring-1 ring-line sm:bottom-6 sm:right-6">
-          {/* Header */}
           <div className="hero-navy flex items-center gap-3 px-4 py-3">
-            <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-gold">
-              <img src={asset('design/icon-soldier-hat.png')} alt="" aria-hidden="true" draggable="false" className="h-7 w-auto" />
-            </span>
+            <Avatar />
             <div className="min-w-0 flex-1">
-              <p className="font-cond text-[17px] uppercase leading-none tracking-wide text-white">{BOT_NAME}</p>
-              <p className="mt-0.5 text-[12px] text-white/70">Your Tehillim commander</p>
+              <p className="font-display text-[17px] font-black leading-none text-white">{BOT_NAME}</p>
+              <p className="mt-0.5 text-[12px] text-white/70">Your Tehillim helper</p>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full text-white/80 transition hover:bg-white/10">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
 
-          {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-paper/50 px-3 py-3">
             {messages.map((m) => (
               <div key={m.id} className={`flex ${m.from === 'kid' ? 'justify-end' : 'justify-start'}`}>
-                <span
-                  className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${
-                    m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'
-                  }`}
-                >
+                <span className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'}`}>
                   {m.text}
                 </span>
               </div>
@@ -193,24 +251,19 @@ export default function ChatBuddy() {
             ) : null}
           </div>
 
-          {/* Quick replies */}
           <div className="flex flex-wrap gap-1.5 border-t border-line bg-card px-3 py-2">
-            {QUICK_REPLIES.map((q) => (
+            {quickReplies.map((q) => (
               <button key={q} type="button" onClick={() => send(q)} className="rounded-full bg-track px-2.5 py-1 text-[12px] font-semibold text-navy transition hover:bg-green/15 hover:text-green">
                 {q}
               </button>
             ))}
           </div>
 
-          {/* Input */}
-          <form
-            onSubmit={(e) => { e.preventDefault(); send() }}
-            className="flex items-center gap-2 border-t border-line bg-card px-3 py-2.5"
-          >
+          <form onSubmit={(e) => { e.preventDefault(); send() }} className="flex items-center gap-2 border-t border-line bg-card px-3 py-2.5">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask your commander…"
+              placeholder={`Ask ${BOT_NAME}…`}
               aria-label="Message"
               className="min-w-0 flex-1 rounded-full border border-line bg-[#eef4ff] px-3.5 py-2 text-[14px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25"
             />
