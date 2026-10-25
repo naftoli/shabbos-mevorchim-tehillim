@@ -11,6 +11,57 @@ import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 // Scripted, client-side, kid-safe. Rename the helper here:
 const BOT_NAME = 'Mendy'
 
+// Real-AI endpoint on the PHP backend (served under the app's base path). When
+// it's unreachable — the static Netlify file, offline, or no API key set — the
+// chat falls back to the scripted answers below, so Mendy always works.
+const AI_ENDPOINT = `${import.meta.env.BASE_URL}api/chat`
+
+// A compact, non-sensitive snapshot of the child's data for the AI prompt.
+function aiContext(ctx) {
+  if (!ctx) return {}
+  const cur = ctx.progress?.current
+  const medal = ctx.progress?.medal
+  const s = ctx.social
+  const sm = ctx.sMevorchim
+  return {
+    name: ctx.firstName,
+    ladder: ctx.ladder ?? null,
+    finishTrainingByGrade: ctx.gradeLabel ?? null,
+    situation: ctx.situation,
+    thisMonth: cur
+      ? { month: ctx.monthHeb, kapitlachQuota: cur.quota, kapitlachLabel: cur.quotaLabel, kapitlachSaid: cur.said, minutesQuota: cur.minutes, minutesSaid: cur.saidMinutes, done: cur.met }
+      : null,
+    missionsTotal: ctx.progress?.missionsTotal ?? 0,
+    medal: medal ? { current: medal.current?.name ?? null, next: medal.next?.name ?? null, missionsToNext: medal.missionsToNext ?? null } : null,
+    rank: s ? { className: s.className, classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
+    nextShabbosMevorchim: sm ? { month: sm.monthEn, daysUntil: sm.daysUntil, hebDate: sm.hebDateLabel } : null,
+  }
+}
+
+// Ask the backend AI. Throws on any failure so the caller can fall back.
+async function aiReply(message, history, ctx) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const res = await fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        history: history.map((m) => ({ from: m.from, text: m.text })),
+        context: aiContext(ctx),
+      }),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) throw new Error(`chat ${res.status}`)
+    const data = await res.json()
+    if (!data || typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('no reply')
+    return data.reply.trim()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Which situation is the child in right now? Drives the opening greeting.
 function readSituation(ctx) {
   const { ladder, progress } = ctx
@@ -135,7 +186,7 @@ export default function ChatBuddy() {
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
   const scrollRef = useRef(null)
-  const timers = useRef([])
+  const convoRef = useRef([])
 
   const ctx = useMemo(() => {
     if (!kid) return null
@@ -162,26 +213,29 @@ export default function ChatBuddy() {
   }, [open, messages.length, greeting])
 
   useEffect(() => {
+    convoRef.current = messages
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, typing])
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
   if (!kid) return null
   const showPeek = !open && !peekClosed && pathname === '/me' && !!greeting
 
-  function send(raw) {
+  async function send(raw) {
     const text = (raw ?? input).trim()
     if (!text) return
     setInput('')
-    setMessages((m) => [...m, { id: `k${Date.now()}`, from: 'kid', text }])
+    const kidMsg = { id: `k${Date.now()}`, from: 'kid', text }
+    setMessages((m) => [...m, kidMsg])
     setTyping(true)
-    const reply = buildReply(text, ctx)
-    const tmr = setTimeout(() => {
-      setTyping(false)
-      setMessages((m) => [...m, { id: `b${Date.now()}`, from: 'bot', text: reply }])
-    }, 450)
-    timers.current.push(tmr)
+    const history = [...convoRef.current, kidMsg].slice(-9)
+    let reply
+    try {
+      reply = await aiReply(text, history, ctx) // real AI via the backend
+    } catch {
+      reply = buildReply(text, ctx) // scripted fallback (static file / offline / no key)
+    }
+    setTyping(false)
+    setMessages((m) => [...m, { id: `b${Date.now()}`, from: 'bot', text: reply }])
   }
 
   return (

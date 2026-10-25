@@ -33,6 +33,24 @@ teacher/HQ tools (`admin_users_track.php`, `mark_tehillim.php`, the teacher
 grid) until those writes are designed and signed off. No endpoint here writes to
 the database.
 
+## Mendy (AI helper)
+
+`POST /chat` — `{ message, history?, context? }` → `{ reply }`. Proxies to the
+Claude Messages API with a tightly scoped system prompt: Mendy only answers
+about the child's Tehillim Club participation (progress, ladder, this month's
+kapitlach, missions, medals, rank, next Shabbos Mevorchim, how it works) and
+politely refuses anything off-topic. The child's data is passed in `context`
+(the same snapshot the SPA already shows); no DB read is required. The SPA falls
+back to its built-in scripted answers whenever this endpoint is unavailable, so
+the static Netlify build keeps working.
+
+Setup: set **`WWTC_AI_KEY`** (an Anthropic API key) in
+`mashpia.com/includes/globals.php` (gitignored) or the environment — the key is
+server-side only, never shipped to the browser. Optional `WWTC_AI_MODEL`
+(default `claude-haiku-5-5`). Until the key is set, `/chat` returns 503 and the
+SPA uses the scripted helper. Note: this bills per message and is used by
+children — consider adding rate-limiting/abuse protection before heavy use.
+
 ## Setup
 
 1. **Token secret.** Set `WWTC_TOKEN_SECRET` in `mashpia.com/includes/globals.php`

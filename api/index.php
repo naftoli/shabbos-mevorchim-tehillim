@@ -709,6 +709,110 @@ if ($method === 'GET' && $path === '/me/social') {
     ]);
 }
 
+// ---- Mendy: a scoped AI helper ---------------------------------------------
+
+/** System prompt that keeps Mendy warm, on-topic, and grounded in the child's data. */
+function wwtcMendySystem(string $ctxJson): string
+{
+    return <<<SYS
+You are "Mendy", a warm, friendly helper on the Worldwide Tehillim Club — a Tzivos Hashem campaign where Jewish children say Tehillim every Shabbos Mevorchim and work, grade by grade, toward saying the whole Sefer Tehillim. You talk to one child at a time, like a caring older friend. You are NOT a commander — always gentle and encouraging.
+
+Your ONLY job is to help this child with the Tehillim Club: their Tehillim progress, their ladder (their training plan — the grade they'll finish training to say the whole Tehillim by), this month's kapitlach and minutes, their missions and medals, their class/school rank, the next Shabbos Mevorchim, how the club works, and warm chizuk to say Tehillim.
+
+Rules:
+- Stay strictly on those topics. If the child asks about anything else (homework, games, other subjects, personal troubles, the news, etc.), kindly say you're just here to help with their Tehillim and gently steer back. Do not answer off-topic questions.
+- Use ONLY the facts in the child's data below. Never invent numbers, names, Hebrew dates, or ranks. If something isn't in the data, say you don't have it and suggest they check their page.
+- The ladder is training, not the goal. Saying the whole Tehillim every Shabbos Mevorchim is the goal.
+- Keep replies short (1-3 sentences), warm, simple, and age-appropriate. A little emoji is nice. Use the child's first name sometimes.
+- Never give medical, legal, or safety advice, and never discuss anything inappropriate or frightening. If a child seems upset or in trouble, gently encourage them to talk to a parent, teacher, or Rabbi.
+
+The child's data (JSON):
+$ctxJson
+SYS;
+}
+
+/** Call the Claude Messages API. Returns the reply text, or null on any failure. */
+function wwtcMendyAsk(string $key, string $model, string $system, array $messages): ?string
+{
+    $payload = json_encode(
+        ['model' => $model, 'max_tokens' => 300, 'system' => $system, 'messages' => $messages],
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    );
+    $ch = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => ['content-type: application/json', 'anthropic-version: 2023-06-01', 'x-api-key: ' . $key],
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 25,
+    ]);
+    $raw = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err = curl_error($ch);
+    curl_close($ch);
+    if (!is_string($raw) || $status < 200 || $status >= 300) {
+        error_log('WWTC Mendy AI error: status ' . $status . ' ' . $err . ' ' . (is_string($raw) ? mb_substr($raw, 0, 500) : ''));
+        return null;
+    }
+    $data = json_decode($raw, true);
+    $text = '';
+    foreach ((array) ($data['content'] ?? []) as $block) {
+        if (($block['type'] ?? '') === 'text') {
+            $text .= (string) ($block['text'] ?? '');
+        }
+    }
+    $text = trim($text);
+    return $text === '' ? null : $text;
+}
+
+if ($method === 'POST' && $path === '/chat') {
+    $in = wwtcInput();
+    $message = trim((string) ($in['message'] ?? ''));
+    if ($message === '') {
+        wwtcError('Please include a message.', 422);
+    }
+    $message = mb_substr($message, 0, 600);
+
+    // Server-side only. Set WWTC_AI_KEY in globals.php (gitignored) or the env.
+    $key = defined('WWTC_AI_KEY') ? (string) WWTC_AI_KEY : '';
+    if (strlen($key) < 10) {
+        $key = wwtcEnv('WWTC_AI_KEY');
+    }
+    if (strlen($key) < 10) {
+        wwtcError('Mendy’s AI is not configured yet.', 503);
+    }
+    $model = wwtcEnv('WWTC_AI_MODEL') ?: 'claude-haiku-5-5';
+
+    // The child's own, non-sensitive progress snapshot, as the SPA computed it.
+    $ctx = is_array($in['context'] ?? null) ? $in['context'] : [];
+    $system = wwtcMendySystem((string) json_encode($ctx, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+    // Short rolling history for continuity (child = user, Mendy = assistant).
+    $messages = [];
+    foreach ((array) ($in['history'] ?? []) as $h) {
+        $text = trim((string) ($h['text'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        $messages[] = ['role' => ($h['from'] ?? '') === 'kid' ? 'user' : 'assistant', 'content' => mb_substr($text, 0, 600)];
+    }
+    $messages = array_slice($messages, -8);
+    // The Messages API requires the first turn to be from the user.
+    while ($messages && $messages[0]['role'] !== 'user') {
+        array_shift($messages);
+    }
+    if (!$messages || end($messages)['content'] !== $message) {
+        $messages[] = ['role' => 'user', 'content' => $message];
+    }
+
+    $reply = wwtcMendyAsk($key, $model, $system, $messages);
+    if ($reply === null) {
+        wwtcError('Mendy is taking a quick break — please try again in a moment.', 502);
+    }
+    wwtcJson(['reply' => $reply]);
+}
+
 // ---- writes: not available (read-only first cut) ---------------------------
 
 $writeRoutes = [
