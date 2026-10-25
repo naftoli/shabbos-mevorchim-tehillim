@@ -39,33 +39,43 @@ function wwtcPct($done, $quota): int
 }
 
 /**
- * One school's current-month picture, built from ShabbosMevorchim::
- * setStudentResults() (the same per-student numbers the by-student report uses).
- * Returns ['classes' => [...], 'students' => [...]] for the current Shabbos
- * Mevorchim, Kapitelach. "perfect" here means every soldier met their own quota
- * (the SPA's definition), derived from the per-student rows.
+ * One school's current-month picture, following shabbos_mevorchim_by_class2.php:
+ * setSchoolResults() + setClassResults() + setStudentResults(). Per-class goal/
+ * done come from classResults/classDoneResults (what generateSummary renders);
+ * the per-soldier rows come from studentResults/studentDoneResults (what
+ * generateStudentReport renders). Returns ['classes' => [...], 'students' => [...]]
+ * for the current Shabbos Mevorchim, Kapitelach. "met"/"perfect" (every soldier
+ * met their own quota) are derived from the per-soldier rows — the class reports
+ * do not compute them, but the SPA shows them.
  */
 function wwtcSchoolData(int $schoolId): array
 {
     $report = wwtcReport();
     $date = wwtcCurrentDate();
     $report->setSchool($schoolId);
-    $report->setStudentResults($schoolId);
-    $meta = (array) $report->getClasses();          // [class_id => ['grade','teacher']]
-    $quotaRows = (array) $report->getStudentResults();      // [date][class][uid][key] = quota
-    $doneRows = (array) $report->getStudentDoneResults();   // [date][class][uid][key] = done
-    $names = (array) $report->getUsers();            // [uid => "First Last"]
+    $report->setSchoolResults($schoolId);
+    $report->setClassResults();
+    $report->setStudentResults($schoolId, $date);
 
-    $classes = [];
+    $meta = (array) $report->getClasses();                 // [class_id => ['grade','teacher']]
+    $classQuota = $report->getClassResults()['Kapitelach'][$date] ?? [];      // [class_id => goal]
+    $classDone = $report->getClassDoneResults()['Kapitelach'][$date] ?? [];   // [class_id => done]
+    $quotaRows = (array) $report->getStudentResults();     // [date][class][uid][key] = quota
+    $doneRows = (array) $report->getStudentDoneResults();  // [date][class][uid][key] = done
+    $names = (array) $report->getUsers();                  // [uid => "First Last"]
+
+    // Per-soldier rows + per-class size/met counts (student level).
     $students = [];
+    $sizeBy = [];
+    $metBy = [];
     foreach (($quotaRows[$date] ?? []) as $classId => $usersByKey) {
         $m = $meta[$classId] ?? ['grade' => '', 'teacher' => ''];
-        $said = 0; $quota = 0; $size = 0; $met = 0;
         foreach ($usersByKey as $uid => $byKey) {
             $q = (int) ($byKey['Kapitelach'] ?? 0);
             $d = (int) ($doneRows[$date][$classId][$uid]['Kapitelach'] ?? 0);
             $isMet = $q > 0 && $d >= $q;
-            $size++; $quota += $q; $said += $d; $met += $isMet ? 1 : 0;
+            $sizeBy[$classId] = ($sizeBy[$classId] ?? 0) + 1;
+            $metBy[$classId] = ($metBy[$classId] ?? 0) + ($isMet ? 1 : 0);
             $students[] = [
                 'id' => (int) $uid,
                 'name' => (string) ($names[$uid] ?? ''),
@@ -76,6 +86,15 @@ function wwtcSchoolData(int $schoolId): array
                 'met' => $isMet,
             ];
         }
+    }
+
+    // Per-class rows: goal/done from the class aggregate (generateSummary).
+    $classes = [];
+    foreach ($meta as $classId => $m) {
+        $quota = (int) ($classQuota[$classId] ?? 0);
+        $said = (int) ($classDone[$classId] ?? 0);
+        $size = (int) ($sizeBy[$classId] ?? 0);
+        $met = (int) ($metBy[$classId] ?? 0);
         $classes[] = [
             'id' => (int) $classId,
             'name' => (string) $m['grade'],
@@ -470,6 +489,7 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
             'id' => $c['id'],
             'name' => $c['name'],
             'grade' => $c['grade'],
+            'teacher' => $c['teacher'],
             'size' => $c['size'],
             'goal' => $c['quota'],
             'accomplished' => $c['said'],
