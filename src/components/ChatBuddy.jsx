@@ -91,9 +91,9 @@ function buildReply(text, ctx) {
     const nextLine = medal?.next ? ` — ${medal.missionsToNext} mission${plural(medal.missionsToNext)} to ${medal.next.name}.` : '.'
     return `You've completed ${m} mission${plural(m)}. ${medalLine}${nextLine} Keep it up, ${firstName}! 💪`
   }
-  if (has('ladder')) {
-    if (!ladder) return `You haven't picked a ladder yet — want help choosing one? 🪜`
-    return `You're on Ladder ${ladder} — training to say the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
+  if (has('ladder', 'which one', 'what one', 'currently on', 'am i on', 'which am i', 'what am i on', "i'm on", 'im on', 'on now', 'my current', 'what grade', 'which number', 'what number')) {
+    if (!ladder) return `You haven't picked your ladder yet, ${firstName} — want help choosing one? 🪜`
+    return `You're on Ladder ${ladder} — you're training to say the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
   }
   if (has('mevorchim', 'next shabbos', 'when', 'bentch', 'bench')) {
     if (!sMevorchim) return `Keep an eye on your page for the next Shabbos Mevorchim! 💙`
