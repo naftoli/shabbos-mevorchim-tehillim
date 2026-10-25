@@ -3,9 +3,11 @@
 // GENERATED from the campaign's "Master" sheet (13 grades x 12 months x up to
 // 8 ladders). Do not hand-edit cells; regenerate from the source sheet.
 //
-// A child picks a LADDER (5-12), numbered by the grade in which they finish the
-// whole Tehillim (kapitel 150): Ladder 5 = finish by 5th grade ... Ladder 12 =
-// finish by 12th grade. The child stays on their ladder number every year.
+// A child picks a LADDER (5-12) — their TRAINING plan, numbered by the grade in
+// which they finish training to say the whole Tehillim (kapitel 150): Ladder 5 =
+// finish training by 5th grade ... Ladder 12 = by 12th grade. (Saying the whole
+// Tehillim every Shabbos Mevorchim is the goal; the ladder is the ramp to it.)
+// The child stays on their ladder number every year.
 // Grade G offers ladders max(5, G)..12. (The raw table below is still keyed by
 // the internal pace 1-8 = finish grade - 4, and re-keyed to 5-12 at load.)
 //
@@ -25,8 +27,8 @@ export const GRADES = ["pre1a","1","2","3","4","5","6","7","8","9","10","11","12
 
 export const GRADE_LABEL = {"1":"1st","2":"2nd","3":"3rd","4":"4th","5":"5th","6":"6th","7":"7th","8":"8th","9":"9th","10":"10th","11":"11th","12":"12th","pre1a":"Pre-1A"}
 
-// A ladder IS numbered by the grade a child finishes the whole Tehillim in:
-// Ladder 5 finishes in 5th grade … Ladder 12 finishes in 12th grade.
+// A ladder IS numbered by the grade a child finishes their training in:
+// Ladder 5 finishes training by 5th grade … Ladder 12 by 12th grade.
 // Listed high → low so the steepest ladder (12) shows first everywhere.
 export const LADDERS = [12, 11, 10, 9, 8, 7, 6, 5]
 

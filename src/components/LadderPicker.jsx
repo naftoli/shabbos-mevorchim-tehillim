@@ -27,7 +27,7 @@ function LadderButton({ ladder, active, onClick }) {
     >
       <div className="font-cond text-lg leading-none">Ladder {ladder}</div>
       <div className={`text-xs ${active ? 'text-white/80' : 'text-muted'}`}>
-        finish by {GRADE_LABEL[String(finishGrade(ladder))]} grade
+        finish training by {GRADE_LABEL[String(finishGrade(ladder))]} grade
       </div>
     </button>
   )

@@ -17,7 +17,7 @@ export default function LadderBreakdown({ ladder, onClose }) {
         <div className="hero-navy flex items-center justify-between px-5 py-4">
           <div>
             <h3 className="font-cond text-2xl uppercase tracking-[0.03em] text-white">Ladder {ladder} · Full Breakdown</h3>
-            <p className="text-sm text-gold">Kapitel reached each Shabbos Mevorchim · finish by {GRADE_LABEL[String(finishGrade(ladder))]} grade</p>
+            <p className="text-sm text-gold">Kapitel reached each Shabbos Mevorchim · finish training by {GRADE_LABEL[String(finishGrade(ladder))]} grade</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-white transition hover:bg-white/35">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>

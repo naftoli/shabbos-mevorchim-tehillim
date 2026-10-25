@@ -7,7 +7,7 @@ const STEPS = [
   {
     n: 1,
     title: 'Pick your ladder',
-    body: 'Choose the grade by which you’ll finish the whole Tehillim — that’s your ladder (Ladder 5 finishes by 5th grade, up to Ladder 12 by 12th). A steeper ladder climbs faster.',
+    body: 'Your ladder is your training plan — the grade by which you’ll finish training to say the whole Tehillim (Ladder 5 finishes training by 5th grade, up to Ladder 12 by 12th). A steeper ladder trains faster. Saying the whole Tehillim every Shabbos Mevorchim is the goal; the ladder gets you there.',
   },
   {
     n: 2,

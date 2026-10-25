@@ -128,7 +128,7 @@ export default function KidDashboard() {
               <LadderGlyph width="22" height="34" className="flex-none" />
               <div className="text-right">
                 <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
-                <p className="mt-1 text-xs text-white/70">finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+                <p className="mt-1 text-xs text-white/70">finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
               </div>
             </div>
           </div>
@@ -301,7 +301,7 @@ export default function KidDashboard() {
               <p className="sh">Your Ladder</p>
               <h3 className="font-display text-xl font-black text-navy">
                 Ladder {kid.ladder}
-                <span className="font-normal text-muted"> — finish by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+                <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
               </h3>
             </div>
             <Button variant="navy" onClick={() => navigate('/ladders')}>Switch my ladder</Button>

@@ -145,7 +145,7 @@ export default function AdminDashboard() {
                 <label className="text-sm">
                   <span className="mb-1 block font-semibold text-navy">Ladder</span>
                   <select className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2">
-                    {LADDERS.map((L) => <option key={L}>Ladder {L} — finish by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
+                    {LADDERS.map((L) => <option key={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
                   </select>
                 </label>
                 <Button variant="navy">Apply</Button>

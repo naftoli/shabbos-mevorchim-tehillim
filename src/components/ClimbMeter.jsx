@@ -75,7 +75,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
         </div>
         <div className="text-right">
           <div className="font-cond text-3xl leading-none text-green">{Math.round(pct(r))}%</div>
-          {finishGradeLabel ? <div className="text-xs text-muted">finish by {finishGradeLabel} grade</div> : null}
+          {finishGradeLabel ? <div className="text-xs text-muted">finish training by {finishGradeLabel} grade</div> : null}
         </div>
       </div>
 

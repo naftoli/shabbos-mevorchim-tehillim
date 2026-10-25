@@ -62,7 +62,7 @@ export default function Resources() {
               a blank set for the whole class from here.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {LADDERS.map((L) => <Pll key={L}>Ladder {L} → finish by {GRADE_LABEL[String(L)]}</Pll>)}
+              {LADDERS.map((L) => <Pll key={L}>Ladder {L} → finish training by {GRADE_LABEL[String(L)]}</Pll>)}
             </div>
           </Card>
         </section>

@@ -41,7 +41,7 @@ export default function FirstLadderModal({ open, name, grade, onPick, onClose })
             {name ? `Welcome, ${name.split(' ')[0]}!` : 'Welcome, soldier!'}
           </h2>
           <p className="mt-1 text-sm text-white/85">
-            Pick your <span className="font-bold text-gold">ladder</span> — the grade you’ll finish the whole Tehillim by.
+            Pick your <span className="font-bold text-gold">ladder</span> — the grade you’ll finish your training to say the whole Tehillim by.
           </p>
         </div>
 

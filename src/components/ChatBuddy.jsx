@@ -9,7 +9,7 @@ import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 // and opens with a nudge that fits how they're actually doing — behind on quota,
 // way ahead, or still finding their feet — then chats from the data on record.
 // Scripted, client-side, kid-safe. Rename the helper here:
-const BOT_NAME = 'Tzviki'
+const BOT_NAME = 'Mendy'
 
 // Which situation is the child in right now? Drives the opening greeting.
 function readSituation(ctx) {
@@ -63,10 +63,10 @@ function buildReply(text, ctx) {
   const plural = (n) => (n === 1 ? '' : 's')
 
   if (has('how does it work', 'how it work', 'how do i', 'explain', 'what is this', 'what do i do', 'understand')) {
-    return `It's simple, ${firstName}: every Shabbos Mevorchim you say your Tehillim and mark it done here. You pick a “ladder” — the grade you want to finish the whole Sefer Tehillim by — and each month it tells you exactly what to say. Little by little, you climb to all 150 kapitlach! 📖`
+    return `It's simple, ${firstName}: every Shabbos Mevorchim you say your Tehillim and mark it done here. You pick a “ladder” — your training plan for the grade you'll finish training to say the whole Tehillim by — and each month it tells you exactly what to say. Little by little, you train up to all 150 kapitlach! 📖`
   }
   if (has('pick', 'choose', 'which ladder', 'what ladder', 'help me pick')) {
-    return `A ladder is the grade you'll finish the whole Tehillim by — a lower number means a little more each month, a higher number is a gentler climb. Pick whatever feels right for you; you can always change it later. Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page and I'll be right here. 🪜`
+    return `A ladder is your training plan — the grade you'll finish training to say the whole Tehillim by. A lower number means a little more each month, a higher number is a gentler climb. Pick whatever feels right for you; you can always change it later. Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page and I'll be right here. 🪜`
   }
   if (has('challenge', 'harder', 'move up', 'switch', 'change', 'tell me about ladder', 'bigger')) {
     const target = ladder && ladder > 5 ? ladder - 1 : ladder
@@ -93,7 +93,7 @@ function buildReply(text, ctx) {
   }
   if (has('ladder')) {
     if (!ladder) return `You haven't picked a ladder yet — want help choosing one? 🪜`
-    return `You're on Ladder ${ladder} — climbing to finish the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
+    return `You're on Ladder ${ladder} — training to say the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
   }
   if (has('mevorchim', 'next shabbos', 'when', 'bentch', 'bench')) {
     if (!sMevorchim) return `Keep an eye on your page for the next Shabbos Mevorchim! 💙`
