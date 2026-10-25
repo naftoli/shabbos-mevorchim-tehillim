@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Brand, Button } from './ui.jsx'
+import ChatBuddy from './ChatBuddy.jsx'
 import { asset } from '../lib/asset.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { IS_DEMO } from '../lib/liveMode.js'
@@ -121,6 +122,9 @@ export default function Layout({ children }) {
           </p>
         </div>
       </footer>
+
+      {/* Floating Tehillim commander — shows only when a soldier is signed in. */}
+      <ChatBuddy />
     </div>
   )
 }
