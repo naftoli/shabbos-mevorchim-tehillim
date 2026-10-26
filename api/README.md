@@ -8,30 +8,51 @@ Mashpia roster and admin accounts. Campaign numbers come from
 `shabbos_mevorchim_by_student.php`, `battlefront/api/getWWTC.php`) — so the API
 returns the figures those reports show.
 
-## Status: read-only first cut
+## Status
 
-Implemented and verified against live data:
+Reads — all implemented (same figures as the WWTC report pages):
 
 - `POST /soldier/login` — `{ serial, dob: "YYYY-MM-DD" }` → `{ token, expiresIn, soldier }`
 - `POST /admin/login` — `{ username, password }` → `{ token, expiresIn, admin }`
 - `GET /campaign` — `{ year, currentMonth, currentMonthIndex, months[], monthDates }`
-- `GET /stats` — nationwide totals for the current Shabbos Mevorchim:
+- `GET /stats` — nationwide totals:
   `{ monthLabel, year, accomplished, quota, pct, minutes, minutesQuota, minutesPct, soldiers, schools, classes }`
+- `GET /running-totals` — `{ thisMonth, thisYear, allTime }` (all-time = this year +
+  `WWTC_ALLTIME_BASE`, since there is no historical kapitlach store).
+- `GET /schools` (full per-school aggregate: kapitlach/minutes/pct + kids/met/pctMet),
+  `GET /schools/:id`, `GET /schools/:id/class-leaderboard`,
+  `GET /schools/:id/leaderboard` (public — full soldier names),
+  `GET /schools/:id/not-completed` (admin), `GET /perfect-platoons`,
+  `GET /reports/army`, `GET /reports/base/:schoolId`, `GET /reports/platoon/:classId`
+  (all take `?monthIdx=` for an elapsed month; default current),
+  `GET /me/progress`, `GET /me/social`.
+
+Per-school / per-class "soldiers who completed" and "perfect platoons" come from
+the mission-mark signal (`date_tasks_mission_marks`) via cheap grouped queries
+(`wwtcCompletionCounts()`), not a per-student loop — so the home page and stats
+scale to the whole army. "Perfect platoon" here means every enrolled soldier in a
+class earned the mission this month (met === size), matching the SPA.
 
 Send the token as `Authorization: Bearer <token>`.
 
-Scaffolded, returning **501** until the next pass (shapes will match
-`src/services/api.js`): `GET /schools`, `GET /schools/:id`,
-`GET /schools/:id/leaderboard`, `GET /schools/:id/class-leaderboard`,
-`GET /perfect-platoons`, `GET /reports/army`, `GET /reports/base/:schoolId`,
-`GET /reports/platoon/:classId`, `GET /me/progress`, `GET /me/social`.
+Writes — the signed-in soldier's own, scoped by the bearer token to their
+`user_id`:
 
-Writes return **405** by design for now — soldier self-report
-(`POST /me/report`), ladder self-select (`PUT /me/ladder`) and dedications
-(`PATCH /schools/:id/dedication`). Recording and ladder assignment stay with the
-teacher/HQ tools (`admin_users_track.php`, `mark_tehillim.php`, the teacher
-grid) until those writes are designed and signed off. No endpoint here writes to
-the database.
+- `POST /me/report` — `{ kapitlach, minutes }` for the **current** Shabbos
+  Mevorchim → fresh `/me/progress`. Writes `date_tasks_marks` (grids 8001/8002)
+  and keeps the kapitelach mission mark (`date_tasks_mission_marks`) in sync with
+  the quota, exactly as `mark_tehillim2.php` does, in one transaction, then bumps
+  `Cache::bumpVersion('shabbos_mevorchim:v')` so the reports refresh.
+- `PUT /me/ladder` — `{ ladder }` (5..12) → writes `user_tracks.track_id` for the
+  Tehillim subject. Ladder ↔ track mapping: `track_id = 13 - ladder` (ladder 12 =
+  track 1 … 5 = track 8; only tracks 3..8 exist today).
+
+Still **405** by design: dedications (`PATCH /schools/:id/dedication`) — the SPA
+keeps dedications client-side until that write is designed.
+
+> Writes have been verified read-only (the mission/task lookups resolve correctly
+> against live data) but the INSERT/UPDATE/DELETE path has NOT been exercised
+> against a database yet — test on `test.mashpia.com` before master.
 
 ## Mendy (AI helper)
 

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { useLiveData } from '@/lib/useLiveData.js'
 import { Card, Pill } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
@@ -63,8 +64,9 @@ function StatTile({ icon, value, label, sub }) {
 }
 
 function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
-  const report = useMemo(() => getArmyReport(monthIdx), [monthIdx])
+  const { data: report } = useLiveData(() => getArmyReport(monthIdx), [monthIdx])
   const [sort, setSort] = useState('accomplished')
+  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
   const ratio = (r) => r.accomplished / (r.goal || 1) // % of quota, as a tiebreaker
   const rows = [...report.rows].sort((a, b) =>
     sort === 'met'
@@ -156,8 +158,8 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
 }
 
 function BaseReport({ schoolId, monthIdx, monthHeb, onPickClass }) {
-  const report = useMemo(() => getBaseReport(schoolId, monthIdx), [schoolId, monthIdx])
-  if (!report) return null
+  const { data: report } = useLiveData(() => getBaseReport(schoolId, monthIdx), [schoolId, monthIdx])
+  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
   const rows = [...report.rows].sort((a, b) => b.accomplished - a.accomplished)
   const t = report.rows.reduce((a, c) => ({ size: a.size + c.size, goal: a.goal + c.goal, accomplished: a.accomplished + c.accomplished, completed: a.completed + c.completed, perfect: a.perfect + (c.perfect ? 1 : 0) }), { size: 0, goal: 0, accomplished: 0, completed: 0, perfect: 0 })
   const maxAcc = Math.max(1, ...report.rows.map((c) => c.accomplished))
@@ -203,8 +205,8 @@ function BaseReport({ schoolId, monthIdx, monthHeb, onPickClass }) {
 }
 
 function PlatoonReport({ classId, monthIdx }) {
-  const report = useMemo(() => getPlatoonReport(classId, monthIdx), [classId, monthIdx])
-  if (!report) return null
+  const { data: report } = useLiveData(() => getPlatoonReport(classId, monthIdx), [classId, monthIdx])
+  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line px-5 py-4">

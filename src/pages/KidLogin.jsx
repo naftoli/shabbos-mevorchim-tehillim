@@ -36,7 +36,7 @@ export default function KidLogin() {
 
   if (kid) return <Navigate to="/me" replace />
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault()
     setError('')
     const iso = toISO(dob)
@@ -45,7 +45,7 @@ export default function KidLogin() {
       return
     }
     try {
-      loginKid(serial, iso)
+      await loginKid(serial, iso)
       navigate('/me', { replace: true })
     } catch (err) {
       setError(err.message)

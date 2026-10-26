@@ -5,6 +5,8 @@
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
 import { medalState } from '@/lib/medals.js'
+import { IS_DEMO } from '@/lib/liveMode.js'
+import * as mashpia from './mashpia.js'
 import {
   ROSTER,
   CURRENT_MONTH,
@@ -75,13 +77,32 @@ function schoolAgg(school) {
   }
 }
 
+// Live-data subscription. In live mode useLiveData's refresh rides the Mashpia
+// client's 30s poll; in demo mode it fires whenever a demo write invalidates the
+// cache, so the admin console refreshes right after an edit.
+const listeners = new Set()
+export function subscribe(cb) {
+  if (!IS_DEMO) return mashpia.subscribe(cb)
+  listeners.add(cb)
+  return () => listeners.delete(cb)
+}
+
+// Drop a live bearer-token session (logout, or an expired token). No-op in demo.
+export function endSession(role) {
+  if (!IS_DEMO) mashpia.endSession(role)
+}
+
 let _schools = null
 const schools = () => (_schools ??= ROSTER.map(schoolAgg))
-const invalidate = () => { _schools = null }
+const invalidate = () => {
+  _schools = null
+  listeners.forEach((cb) => cb())
+}
 
 // ---- global ----------------------------------------------------------------
 
-export function getGlobalStats() {
+export async function getGlobalStats() {
+  if (!IS_DEMO) return mashpia.getGlobalStats()
   const s = schools()
   const acc = s.reduce((a, x) => a + x.saidMonth, 0)
   const quota = s.reduce((a, x) => a + x.quotaMonth, 0)
@@ -104,11 +125,12 @@ export function getGlobalStats() {
     soldiers,
     schools: s.length,
     classes,
-    perfectPlatoons: getPerfectPlatoons().length,
+    perfectPlatoons: demoPerfectPlatoons().length,
   }
 }
 
-export function getRunningTotals() {
+export async function getRunningTotals() {
+  if (!IS_DEMO) return mashpia.getRunningTotals()
   const s = schools()
   const thisMonth = s.reduce((a, x) => a + x.saidMonth, 0)
   // Headline worldwide total is a fixed demo figure (see YEAR_KAPITLACH).
@@ -116,7 +138,8 @@ export function getRunningTotals() {
   return { thisMonth, thisYear, allTime: thisYear + PRIOR_YEARS_KAPITLACH }
 }
 
-export function getSchools() {
+export async function getSchools() {
+  if (!IS_DEMO) return mashpia.getSchools()
   return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth)
 }
 export function topSchoolsByKapitlach(n = 5) {
@@ -128,7 +151,12 @@ export function topSchoolsByQuota(n = 5) {
     .sort((a, b) => b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name))
     .slice(0, n)
 }
-export function getPerfectPlatoons() {
+export async function getPerfectPlatoons() {
+  if (!IS_DEMO) return mashpia.getPerfectPlatoons()
+  return demoPerfectPlatoons()
+}
+
+function demoPerfectPlatoons() {
   const out = []
   for (const school of ROSTER) {
     for (const cls of school.classes) {
@@ -166,7 +194,12 @@ function safeKid(kid, school, cls) {
   }
 }
 
-export function verifyKid(serial, dob) {
+export async function verifyKid(serial, dob) {
+  if (!IS_DEMO) return mashpia.verifyKid(serial, dob)
+  return demoVerifyKid(serial, dob)
+}
+
+function demoVerifyKid(serial, dob) {
   for (const school of ROSTER) {
     for (const cls of school.classes) {
       const kid = cls.kids.find((k) => k.serial === String(serial).trim() && k.dob === dob)
@@ -195,7 +228,8 @@ export function getKid(id) {
   return found ? safeKid(found.kid, found.school, found.cls) : null
 }
 
-export function verifyAdmin(username, password) {
+export async function verifyAdmin(username, password) {
+  if (!IS_DEMO) return mashpia.verifyAdmin(username, password)
   if (password !== DEMO_ADMIN_PASSWORD) return null
   const a = DEMO_ADMINS.find((x) => x.username.toLowerCase() === String(username).trim().toLowerCase())
   return a ? { kind: a.kind, name: a.name, schoolId: a.schoolId, username: a.username } : null
@@ -203,7 +237,17 @@ export function verifyAdmin(username, password) {
 
 // ---- soldier progress + medals --------------------------------------------
 
-export function getKidProgress(id) {
+// Live: the API computes months/met server-side; the medal is derived here (the
+// backend leaves medal null — medal logic is client-side). Demo: from the roster.
+export async function getKidProgress(id) {
+  if (!IS_DEMO) {
+    const p = await mashpia.getKidProgress()
+    return p ? { ...p, medal: medalState(p.missionsTotal) } : null
+  }
+  return demoKidProgress(id)
+}
+
+function demoKidProgress(id) {
   const found = locate(id)
   if (!found) return null
   const { kid } = found
@@ -231,8 +275,14 @@ export function getKidProgress(id) {
   }
 }
 
-// Record a month's completion (demo: mutate in memory). Returns fresh progress.
-export function recordMonth(id, month, kapitlach, minutes) {
+// Record a month's completion. Live: POST /me/report (current Shabbos Mevorchim,
+// token-scoped — id/month are ignored, the server uses the signed-in soldier and
+// the current month). Demo: mutate in memory. Returns fresh progress.
+export async function recordMonth(id, month, kapitlach, minutes) {
+  if (!IS_DEMO) {
+    const p = await mashpia.recordMonth(Number(kapitlach) || 0, Number(minutes) || 0)
+    return p ? { ...p, medal: medalState(p.missionsTotal) } : null
+  }
   const found = locate(id)
   if (!found) return null
   const { kid } = found
@@ -247,12 +297,17 @@ export function recordMonth(id, month, kapitlach, minutes) {
   kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
   saveKidProgress(kid)
   invalidate()
-  return getKidProgress(id)
+  return demoKidProgress(id)
 }
 
-// Switch a soldier's ladder (demo: mutate in memory). Whether past months count
-// as missions is re-derived against the new ladder's quotas. Returns fresh progress.
-export function setKidLadder(id, ladder) {
+// Switch a soldier's ladder. Live: PUT /me/ladder (writes user_tracks.track_id,
+// token-scoped). Demo: mutate in memory; whether past months count as missions is
+// re-derived against the new ladder's quotas. Returns fresh progress.
+export async function setKidLadder(id, ladder) {
+  if (!IS_DEMO) {
+    const p = await mashpia.setKidLadder(Number(ladder))
+    return p ? { ...p, medal: medalState(p.missionsTotal) } : null
+  }
   const found = locate(id)
   if (!found) return null
   const { kid } = found
@@ -264,13 +319,14 @@ export function setKidLadder(id, ladder) {
   kid.missionsTotal = kid.priorMissions + met
   saveKidProgress(kid)
   invalidate()
-  return getKidProgress(id)
+  return demoKidProgress(id)
 }
 
 // Social context for a soldier: where their class stands in the school, where
 // the school stands worldwide, and the nudge to climb a rank. Drives the
 // "your class needs you" line on the dashboard.
-export function getKidSocial(id) {
+export async function getKidSocial(id) {
+  if (!IS_DEMO) return mashpia.getKidSocial()
   const found = locate(id)
   if (!found) return null
   const { kid, school, cls } = found
@@ -322,7 +378,16 @@ export function getKidSocial(id) {
 
 // ---- one school (campaign page) -------------------------------------------
 
-export function getSchool(id) {
+// Live: the PHP API returns the same shape (minus city, which Mashpia does not
+// track, and dedication, which stays null until the write endpoint is designed).
+// Demo: computed from the roster below. Async in both modes so callers are
+// identical — see useLiveData.
+export async function getSchool(id) {
+  if (!IS_DEMO) return mashpia.getSchool(id)
+  return demoSchool(id)
+}
+
+function demoSchool(id) {
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return null
   const agg = schoolAgg(school)
@@ -358,7 +423,8 @@ export function getSchool(id) {
   return { ...agg, classes, dedication: schoolDedication(id) }
 }
 
-export function schoolSoldierLeaderboard(id, n = 10) {
+export async function schoolSoldierLeaderboard(id, n = 10) {
+  if (!IS_DEMO) return mashpia.getSoldierLeaderboard(id, n)
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return []
   const kids = []
@@ -378,8 +444,9 @@ export function schoolSoldierLeaderboard(id, n = 10) {
   return kids.sort((a, b) => b.saidYear - a.saidYear || b.missions - a.missions).slice(0, n)
 }
 
-export function schoolClassLeaderboard(id) {
-  const school = getSchool(id)
+export async function schoolClassLeaderboard(id) {
+  if (!IS_DEMO) return mashpia.getClassLeaderboard(id)
+  const school = demoSchool(id)
   if (!school) return []
   return school.classes.slice().sort((a, b) => b.pct - a.pct || b.said - a.said)
 }
@@ -389,7 +456,8 @@ export function schoolClassLeaderboard(id) {
 const monthName = (idx) => ELAPSED_MONTHS[idx] ?? CURRENT_MONTH
 
 // Army report: one row per school for a month.
-export function getArmyReport(monthIdx = CURRENT_MONTH_INDEX) {
+export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX) {
+  if (!IS_DEMO) return mashpia.getArmyReport(monthIdx)
   const month = monthName(monthIdx)
   return {
     month,
@@ -423,7 +491,8 @@ export function getArmyReport(monthIdx = CURRENT_MONTH_INDEX) {
 }
 
 // Base report: one row per class in a school.
-export function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
+export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
+  if (!IS_DEMO) return mashpia.getBaseReport(schoolId, monthIdx)
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return null
   const month = monthName(monthIdx)
@@ -446,7 +515,8 @@ export function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
 }
 
 // Platoon report: one row per child in a class.
-export function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX) {
+export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX) {
+  if (!IS_DEMO) return mashpia.getPlatoonReport(classId, monthIdx)
   const month = monthName(monthIdx)
   for (const school of ROSTER) {
     const cls = school.classes.find((c) => c.id === classId)
@@ -480,7 +550,8 @@ export function removeSchoolDedication(schoolId) {
 }
 
 // Who hasn't completed this month, per class — drives the teacher deadline email.
-export function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
+export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
+  if (!IS_DEMO) return mashpia.getNotCompleted(schoolId)
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)

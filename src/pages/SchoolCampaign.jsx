@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Card, Pill, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
@@ -6,6 +6,7 @@ import QuotaBars from '@/components/QuotaBars.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { useLiveData } from '@/lib/useLiveData.js'
 import {
   getSchool,
   schoolSoldierLeaderboard,
@@ -29,18 +30,36 @@ const classMono = (c) => {
 
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
-  const school = useMemo(() => getSchool(schoolId), [schoolId])
-  const soldiers = useMemo(() => schoolSoldierLeaderboard(schoolId, 10), [schoolId])
-  const classes = useMemo(() => schoolClassLeaderboard(schoolId), [schoolId])
+  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
+  const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId, 10), [schoolId])
+  const { data: classesData } = useLiveData(() => schoolClassLeaderboard(schoolId), [schoolId])
+  const classes = classesData ?? []
+  const soldierRows = soldiers ?? []
   const [classSort, setClassSort] = useState('finished')
+
+  if (error) {
+    return (
+      <>
+        <PageHero eyebrow="Base Campaign" title="Couldn’t load this school">
+          Something went wrong reading this school’s campaign.
+        </PageHero>
+        <div className="mx-auto max-w-5xl space-y-3 px-4 py-10">
+          <Button onClick={reload}>Try again</Button>
+          <div><Button variant="outline" to="/">Back to Home</Button></div>
+        </div>
+      </>
+    )
+  }
 
   if (!school) {
     return (
       <>
-        <PageHero eyebrow="Base Campaign" title="School not found">
-          We couldn’t find that school.
+        <PageHero eyebrow="Base Campaign" title={loading ? 'Loading…' : 'School not found'}>
+          {loading ? 'Loading this school’s campaign…' : 'We couldn’t find that school.'}
         </PageHero>
-        <div className="mx-auto max-w-5xl px-4 py-10"><Button to="/">Back to Home</Button></div>
+        {loading ? null : (
+          <div className="mx-auto max-w-5xl px-4 py-10"><Button to="/">Back to Home</Button></div>
+        )}
       </>
     )
   }
@@ -56,7 +75,7 @@ export default function SchoolCampaign() {
           <div className="min-w-0">
             <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
             <h1 className="font-display text-3xl font-black text-white sm:text-4xl">{school.name}</h1>
-            <p className="text-white/80">{school.city} · {fmt(school.kids)} soldiers</p>
+            <p className="text-white/80">{school.city ? `${school.city} · ` : ''}{fmt(school.kids)} soldiers</p>
           </div>
         </div>
       </section>
@@ -124,7 +143,7 @@ export default function SchoolCampaign() {
           <Card className="p-5 sm:p-6">
             <h2 className="mb-4 font-display text-xl font-black text-navy">Top Soldiers</h2>
             <ol className="space-y-2">
-              {soldiers.map((s, i) => (
+              {soldierRows.map((s, i) => (
                 <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]">
                   <span className="w-7 text-center font-display text-lg font-bold italic text-blue-accent">{RANK_MEDAL[i] || i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-navy">{s.name}</span>

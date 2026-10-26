@@ -10,6 +10,8 @@ import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
 import TehillimTraining from '@/components/TehillimTraining.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
+import { useLiveData } from '@/lib/useLiveData.js'
+import { IS_DEMO } from '@/lib/liveMode.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -32,22 +34,22 @@ function LadderGlyph(props) {
 export default function KidDashboard() {
   const { kid, logoutKid } = useAuth()
   const navigate = useNavigate()
-  const [tick, setTick] = useState(0) // bump to re-read after recording
-  const progress = useMemo(() => {
-    if (!kid) return null
-    // The demo roster rebuilds ladderless on each page load; keep it in sync
-    // with the session's chosen ladder before reading progress.
-    if (kid.ladder) setKidLadder(kid.id, kid.ladder)
-    return getKidProgress(kid.id)
-    // `tick` is a deliberate recompute key: saveReport mutates the in-memory
-    // demo store and bumps it. It isn't read in the body, so the heuristic calls
-    // it unnecessary, but dropping it would stop the re-read after a save.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kid, tick])
+  const { data: progress, loading: progressLoading, error: progressError, reload: reloadProgress } = useLiveData(
+    () => {
+      if (!kid) return Promise.resolve(null)
+      // Demo only: the roster rebuilds ladderless on each load, so re-sync the
+      // session's chosen ladder before reading. Live keeps the ladder server-side.
+      if (IS_DEMO && kid.ladder) setKidLadder(kid.id, kid.ladder)
+      return getKidProgress(kid.id)
+    },
+    [kid],
+  )
+  const { data: social, reload: reloadSocial } = useLiveData(
+    () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
+    [kid],
+  )
 
   const cur = progress?.current
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `tick` recompute key; see progress above
-  const social = useMemo(() => (kid?.ladder ? getKidSocial(kid.id) : null), [kid, tick])
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
   // Furthest kapitel actually climbed this year = highest completed month's target.
   const reached = useMemo(
@@ -70,7 +72,20 @@ export default function KidDashboard() {
   }
 
   if (!kid) return <Navigate to="/login" replace />
-  if (!progress) return <Navigate to="/login" replace />
+  if (!progress) {
+    // Logged in but progress is still loading (or failed) — don't bounce to login.
+    return (
+      <>
+        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={progressError ? 'Couldn’t load your Tehillim' : 'Loading…'}>
+          {progressError ? 'Something went wrong. Please try again.' : 'One moment…'}
+        </PageHero>
+        <div className="mx-auto max-w-2xl px-4 py-10 text-center sm:px-6">
+          {progressError ? <Button variant="navy" onClick={reloadProgress}>Try again</Button> : null}
+          {!progressLoading && !progressError ? <Button variant="ghost" onClick={logoutKid}>Sign out</Button> : null}
+        </div>
+      </>
+    )
+  }
 
   // First login, or no valid ladder yet: graphic welcome + a prompt to choose.
   // (An out-of-range ladder — e.g. a stale value — counts as not chosen.)
@@ -101,10 +116,11 @@ export default function KidDashboard() {
     )
   }
 
-  function saveReport() {
+  async function saveReport() {
     const wasMet = cur.met
-    const prog = recordMonth(kid.id, cur.month, Number(said) || 0, Number(mins) || 0)
-    setTick((t) => t + 1)
+    const prog = await recordMonth(kid.id, cur.month, Number(said) || 0, Number(mins) || 0)
+    reloadProgress()
+    reloadSocial()
     if (prog?.current?.met && !wasMet) celebrate()
   }
 

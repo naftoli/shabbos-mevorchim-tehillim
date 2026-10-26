@@ -9,8 +9,8 @@ export default function Ladders() {
 
   if (!kid) return <Navigate to="/login" replace />
 
-  function pick(L) {
-    changeLadder(L)
+  async function pick(L) {
+    await changeLadder(L)
     navigate('/me', { replace: true })
   }
 

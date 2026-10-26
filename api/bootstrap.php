@@ -12,9 +12,10 @@ declare(strict_types=1);
  * _by_student.php, battlefront/api/getWWTC.php) — so this API returns the same
  * numbers those reports show.
  *
- * Read-only: every write endpoint (soldier self-report, ladder self-select,
- * dedications) returns 405 for now. Recording and ladder assignment stay with
- * the teacher/HQ tools until those writes are designed and signed off.
+ * Reads mirror the WWTC report pages. Writes are scoped by the bearer token to
+ * the signed-in soldier's own record: POST /me/report (kapitlach/minutes marks,
+ * the mark_tehillim2.php logic) and PUT /me/ladder (user_tracks.track_id). Only
+ * dedications stay a 405 — the SPA keeps those client-side for now.
  */
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
@@ -325,6 +326,21 @@ function wwtcElapsedMonths(): array
 }
 
 /**
+ * The Shabbos-Mevorchim jd for an elapsed-month index (the SPA's monthIdx, 0 =
+ * first elapsed month). Out of range or null falls back to the current month, so
+ * reports default to "now" when no month is given.
+ */
+function wwtcDateForMonthIdx($idx): int
+{
+    if ($idx === null || $idx === '') {
+        return wwtcCurrentDate();
+    }
+    $elapsed = wwtcElapsedMonths();
+    $idx = (int) $idx;
+    return isset($elapsed[$idx]) ? (int) $elapsed[$idx]['jd'] : wwtcCurrentDate();
+}
+
+/**
  * A ShabbosMevorchim configured for one report date (default: current month).
  * Shares one instance per date so a request that touches several endpoints does
  * not rebuild it. setArmyResults()/setSchoolResults() etc. are called by the
@@ -344,6 +360,23 @@ function wwtcReport(?int $jd = null): ShabbosMevorchim
 
 // ---- soldier lookup --------------------------------------------------------
 
+/**
+ * SPA ladder (5..12, the grade a soldier finishes training to say the whole
+ * Tehillim by) <-> DB user_tracks.track_id. Ladder 12 = track 1, 11 = track 2,
+ * ... 5 = track 8, so track_id = 13 - ladder and ladder = 13 - track_id. (Only
+ * tracks 3..8 — ladders 10..5 — exist today; 11 and 12 come when 1 and 2 are added.)
+ */
+function wwtcLadderFromTrack($trackId): ?int
+{
+    $trackId = (int) $trackId;
+    return $trackId > 0 ? 13 - $trackId : null;
+}
+
+function wwtcTrackFromLadder(int $ladder): int
+{
+    return 13 - $ladder;
+}
+
 /** Public soldier payload (never the dob). Keyed by user_serial as the SPA id. */
 function wwtcSafeKid(array $u): array
 {
@@ -352,7 +385,7 @@ function wwtcSafeKid(array $u): array
         'serial' => (string) $u['user_serial'],
         'name' => trim(($u['first'] ?? '') . ' ' . ($u['last'] ?? '')),
         'grade' => isset($u['class_grade']) ? (string) $u['class_grade'] : null,
-        'ladder' => isset($u['track_id']) && $u['track_id'] !== null ? (int) $u['track_id'] : null,
+        'ladder' => isset($u['track_id']) && $u['track_id'] !== null ? wwtcLadderFromTrack($u['track_id']) : null,
         'schoolId' => isset($u['school_id']) ? (int) $u['school_id'] : null,
         'schoolName' => $u['school_name'] ?? null,
         'className' => trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? '')),
@@ -405,4 +438,59 @@ function wwtcEligibleSchools(): array
           ORDER BY s.school_name'
     )->fetchAll(PDO::FETCH_KEY_PAIR);
     return $schools = array_map('strval', $rows);
+}
+
+/**
+ * Per-school / per-class completion for a Shabbos-Mevorchim date, computed from
+ * the mission-mark signal (date_tasks_mission_marks — the "earned this month"
+ * row the teacher tool and POST /me/report both maintain) plus eligible enrolled
+ * headcounts. Cheap grouped queries, so this scales to the whole army without the
+ * per-student loop the summary report does. Returns:
+ *   [ 'metBySchool' => [sid=>n], 'sizeBySchool' => [sid=>n],
+ *     'metByClass' => [sid=>[cid=>n]], 'sizeByClass' => [sid=>[cid=>n]] ]
+ */
+function wwtcCompletionCounts(int $date): array
+{
+    global $MASHPIA_DB;
+    static $cache = [];
+    if (isset($cache[$date])) {
+        return $cache[$date];
+    }
+
+    $met = $MASHPIA_DB->prepare(
+        'SELECT u.school_id, u.class_id, COUNT(*) n
+           FROM date_tasks_mission_marks mm
+           JOIN users u ON u.user_id = mm.user_id
+          WHERE mm.subject_id = ' . WWTC_SUBJECT_ID . ' AND mm.mark_date = :d
+          GROUP BY u.school_id, u.class_id'
+    );
+    $met->execute([':d' => $date]);
+
+    $size = $MASHPIA_DB->query(
+        'SELECT u.school_id, u.class_id, COUNT(DISTINCT u.user_id) n
+           FROM users u
+           JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
+           JOIN schools s ON s.school_id = u.school_id
+           JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
+          WHERE u.user_registered > 0 AND s.school_era IS NULL AND c.class_era = 0
+            AND u.school_id NOT IN (82, 612)
+          GROUP BY u.school_id, u.class_id'
+    );
+
+    $out = ['metBySchool' => [], 'sizeBySchool' => [], 'metByClass' => [], 'sizeByClass' => []];
+    foreach ($met->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sid = (int) $r['school_id'];
+        $cid = (int) $r['class_id'];
+        $n = (int) $r['n'];
+        $out['metByClass'][$sid][$cid] = $n;
+        $out['metBySchool'][$sid] = ($out['metBySchool'][$sid] ?? 0) + $n;
+    }
+    foreach ($size->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $sid = (int) $r['school_id'];
+        $cid = (int) $r['class_id'];
+        $n = (int) $r['n'];
+        $out['sizeByClass'][$sid][$cid] = $n;
+        $out['sizeBySchool'][$sid] = ($out['sizeBySchool'][$sid] ?? 0) + $n;
+    }
+    return $cache[$date] = $out;
 }

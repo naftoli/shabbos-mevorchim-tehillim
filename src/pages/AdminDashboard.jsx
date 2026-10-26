@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
+import { useLiveData } from '@/lib/useLiveData.js'
 import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
@@ -58,17 +59,20 @@ function DedicationEditor({ school, onSaved }) {
 
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
-  const allSchools = useMemo(() => (isSuper ? getSchools() : []), [isSuper])
+  const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools() : Promise.resolve([])), [isSuper])
+  const allSchools = allSchoolsData ?? []
   const [schoolId, setSchoolId] = useState(admin?.schoolId || null)
-  const [tick, setTick] = useState(0) // bump to re-read after editing the dedication
+  const activeId = isSuper ? schoolId : (admin?.schoolId ?? null)
+  // reloadSchool re-reads after editing the dedication (and on the live poll).
+  const { data: school, reload: reloadSchool } = useLiveData(
+    () => (activeId ? getSchool(activeId) : Promise.resolve(null)),
+    [activeId],
+  )
+  const { data: base } = useLiveData(() => (activeId ? getBaseReport(activeId) : Promise.resolve(null)), [activeId])
+  const { data: missingData } = useLiveData(() => (activeId ? notCompleted(activeId) : Promise.resolve([])), [activeId])
+  const missing = missingData ?? []
 
   if (!admin) return <Navigate to="/admin/login" replace />
-
-  const activeId = isSuper ? schoolId : admin.schoolId
-  void tick // re-render trigger after editing the dedication
-  const school = activeId ? getSchool(activeId) : null
-  const base = activeId ? getBaseReport(activeId) : null
-  const missing = activeId ? notCompleted(activeId) : []
 
   return (
     <>
@@ -128,7 +132,7 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Dedication — add / edit / remove */}
-            <DedicationEditor school={school} onSaved={() => setTick((t) => t + 1)} />
+            <DedicationEditor school={school} onSaved={reloadSchool} />
 
             {/* Set a class/school onto a ladder */}
             <Card className="p-5 sm:p-6">
@@ -139,7 +143,7 @@ export default function AdminDashboard() {
                   <span className="mb-1 block font-semibold text-navy">Class</span>
                   <select className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2">
                     <option>Whole school</option>
-                    {base.rows.map((c) => <option key={c.id}>{c.name}</option>)}
+                    {(base?.rows ?? []).map((c) => <option key={c.id}>{c.name}</option>)}
                   </select>
                 </label>
                 <label className="text-sm">
@@ -164,7 +168,7 @@ export default function AdminDashboard() {
                   <th className="px-4 py-2 text-right font-cond uppercase">Completed</th>
                 </tr></thead>
                 <tbody>
-                  {base.rows.map((c) => (
+                  {(base?.rows ?? []).map((c) => (
                     <tr key={c.id} className="border-t border-line">
                       <td className="px-4 py-2 font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{c.size}</td>

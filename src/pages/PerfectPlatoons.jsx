@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PageHero } from './_page.jsx'
 import { Input } from '@/components/ui.jsx'
+import { useLiveData } from '@/lib/useLiveData.js'
 import { getPerfectPlatoons, getSchool, CURRENT_MONTH } from '@/services/api.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
@@ -15,12 +16,14 @@ export default function PerfectPlatoons() {
   const [params] = useSearchParams()
   const schoolId = params.get('school')
   const perSchool = !!schoolId
-  const schoolName = useMemo(() => (schoolId ? getSchool(schoolId)?.name ?? null : null), [schoolId])
+  const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId) : Promise.resolve(null)), [schoolId])
+  const schoolName = school?.name ?? null
 
+  const { data: platoonsData } = useLiveData(() => getPerfectPlatoons(), [])
   const all = useMemo(() => {
-    const list = getPerfectPlatoons()
-    return schoolId ? list.filter((p) => p.schoolId === schoolId) : list
-  }, [schoolId])
+    const list = platoonsData ?? []
+    return schoolId ? list.filter((p) => String(p.schoolId) === String(schoolId)) : list
+  }, [platoonsData, schoolId])
 
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()

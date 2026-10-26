@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import { Card } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
+import { useLiveData } from '@/lib/useLiveData.js'
 import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
@@ -52,9 +53,15 @@ function Level({ medal, index, missionsTotal }) {
 
 export default function Medals() {
   const { kid } = useAuth()
+  const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   if (!kid) return <Navigate to="/login" replace />
-  const progress = getKidProgress(kid.id)
-  if (!progress) return <Navigate to="/login" replace />
+  if (!progress) {
+    return (
+      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Loading…">
+        One moment…
+      </PageHero>
+    )
+  }
 
   const { missionsTotal, medal } = progress
   const pct = Math.min(100, Math.round((missionsTotal / TOTAL) * 100))

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getGlobalStats,
@@ -8,6 +8,8 @@ import {
 } from '@/services/api.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
+import { useLiveData } from '@/lib/useLiveData.js'
+import { PageHero } from './_page.jsx'
 import { Button, Card, Pill, SchoolLogo, Input } from '@/components/ui.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
@@ -177,16 +179,22 @@ function SchoolCard({ s, color }) {
 }
 
 export default function Home() {
-  const stats = useMemo(() => getGlobalStats(), [])
-  const totals = useMemo(() => getRunningTotals(), [])
-  const schools = useMemo(() => getSchools(), [])
-  const platoons = useMemo(() => getPerfectPlatoons(), [])
+  const { data: stats } = useLiveData(() => getGlobalStats(), [])
+  const { data: totals } = useLiveData(() => getRunningTotals(), [])
+  const { data: schoolsData } = useLiveData(() => getSchools(), [])
+  const { data: platoonsData } = useLiveData(() => getPerfectPlatoons(), [])
   const [query, setQuery] = useState('')
 
+  const schools = schoolsData ?? []
+  const platoons = platoonsData ?? []
   const q = query.trim().toLowerCase()
   const filtered = schools.filter(
-    (s) => !q || s.name.toLowerCase().includes(q) || s.city.toLowerCase().includes(q),
+    (s) => !q || s.name.toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q),
   )
+
+  if (!stats || !totals) {
+    return <PageHero eyebrow="Worldwide Tehillim Club" title="Loading…">One moment…</PageHero>
+  }
 
   return (
     <div>

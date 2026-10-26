@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { getKidProgress, getKidSocial } from '@/services/api.js'
+import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 
@@ -266,10 +267,14 @@ export default function ChatBuddy() {
   const scrollRef = useRef(null)
   const convoRef = useRef([])
 
+  const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
+  const { data: social } = useLiveData(
+    () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
+    [kid],
+  )
+
   const ctx = useMemo(() => {
-    if (!kid) return null
-    const progress = getKidProgress(kid.id)
-    const social = kid.ladder ? getKidSocial(kid.id) : null
+    if (!kid || !progress) return null
     const base = {
       firstName: (kid.name || 'friend').split(' ')[0],
       ladder: kid.ladder,
@@ -280,7 +285,7 @@ export default function ChatBuddy() {
       monthHeb: progress?.current ? MONTH_HEB[progress.current.month] : '',
     }
     return { ...base, situation: readSituation(base) }
-  }, [kid])
+  }, [kid, progress, social])
 
   const greeting = useMemo(() => (ctx ? openingGreeting(ctx) : ''), [ctx])
   const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
