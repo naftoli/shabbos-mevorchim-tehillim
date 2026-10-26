@@ -266,6 +266,7 @@ export default function ChatBuddy() {
   const [typing, setTyping] = useState(false)
   const scrollRef = useRef(null)
   const convoRef = useRef([])
+  const msgSeq = useRef(0) // monotonic message ids (no impure Date.now in render)
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social } = useLiveData(
@@ -290,11 +291,6 @@ export default function ChatBuddy() {
   const greeting = useMemo(() => (ctx ? openingGreeting(ctx) : ''), [ctx])
   const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
 
-  // Seed the opening greeting the first time the panel opens.
-  useEffect(() => {
-    if (open && !messages.length && greeting) setMessages([{ id: 'w', from: 'bot', text: greeting }])
-  }, [open, messages.length, greeting])
-
   useEffect(() => {
     convoRef.current = messages
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -302,12 +298,15 @@ export default function ChatBuddy() {
 
   if (!kid) return null
   const showPeek = !open && !peekClosed && pathname === '/me' && !!greeting
+  // The opening greeting is a derived first bubble (not seeded into state), so the
+  // panel shows it without a set-state-in-effect; the real conversation follows.
+  const thread = greeting ? [{ id: 'w', from: 'bot', text: greeting }, ...messages] : messages
 
   async function send(raw) {
     const text = (raw ?? input).trim()
     if (!text) return
     setInput('')
-    const kidMsg = { id: `k${Date.now()}`, from: 'kid', text }
+    const kidMsg = { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }
     setMessages((m) => [...m, kidMsg])
     setTyping(true)
     const history = [...convoRef.current, kidMsg].slice(-9)
@@ -318,7 +317,7 @@ export default function ChatBuddy() {
       reply = buildReply(text, ctx) // scripted fallback (static file / offline / no key)
     }
     setTyping(false)
-    setMessages((m) => [...m, { id: `b${Date.now()}`, from: 'bot', text: reply }])
+    setMessages((m) => [...m, { id: `b${(msgSeq.current += 1)}`, from: 'bot', text: reply }])
   }
 
   return (
@@ -370,7 +369,7 @@ export default function ChatBuddy() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-paper/50 px-3 py-3">
-            {messages.map((m) => (
+            {thread.map((m) => (
               <div key={m.id} className={`flex ${m.from === 'kid' ? 'justify-end' : 'justify-start'}`}>
                 <span className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'}`}>
                   {m.text}
