@@ -1,7 +1,7 @@
 // The nationwide progress bar: a rounded track with a blue gradient fill to
 // `percent`, and a marker riding the fill's end — a Sefer Tehillim for kapitlach,
 // a clock for minutes (pass `icon`).
-export default function GoalBar({ percent, label = 'of goal', marker = true, icon = '📖', iconSrc, className = '' }) {
+export default function GoalBar({ percent, label = 'of goal', marker = true, icon = '📖', iconSrc, fill, className = '' }) {
   const actual = Math.max(0, Math.floor(Number(percent) || 0))
   const p = Math.min(100, actual)
   return (
@@ -16,7 +16,7 @@ export default function GoalBar({ percent, label = 'of goal', marker = true, ico
       >
         <div
           className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
-          style={{ width: `${Math.max(p, 1.5)}%`, background: 'var(--grad-progress)' }}
+          style={{ width: `${Math.max(p, 1.5)}%`, background: fill || 'var(--grad-progress)' }}
         />
       </div>
 

@@ -199,6 +199,12 @@ export default function Home() {
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-center"
         />
+        {/* cool blue wash so the hero reads calm and on-brand over any photo */}
+        <div
+          className="absolute inset-0"
+          aria-hidden="true"
+          style={{ background: 'linear-gradient(135deg, rgba(15,35,80,0.62) 0%, rgba(23,53,111,0.5) 45%, rgba(42,95,184,0.34) 100%)' }}
+        />
         <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
           <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
             <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px] lg:text-[18px]">
@@ -218,7 +224,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => document.getElementById('schools')?.scrollIntoView({ behavior: 'smooth' })}
-                className="btn btn-gold w-full px-6 py-3 text-[18px] sm:w-auto sm:min-w-[240px] sm:text-[21px]"
+                className="btn btn-o-white w-full px-6 py-3 text-[18px] sm:w-auto sm:min-w-[240px] sm:text-[21px]"
               >
                 See the Schools
               </button>
