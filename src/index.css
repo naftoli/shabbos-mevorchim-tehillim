@@ -25,7 +25,7 @@
   --color-purple: #5b3fa8;
 
   --color-sky: #cddafa;            /* header bar / chips */
-  --color-mint: #f4edda;           /* page background (warm parchment) */
+  --color-mint: #ecd7f0;           /* page background (soft lavender) */
   --color-blue-accent: #2246a8;    /* rank numerals */
 
   /* race bar palette — one per school, in rank order */
@@ -35,7 +35,7 @@
   --color-race-red: #eb635d;
   --color-race-teal: #0e8aa6;
 
-  --color-paper: #f4edda;          /* page background (warm parchment — no white) */
+  --color-paper: #ecd7f0;          /* page background (soft lavender — no white) */
   --color-card: #dce8ff;           /* cards = soft sky blue (Lulav-style, not white) */
   --color-line: #bccfee;           /* hairlines */
   --color-muted: #46557d;          /* muted text */
@@ -80,12 +80,12 @@ h1, h2, h3, h4 { line-height: 1.15; }
   .font-cond { font-synthesis-weight: none; }
 }
 
-/* sky page with a soft blue / gold glow */
+/* soft lavender page with a gentle orchid / gold glow */
 .bg-field {
   background-color: var(--color-paper);
   background-image:
-    radial-gradient(circle at 15% 18%, rgba(135, 180, 245, 0.35), transparent 45%),
-    radial-gradient(circle at 85% 8%, rgba(255, 213, 74, 0.12), transparent 42%);
+    radial-gradient(circle at 15% 18%, rgba(214, 176, 232, 0.45), transparent 45%),
+    radial-gradient(circle at 85% 8%, rgba(255, 213, 74, 0.10), transparent 42%);
 }
 
 /* subtle brand strip (used on login cards) */

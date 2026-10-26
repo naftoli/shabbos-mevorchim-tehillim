@@ -190,17 +190,17 @@ export default function Home() {
 
   return (
     <div>
-      {/* Campaign banner — Tzivos Hashem */}
-      <img
-        src={asset('brand/tzivos-hashem.jpg')}
-        alt="Shabbos Mevorchim Tehillim · Tzivos Hashem"
-        className="mx-auto block w-full max-w-[1400px]"
-      />
-
-      {/* Hero — royal-blue gradient with a glass panel (no Sukkos art). */}
-      <section className="hero-navy relative isolate flex min-h-[380px] sm:min-h-[460px] md:min-h-[520px]">
-        <div className="relative mx-auto flex w-full max-w-[1400px] flex-col items-start justify-center gap-2 px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
-          <div className="hero-glass relative z-30 w-full max-w-[680px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
+      {/* Hero — a full-bleed photo with the brand glass panel on top.
+          design/hero-bg.jpg is a placeholder; drop the real photo in at that path. */}
+      <section className="relative isolate flex min-h-[420px] sm:min-h-[500px] md:min-h-[560px]">
+        <img
+          src={asset('design/hero-bg.jpg')}
+          alt=""
+          draggable="false"
+          className="absolute inset-0 h-full w-full select-none object-cover object-center"
+        />
+        <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
+          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
             <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px] lg:text-[18px]">
               Shabbos Mevorchim {stats.year} · Worldwide Mivtza
             </p>
