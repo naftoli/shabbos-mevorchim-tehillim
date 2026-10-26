@@ -24,8 +24,8 @@
   --color-orange: #d97706;
   --color-purple: #5b3fa8;
 
-  --color-sky: #cddafa;            /* header bar / chips */
-  --color-mint: #ecd7f0;           /* page background (soft lavender) */
+  --color-sky: #c3ecff;            /* header bar / chips — bright cyan */
+  --color-mint: #ecd3ec;           /* page background (soft pink-lavender) */
   --color-blue-accent: #2246a8;    /* rank numerals */
 
   /* race bar palette — one per school, in rank order */
@@ -35,7 +35,7 @@
   --color-race-red: #eb635d;
   --color-race-teal: #0e8aa6;
 
-  --color-paper: #ecd7f0;          /* page background (soft lavender — no white) */
+  --color-paper: #ecd3ec;          /* page background (soft pink-lavender — no white) */
   --color-card: #dce8ff;           /* cards = soft sky blue (Lulav-style, not white) */
   --color-line: #bccfee;           /* hairlines */
   --color-muted: #46557d;          /* muted text */
@@ -56,7 +56,7 @@
   --grad-cta-gold: linear-gradient(90deg, #ffd54a 0%, #e0a21a 100%);    /* gold CTA */
   --grad-pill-green: linear-gradient(90deg, #8fb4f5 0%, #6f93e6 100%);  /* nav active pill / toggle */
   --grad-progress: linear-gradient(90deg, #6f93e6 0%, #2a5fb8 100%);    /* bar fills */
-  --glass-green: rgba(15, 35, 80, 0.8);                                 /* hero glass panel */
+  --glass-green: rgba(37, 86, 168, 0.56);                               /* hero glass panel — lighter royal blue, photo shows through */
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -159,8 +159,8 @@ h1, h2, h3, h4 { line-height: 1.15; }
 .hero-glass {
   color: #fff;
   background: var(--glass-green);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
   border-radius: 40px;
   box-shadow: 0 24px 60px -30px rgba(15, 35, 80, 0.45);
 }
