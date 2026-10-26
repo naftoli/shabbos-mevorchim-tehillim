@@ -157,6 +157,9 @@ function buildReply(text, ctx) {
     const when = sMevorchim.daysUntil <= 0 ? 'this Shabbos!' : sMevorchim.daysUntil === 1 ? 'tomorrow' : `in ${sMevorchim.daysUntil} days`
     return `The next Shabbos Mevorchim bentches ${MONTH_HEB[sMevorchim.monthEn] ?? sMevorchim.monthEn} — that's ${when}${sMevorchim.hebDateLabel ? ` (${sMevorchim.hebDateLabel})` : ''}. Get ready! 💙`
   }
+  if (has('affect', 'impact', 'matter', 'count', 'does it do', 'help my', 'help the', 'lift', 'difference', 'why does', 'who does')) {
+    return `Every kapitel you say counts for your class, your school, and the whole Tzivos Hashem army, ${firstName} — you lift everyone up! And when every child in your class finishes, you become a Perfect Platoon. 💙`
+  }
   if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard')) {
     if (!social) return `Every time you say your Tehillim, you lift your whole class and school up! 🏆`
     const tail = social.classRank === 1 ? `Your class is in first place — amazing!` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every child counts — keep saying your Tehillim!`
