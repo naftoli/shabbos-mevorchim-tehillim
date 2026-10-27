@@ -25,7 +25,7 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
         </span>
         <span className="mt-1 font-display text-[10px] font-semibold uppercase leading-none tracking-[0.04em] sm:text-[13px] 2xl:text-[15px]"
           style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
-          Worldwide · Tzivos Hashem
+          Tzivos Hashem
         </span>
       </span>
     </span>

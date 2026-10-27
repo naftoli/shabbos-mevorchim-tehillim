@@ -15,9 +15,9 @@ function Line({ leftLabel, leftValue, rightLabel, rightValue, pct, icon, iconSrc
         </div>
         <div>
           <p className="font-display text-[13px] font-semibold uppercase leading-none text-navy sm:text-[15px]">{rightLabel}</p>
-          <p className="mt-1.5 font-display text-[26px] font-black leading-none tabular-nums text-green sm:text-[34px]">{rightValue}</p>
+          <p className="mt-1.5 font-display text-[26px] font-black leading-none tabular-nums sm:text-[34px]" style={{ color: '#a85fa5' }}>{rightValue}</p>
         </div>
-        <p className="ml-auto font-display text-[26px] font-black leading-none tabular-nums text-green sm:text-[34px]">{pct}%</p>
+        <p className="ml-auto font-display text-[26px] font-black leading-none tabular-nums text-blue sm:text-[34px]">{pct}%</p>
       </div>
       <GoalBar percent={pct} icon={icon} iconSrc={iconSrc} fill={fill} className="mt-4 sm:mr-14" />
     </div>
