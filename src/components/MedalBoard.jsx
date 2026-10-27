@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MEDALS } from '@/lib/medals.js'
+import { MEDALS, MEDAL_THRESHOLDS } from '@/lib/medals.js'
 import { Card } from './ui.jsx'
 import MedalCoin from './MedalCoin.jsx'
 import { fmt } from '@/lib/format.js'
@@ -20,7 +20,7 @@ export default function MedalBoard({ progress }) {
   const { medal, missionsTotal } = progress
   const earnedCount = medal.earnedCount
   const next = medal.next
-  const pct = Math.max(2, Math.round((missionsTotal / 110) * 100))
+  const pct = Math.max(2, Math.round((missionsTotal / MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1]) * 100))
 
   return (
     <Link to="/medals" className="block">

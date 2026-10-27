@@ -1,13 +1,12 @@
 // Medals are awarded at cumulative missions (a mission = finishing a month's
-// quota). Eleven tiers, each its own color.
-export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95, 110]
+// quota). Ten tiers, each its own color; Black is the top.
+export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95]
 
 // Names and colours taken straight from the Mashpia medal board source
-// (לבן/אדום/כתום/צהוב/ירוק/כחול/סגול/חום/אפור/שחור/ברונזה). `ink` is the number
-// colour for contrast on light vs. dark medals.
-// `coin` names the real medal graphic (public/design/coin-<name>.png) — the
-// shield coin the client supplied in each ladder colour. Bronze has no coin
-// art yet, so it keeps the CSS-rendered fallback (coin: null).
+// (לבן/אדום/כתום/צהוב/ירוק/כחול/סגול/חום/אפור/שחור). `ink` is the number colour
+// for contrast on light vs. dark medals. `coin` names the real medal graphic
+// (public/design/coin-<name>.png) — the shield coin the client supplied in each
+// ladder colour.
 export const MEDALS = [
   { name: 'White', color: '#d8dbde', ink: '#1b2a4e', coin: 'white' },
   { name: 'Red', color: '#aa2834', ink: '#ffffff', coin: 'red' },
@@ -19,7 +18,6 @@ export const MEDALS = [
   { name: 'Brown', color: '#6d4c38', ink: '#ffffff', coin: 'brown' },
   { name: 'Gray', color: '#71707b', ink: '#ffffff', coin: 'gray' },
   { name: 'Black', color: '#0a0515', ink: '#ffffff', coin: 'black' },
-  { name: 'Bronze', color: '#bcaaa4', ink: '#1b2a4e', coin: null },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
 // A medal's own colour can be too light to read as text on a light card

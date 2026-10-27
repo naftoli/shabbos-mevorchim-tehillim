@@ -9,7 +9,7 @@ import MedalCoin from '@/components/MedalCoin.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 
-const TOTAL = MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1] // 110
+const TOTAL = MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1] // Black, the top tier
 
 // A single mission coin: gold once earned, a grey slot until then.
 function Coin({ n, earned }) {

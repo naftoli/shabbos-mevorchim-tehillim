@@ -19,7 +19,7 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
       </span>
     )
   }
-  // No coin art (Bronze) — keep the CSS coin with its threshold number.
+  // No coin art for this tier — fall back to a CSS coin with its threshold number.
   return (
     <span
       className={`inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
