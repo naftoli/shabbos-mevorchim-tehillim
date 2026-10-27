@@ -5,9 +5,9 @@ import { PageHero } from './_page.jsx'
 import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
+import MedalCoin from '@/components/MedalCoin.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
-import { asset } from '@/lib/asset.js'
 
 const TOTAL = MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1] // 110
 
@@ -35,14 +35,10 @@ function Level({ medal, index, missionsTotal }) {
   return (
     <div className="flex flex-col gap-4 border-t border-line py-5 sm:flex-row sm:items-center sm:gap-6">
       <div className="flex w-28 flex-none flex-col items-center gap-1 text-center">
-        <span
-          className={`grid h-16 w-16 place-items-center rounded-full font-cond text-2xl font-black shadow-sm ring-2 ${lit ? '' : 'opacity-30 grayscale'} ${active ? 'ring-gold' : 'ring-black/10'}`}
-          style={{ background: medal.color, color: medal.ink }}
-        >
-          {medal.threshold}
-        </span>
+        <MedalCoin medal={medal} size={64} locked={!lit} active={active} />
         <span className="font-cond text-[11px] uppercase tracking-wide text-muted">Level {index + 1}</span>
         <span className="text-[13px] font-bold" style={{ color: lit ? legible(medal.color) : 'var(--color-muted)' }}>{medal.name}</span>
+        <span className="font-cond text-[11px] tabular-nums text-muted">{medal.threshold} missions</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {coins.map((n) => <Coin key={n} n={n} earned={n <= missionsTotal} />)}
@@ -76,7 +72,7 @@ export default function Medals() {
         {/* Status */}
         <Card className="overflow-hidden">
           <div className="hero-navy flex flex-wrap items-center gap-5 px-6 py-6">
-            <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-16 w-auto drop-shadow" />
+            <MedalCoin medal={medal.current || MEDALS[0]} size={64} className="flex-none" />
             <div className="min-w-0 flex-1">
               <p className="font-cond text-sm uppercase tracking-wide text-gold">Tehillim Missions</p>
               <p className="font-display text-3xl font-black leading-none text-white">

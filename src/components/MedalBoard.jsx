@@ -1,27 +1,16 @@
 import { Link } from 'react-router-dom'
 import { MEDALS } from '@/lib/medals.js'
 import { Card } from './ui.jsx'
+import MedalCoin from './MedalCoin.jsx'
 import { fmt } from '@/lib/format.js'
-import { asset } from '@/lib/asset.js'
 
-// One medal in the strip: an earned tier shows its colour + number; a locked
-// tier is a flat grey coin. Mirrors the Mashpia medal board's medal row.
+// One medal in the strip: the real coin when earned, dimmed when locked, with
+// its mission threshold beneath. Mirrors the Mashpia medal board's medal row.
 function StripMedal({ medal, earned, current }) {
   return (
-    <span
-      className="relative grid h-11 w-11 flex-none place-items-center rounded-full font-cond text-[13px] font-bold tabular-nums sm:h-12 sm:w-12 sm:text-[14px]"
-      style={
-        earned
-          ? {
-              background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
-              color: medal.ink,
-              boxShadow: current ? '0 0 0 3px var(--color-gold), 0 1px 3px rgba(0,0,0,.25)' : '0 1px 3px rgba(0,0,0,.25)',
-            }
-          : { background: '#c7ccd6', color: '#7e8795' }
-      }
-      title={`${medal.name} — ${medal.threshold} missions${earned ? ' · earned' : ''}`}
-    >
-      {medal.threshold}
+    <span className="flex flex-col items-center gap-0.5">
+      <MedalCoin medal={medal} size={44} locked={!earned} active={current} />
+      <span className="font-cond text-[10px] font-semibold tabular-nums text-muted">{medal.threshold}</span>
     </span>
   )
 }
@@ -38,7 +27,7 @@ export default function MedalBoard({ progress }) {
       <Card className="p-5 transition hover:shadow-hover sm:p-6">
         {/* Header: current medal + count, with the "don't miss" nudge top-right */}
         <div className="flex flex-wrap items-start gap-4">
-          <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-14 w-auto flex-none drop-shadow sm:h-16" />
+          <MedalCoin medal={medal.current || MEDALS[0]} size={64} className="flex-none" />
           <div className="min-w-0 flex-1">
             <h3 className="font-display text-2xl font-black leading-none text-navy">Tehillim</h3>
             <p className="mt-1.5 text-sm text-muted">
