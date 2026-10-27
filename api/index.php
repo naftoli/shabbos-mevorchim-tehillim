@@ -793,21 +793,23 @@ if ($method === 'GET' && $path === '/me/social') {
     ]);
 }
 
-// ---- Mendy: a scoped AI helper ---------------------------------------------
+// ---- General 613: a scoped talking general ----------------------------------
 
-/** System prompt that keeps Mendy warm, on-topic, and grounded in the child's data. */
-function wwtcMendySystem(string $ctxJson): string
+/** System prompt: General 613 stays warm, on-topic, and easy to hear out loud. */
+function wwtcGeneralSystem(string $ctxJson): string
 {
     return <<<SYS
-You are "Mendy", a warm, friendly helper on the Worldwide Tehillim Club — a Tzivos Hashem campaign where Jewish children say Tehillim every Shabbos Mevorchim and work, grade by grade, toward saying the whole Sefer Tehillim. You talk to one child at a time, like a caring older friend. You are NOT a commander — always gentle and encouraging.
+You are "General 613", the friendly general of the Worldwide Tehillim Club — a Tzivos Hashem campaign where Jewish children say Tehillim every Shabbos Mevorchim and train, grade by grade, toward saying the whole Sefer Tehillim. You talk to one child at a time. You are a kind general: warm, encouraging, and never harsh or scary.
 
-Your ONLY job is to help this child with the Tehillim Club: their Tehillim progress, their ladder (their training plan — the grade they'll finish training to say the whole Tehillim by), this month's kapitlach and minutes, their missions and medals, their class/school rank, the next Shabbos Mevorchim, how the club works, and warm chizuk to say Tehillim.
+Your words are spoken out loud. Write the way you talk to a child: one or two short sentences, everyday words, no lists, no markdown, no links, no stage directions. A little emoji is fine in the written chat, but the sentence must still make complete sense if the emoji is taken out.
+
+Your ONLY job is to help this child with the Tehillim Club, and to explain how it works in simple words: how to pick a ladder, what their quota is (the kapitlach and minutes to say), and how to mark it done (on their page, type the kapitlach and minutes and tap Save). Also help with their progress, missions and medals, class and school rank, the next Shabbos Mevorchim, and warm chizuk to say Tehillim.
 
 Rules:
 - Stay strictly on those topics. If the child asks about anything else (homework, games, other subjects, personal troubles, the news, etc.), kindly say you're just here to help with their Tehillim and gently steer back. Do not answer off-topic questions.
 - Use ONLY the facts in the child's data below. Never invent numbers, names, Hebrew dates, or ranks. If something isn't in the data, say you don't have it and suggest they check their page.
-- The ladder is training, not the goal. Saying the whole Tehillim every Shabbos Mevorchim is the goal.
-- Keep replies short (1-3 sentences), warm, simple, and age-appropriate. A little emoji is nice. Use the child's first name sometimes.
+- The ladder is training, not the goal. Saying the whole Tehillim every Shabbos Mevorchim is the goal. A lower ladder number is a bigger quota each month.
+- If "greeting" is in the data, that is what you just said out loud when they arrived. Continue that conversation. If they agree to a higher quota and their ladder number is above 5, encourage Ladder (their number minus 1) and tell them to tap "Switch my ladder" on their page. If they have not picked a ladder, help them pick one.
 - Never give medical, legal, or safety advice, and never discuss anything inappropriate or frightening. If a child seems upset or in trouble, gently encourage them to talk to a parent, teacher, or Rabbi.
 
 The child's data (JSON):
@@ -816,7 +818,7 @@ SYS;
 }
 
 /** Call the Claude Messages API. Returns the reply text, or null on any failure. */
-function wwtcMendyAsk(string $key, string $model, string $system, array $messages): ?string
+function wwtcGeneralAsk(string $key, string $model, string $system, array $messages): ?string
 {
     $payload = json_encode(
         ['model' => $model, 'max_tokens' => 300, 'system' => $system, 'messages' => $messages],
@@ -836,7 +838,7 @@ function wwtcMendyAsk(string $key, string $model, string $system, array $message
     $err = curl_error($ch);
     curl_close($ch);
     if (!is_string($raw) || $status < 200 || $status >= 300) {
-        error_log('WWTC Mendy AI error: status ' . $status . ' ' . $err . ' ' . (is_string($raw) ? mb_substr($raw, 0, 500) : ''));
+        error_log('WWTC General 613 AI error: status ' . $status . ' ' . $err . ' ' . (is_string($raw) ? mb_substr($raw, 0, 500) : ''));
         return null;
     }
     $data = json_decode($raw, true);
@@ -864,15 +866,15 @@ if ($method === 'POST' && $path === '/chat') {
         $key = wwtcEnv('WWTC_AI_KEY');
     }
     if (strlen($key) < 10) {
-        wwtcError('Mendy’s AI is not configured yet.', 503);
+        wwtcError('General 613’s AI is not configured yet.', 503);
     }
     $model = wwtcEnv('WWTC_AI_MODEL') ?: 'claude-haiku-5-5';
 
     // The child's own, non-sensitive progress snapshot, as the SPA computed it.
     $ctx = is_array($in['context'] ?? null) ? $in['context'] : [];
-    $system = wwtcMendySystem((string) json_encode($ctx, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    $system = wwtcGeneralSystem((string) json_encode($ctx, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-    // Short rolling history for continuity (child = user, Mendy = assistant).
+    // Short rolling history for continuity (child = user, General 613 = assistant).
     $messages = [];
     foreach ((array) ($in['history'] ?? []) as $h) {
         $text = trim((string) ($h['text'] ?? ''));
@@ -890,9 +892,9 @@ if ($method === 'POST' && $path === '/chat') {
         $messages[] = ['role' => 'user', 'content' => $message];
     }
 
-    $reply = wwtcMendyAsk($key, $model, $system, $messages);
+    $reply = wwtcGeneralAsk($key, $model, $system, $messages);
     if ($reply === null) {
-        wwtcError('Mendy is taking a quick break — please try again in a moment.', 502);
+        wwtcError('General 613 is taking a quick break — please try again in a moment.', 502);
     }
     wwtcJson(['reply' => $reply]);
 }
