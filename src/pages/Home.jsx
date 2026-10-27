@@ -190,8 +190,7 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero — a full-bleed photo with the brand glass panel on top.
-          design/hero-bg.jpg is a placeholder; drop the real photo in at that path. */}
+      {/* Hero — the Weiss shul photo full-bleed with the brand glass panel on top. */}
       <section className="relative isolate flex min-h-[420px] sm:min-h-[500px] md:min-h-[560px]">
         <img
           src={asset('design/hero-bg.jpg')}
@@ -203,7 +202,7 @@ export default function Home() {
         <div
           className="absolute inset-0"
           aria-hidden="true"
-          style={{ background: 'linear-gradient(135deg, rgba(15,35,80,0.62) 0%, rgba(23,53,111,0.5) 45%, rgba(42,95,184,0.34) 100%)' }}
+          style={{ background: 'linear-gradient(135deg, rgba(15,35,80,0.42) 0%, rgba(23,53,111,0.32) 45%, rgba(42,95,184,0.2) 100%)' }}
         />
         <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
           <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
