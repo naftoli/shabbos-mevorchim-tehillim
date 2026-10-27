@@ -21,6 +21,14 @@ declare(strict_types=1);
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
 const WWTC_SUBJECT_ID = 1;
+// date_tasks.grid_id for the two tracked tasks.
+const WWTC_GRID_KAPITELACH = 8001;
+const WWTC_GRID_MINUTES = 8002;
+// Shared roster predicate for the ancillary PDO counts (soldiers, classes,
+// headcounts), so they all count the same population. Needs `schools s`,
+// `classes c` and `users u` in scope. Campaign done/goal figures instead follow
+// setASR()'s roster, to stay identical to the WWTC report pages.
+const WWTC_ROSTER_WHERE = 's.school_era IS NULL AND c.class_era = 0 AND u.school_id NOT IN (82, 612)';
 
 // Buffer the legacy includes: api/header/db.php and db.php print a plain-text
 // message and exit() when MySQL is unreachable, which would otherwise reach the
@@ -472,8 +480,7 @@ function wwtcCompletionCounts(int $date): array
            JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
            JOIN schools s ON s.school_id = u.school_id
            JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
-          WHERE u.user_registered > 0 AND s.school_era IS NULL AND c.class_era = 0
-            AND u.school_id NOT IN (82, 612)
+          WHERE u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE . '
           GROUP BY u.school_id, u.class_id'
     );
 

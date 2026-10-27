@@ -37,6 +37,37 @@ function wwtcPct($done, $quota): int
 }
 
 /**
+ * One eligible school's aggregate row for a month, from the army arrays (setASR,
+ * backup-first — the report figures) and the mission-mark completion counts.
+ * The single source for a school's headline numbers, used by both /schools (the
+ * list) and /schools/:id (the detail), so the two never disagree.
+ */
+function wwtcSchoolRow(int $id, string $name, array $kapGoal, array $kapDone, array $minGoal, array $minDone, array $counts): array
+{
+    $said = (int) ($kapDone[$id] ?? 0);
+    $q = (int) ($kapGoal[$id] ?? 0);
+    $minSaid = (int) ($minDone[$id] ?? 0);
+    $minQ = (int) ($minGoal[$id] ?? 0);
+    $kids = (int) ($counts['sizeBySchool'][$id] ?? 0);
+    $met = (int) ($counts['metBySchool'][$id] ?? 0);
+    return [
+        'id' => $id,
+        'name' => $name,
+        'city' => null,  // Mashpia has no school city; the SPA hides it when null
+        'color' => null, // SchoolLogo falls back to initials + a default colour
+        'kids' => $kids,
+        'saidMonth' => $said,
+        'quotaMonth' => $q,
+        'pct' => wwtcPct($said, $q),
+        'metMonth' => $met,
+        'pctMet' => $kids > 0 ? (int) round($met / $kids * 100) : 0,
+        'minutesSaidMonth' => $minSaid,
+        'minutesQuotaMonth' => $minQ,
+        'minutesPct' => wwtcPct($minSaid, $minQ),
+    ];
+}
+
+/**
  * One school's current-month picture, following shabbos_mevorchim_by_class2.php:
  * setSchoolResults() + setClassResults() + setStudentResults(). Per-class goal/
  * done come from classResults/classDoneResults (what generateSummary renders);
@@ -131,9 +162,8 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
 function wwtcKidMonths(array $kid): array
 {
     global $MASHPIA_DB;
-    $tasks = wwtcReport()->getTasks();           // ['Kapitelach'=>8001,'Minutes'=>8002]
-    $kapitel = (int) ($tasks['Kapitelach'] ?? 8001);
-    $minutes = (int) ($tasks['Minutes'] ?? 8002);
+    $kapitel = WWTC_GRID_KAPITELACH;
+    $minutes = WWTC_GRID_MINUTES;
 
     $quotaStmt = $MASHPIA_DB->prepare(
         'SELECT dt.quantity FROM date_tasks dt
@@ -313,7 +343,7 @@ if ($method === 'GET' && $path === '/stats') {
            JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
            JOIN schools s USING (school_id)
            JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
-          WHERE u.user_registered > 0 AND s.school_era IS NULL AND c.class_era = 0 AND u.school_id != 612'
+          WHERE u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE
     )->fetchColumn();
     $schools = count($report->getSchools()); // setASR()'s school roster
     $classes = (int) $MASHPIA_DB->query(
@@ -322,7 +352,7 @@ if ($method === 'GET' && $path === '/stats') {
            JOIN users u ON u.class_id = c.class_id AND u.school_id = c.school_id AND u.user_registered > 0
            JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
            JOIN schools s ON s.school_id = c.school_id
-          WHERE c.class_era = 0 AND s.school_era IS NULL AND c.school_id != 612'
+          WHERE ' . WWTC_ROSTER_WHERE
     )->fetchColumn();
 
     // Soldiers who completed + perfect platoons, from the mission-mark signal.
@@ -397,28 +427,7 @@ if ($method === 'GET' && $path === '/schools') {
 
     $rows = [];
     foreach ($names as $id => $name) {
-        $id = (int) $id;
-        $said = (int) ($kapDone[$id] ?? 0);
-        $q = (int) ($kapGoal[$id] ?? 0);
-        $minSaid = (int) ($minDone[$id] ?? 0);
-        $minQ = (int) ($minGoal[$id] ?? 0);
-        $kids = (int) ($counts['sizeBySchool'][$id] ?? 0);
-        $met = (int) ($counts['metBySchool'][$id] ?? 0);
-        $rows[] = [
-            'id' => $id,
-            'name' => (string) $name,
-            'city' => null,  // Mashpia has no school city; the SPA hides it when null
-            'color' => null, // SchoolLogo falls back to initials + a default colour
-            'kids' => $kids,
-            'saidMonth' => $said,
-            'quotaMonth' => $q,
-            'pct' => wwtcPct($said, $q),
-            'metMonth' => $met,
-            'pctMet' => $kids > 0 ? (int) round($met / $kids * 100) : 0,
-            'minutesSaidMonth' => $minSaid,
-            'minutesQuotaMonth' => $minQ,
-            'minutesPct' => wwtcPct($minSaid, $minQ),
-        ];
+        $rows[] = wwtcSchoolRow((int) $id, (string) $name, $kapGoal, $kapDone, $minGoal, $minDone, $counts);
     }
     usort($rows, static function ($a, $b) {
         return $b['saidMonth'] <=> $a['saidMonth'] ?: strcmp($a['name'], $b['name']);
@@ -434,24 +443,23 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
     if (!isset($names[$id])) {
         wwtcError('School not found.', 404);
     }
+    // Header totals from the same source as the /schools list (so they match);
+    // the class breakdown from the per-student report.
+    $current = wwtcCurrentDate();
+    $sm = wwtcReport($current);
+    $sm->setArmyResults();
+    $sm->setASR($current);
+    $row = wwtcSchoolRow(
+        $id,
+        (string) $names[$id],
+        $sm->getArmySchoolsResults()['Kapitelach'] ?? [],
+        $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [],
+        $sm->getArmySchoolsResults()['Minutes'] ?? [],
+        $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
+        wwtcCompletionCounts($current)
+    );
     $data = wwtcSchoolData($id);
-    $kids = 0; $said = 0; $quota = 0; $met = 0;
-    foreach ($data['classes'] as $c) {
-        $kids += $c['size']; $said += $c['said']; $quota += $c['quota']; $met += $c['met'];
-    }
-    wwtcJson([
-        'id' => $id,
-        'name' => $names[$id],
-        'kids' => $kids,
-        'saidMonth' => $said,
-        'quotaMonth' => $quota,
-        'pct' => wwtcPct($said, $quota),
-        'metMonth' => $met,
-        'pctMet' => $kids > 0 ? (int) round($met / $kids * 100) : 0,
-        'minutesSaidMonth' => $data['minutes'],
-        'minutesQuotaMonth' => $data['minutesQuota'],
-        'minutesPct' => wwtcPct($data['minutes'], $data['minutesQuota']),
-        'city' => null, // Mashpia has no school city; the SPA hides it when null
+    wwtcJson($row + [
         'classes' => $data['classes'],
         'dedication' => null, // static/hidden in live mode for now
     ]);
@@ -487,7 +495,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
                   JOIN date_tasks dt USING (date_task_id)
                   JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
                   JOIN users u2 ON u2.user_id = dtm.user_id
-                 WHERE u2.school_id = :id AND dt.grid_id = 8001
+                 WHERE u2.school_id = :id AND dt.grid_id = ' . WWTC_GRID_KAPITELACH . '
                    AND dtmm.subject_id = ' . WWTC_SUBJECT_ID . " AND dtmm.start_date IN ($in)
                  GROUP BY dtm.user_id, dtmm.start_date
            ) t
@@ -511,10 +519,6 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
 }
 
 // ---- perfect platoons (nationwide) -----------------------------------------
-// "Perfect platoon" here is the live report's definition: a class whose total
-// done reached its total quota (ShabbosMevorchim::setClassResults populates
-// ->perfectPlatoons). This loops every eligible school, so it leans on the
-// class's 15-minute cache; the first call after expiry is slow.
 
 if ($method === 'GET' && $path === '/perfect-platoons') {
     // A perfect platoon = a class where every enrolled soldier earned the mission
@@ -575,6 +579,24 @@ if ($method === 'GET' && $path === '/reports/army') {
     $done = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
     $counts = wwtcCompletionCounts($date);
 
+    // Participation (soldiers with any kapitlach recorded, per school) is distinct
+    // from "met" (the full quota): % participated counts anyone who said something.
+    $partStmt = $MASHPIA_DB->prepare(
+        'SELECT u.school_id, COUNT(DISTINCT dtm.user_id) n
+           FROM date_tasks_marks dtm
+           JOIN date_tasks dt USING (date_task_id)
+           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
+           JOIN users u ON u.user_id = dtm.user_id
+          WHERE dt.grid_id = ' . WWTC_GRID_KAPITELACH . ' AND dtmm.subject_id = ' . WWTC_SUBJECT_ID . '
+            AND dtmm.start_date = :d AND dtm.done_qty > 0
+          GROUP BY u.school_id'
+    );
+    $partStmt->execute([':d' => $date]);
+    $participated = [];
+    foreach ($partStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $participated[(int) $r['school_id']] = (int) $r['n'];
+    }
+
     $rows = [];
     foreach ($names as $id => $name) {
         $id = (int) $id;
@@ -582,6 +604,7 @@ if ($method === 'GET' && $path === '/reports/army') {
         $d = (int) ($done[$id] ?? 0);
         $registered = (int) ($counts['sizeBySchool'][$id] ?? 0);
         $met = (int) ($counts['metBySchool'][$id] ?? 0);
+        $part = (int) ($participated[$id] ?? 0);
         $rows[] = [
             'id' => $id,
             'name' => (string) $name,
@@ -589,7 +612,7 @@ if ($method === 'GET' && $path === '/reports/army') {
             'goal' => $g,
             'accomplished' => $d,
             'pct' => wwtcPct($d, $g),
-            'pctParticipated' => $registered > 0 ? (int) round($met / $registered * 100) : 0,
+            'pctParticipated' => $registered > 0 ? (int) round($part / $registered * 100) : 0,
             'pctMet' => $registered > 0 ? (int) round($met / $registered * 100) : 0,
             'moreThanGoal' => max(0, $d - $g),
             'lessThanGoal' => max(0, $g - $d),
@@ -742,6 +765,8 @@ if ($method === 'GET' && $path === '/me/social') {
     }
 
     // School standing nationwide, by kapitlach this month (same source as /schools).
+    // This is a second pass over the whole army, separate from the school-scoped
+    // wwtcSchoolData above; setASR() is cached (Cache::remember), so it's cheap.
     $current = wwtcCurrentDate();
     $rankSm = wwtcReport($current);
     $rankSm->setArmyResults();
@@ -917,10 +942,11 @@ if ($method === 'POST' && $path === '/me/report') {
         wwtcError('There is no Tehillim mission set for this Shabbos Mevorchim yet.', 409);
     }
 
-    // The mission's kapitelach (8001) and minutes (8002) task rows.
+    // The mission's kapitelach + minutes task rows.
     $taskStmt = $MASHPIA_DB->prepare(
         'SELECT date_task_id, grid_id, quantity, description, points
-           FROM date_tasks WHERE date_tasks_mission_id = :mid AND grid_id IN (8001, 8002)'
+           FROM date_tasks WHERE date_tasks_mission_id = :mid
+            AND grid_id IN (' . WWTC_GRID_KAPITELACH . ', ' . WWTC_GRID_MINUTES . ')'
     );
     $taskStmt->execute([':mid' => $missionId]);
     $tasksByGrid = [];
@@ -931,11 +957,11 @@ if ($method === 'POST' && $path === '/me/report') {
     $userId = (int) $kid['user_id'];
     try {
         $MASHPIA_DB->beginTransaction();
-        if ($hasKap && isset($tasksByGrid[8001])) {
-            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[8001], $kapitlach, true);
+        if ($hasKap && isset($tasksByGrid[WWTC_GRID_KAPITELACH])) {
+            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_KAPITELACH], $kapitlach, true);
         }
-        if ($hasMin && isset($tasksByGrid[8002])) {
-            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[8002], $minutes, false);
+        if ($hasMin && isset($tasksByGrid[WWTC_GRID_MINUTES])) {
+            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_MINUTES], $minutes, false);
         }
         $MASHPIA_DB->commit();
     } catch (\Throwable $e) {
@@ -968,10 +994,31 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
 
     $input = wwtcInput();
     $ladder = (int) ($input['ladder'] ?? 0);
-    if ($ladder < 5 || $ladder > 12) {
-        wwtcError('Choose a ladder between 5 and 12.', 422);
+    // A ladder is the grade a soldier finishes training by, so it can't be below
+    // their current grade (max(5, grade)..12 — the SPA's availableLadders).
+    $gradeNum = is_numeric($kid['class_grade']) ? (int) $kid['class_grade'] : 0;
+    $minLadder = max(5, $gradeNum);
+    if ($ladder < $minLadder || $ladder > 12) {
+        wwtcError("Choose a ladder between $minLadder and 12.", 422);
     }
     $track = wwtcTrackFromLadder($ladder);
+
+    // The target track must actually have a mission this month, or the soldier
+    // would land on a ladder with no quota (e.g. tracks that aren't set up yet).
+    $check = $MASHPIA_DB->prepare(
+        'SELECT 1 FROM date_tasks_missions
+          WHERE subject_id = ' . WWTC_SUBJECT_ID . '
+            AND start_date = :d AND end_date = :d AND school_type_id = :st
+            AND track_id = :track AND level = :lvl AND lang_id = :lang
+          LIMIT 1'
+    );
+    $check->execute([
+        ':d' => wwtcCurrentDate(), ':st' => (int) $kid['school_type_id'],
+        ':track' => $track, ':lvl' => (int) $kid['level'], ':lang' => (int) $kid['lang_id'],
+    ]);
+    if (!$check->fetchColumn()) {
+        wwtcError('That ladder isn’t available for you yet.', 422);
+    }
 
     $stmt = $MASHPIA_DB->prepare(
         'UPDATE user_tracks SET track_id = :track

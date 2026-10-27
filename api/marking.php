@@ -102,6 +102,10 @@ function wwtcApplyMark(PDO $db, int $userId, int $date, array $task, int $val, b
     }
 
     if ($val > 0) {
+        // Sets the same columns mark_tehillim2.php does; the other NOT NULL columns
+        // (mark_quantity, mark_inactive, …) rely on their table defaults, so the DB
+        // must not run in strict SQL mode — which it doesn't, as the teacher tool
+        // inserts the same way in production.
         $db->prepare(
             'INSERT INTO date_tasks_marks
                 SET date_task_id = :tid, user_id = :uid, mark_date = :d,
