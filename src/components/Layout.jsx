@@ -102,12 +102,12 @@ export default function Layout({ children }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="mt-auto bg-green text-white/90">
+      <footer className="mt-auto bg-[#1d2655] text-white/90">
         <div className="mx-auto max-w-[1400px] px-4 pt-7 sm:px-6 lg:px-10">
-          <div className="rounded-2xl bg-card px-6 py-5">
-            <p className="flex flex-wrap items-center justify-center gap-x-2 text-center text-[14px] font-medium text-navy/70">
+          <div className="rounded-2xl bg-[#1d2655] px-6 py-5 ring-1 ring-white/15">
+            <p className="flex flex-wrap items-center justify-center gap-x-2 text-center text-[14px] font-medium text-white">
               This site was built by
-              <span className="font-cond text-[22px] uppercase leading-none tracking-[0.06em] text-green">Sholem Chaskind</span>
+              <span className="font-cond text-[22px] uppercase leading-none tracking-[0.06em] text-white">Sholem Chaskind</span>
             </p>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function Layout({ children }) {
         <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 px-4 py-7 text-sm sm:flex-row sm:px-6 lg:px-10">
           <div className="flex items-center gap-3">
             <img src={asset('th-logo.png')} alt="" className="h-10 w-auto" />
-            <span className="font-cond text-[19px] uppercase leading-none tracking-[0.06em] text-gold">Worldwide Tehillim Club · Tzivos Hashem</span>
+            <span className="font-cond text-[19px] uppercase leading-none tracking-[0.06em] text-white">Worldwide Tehillim Club · Tzivos Hashem</span>
           </div>
           <p className="max-w-xl text-center text-white/80 sm:text-right font-heb text-[16px] leading-relaxed">
 "גּוֹמֵר זַיין דעֶם תְּהִלִּים שַׁבָּת מְבָרְכִים — דאָס דאַרְף מעֶן אָפְּהִיטעֶן, דאָס אִיז נוֹגֵעַ אִיהְם, זַיינעֶ קִינְדעֶר אוּן קִינְד'ס קִינְדעֶר."

@@ -66,7 +66,7 @@ function SchoolsRace({ schools }) {
       a.name.localeCompare(b.name),
   )
   const shown = ranked.slice(0, visible)
-  const segStyle = (active) => (active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined)
+  const segStyle = (active) => (active ? { background: 'linear-gradient(180deg, #c3b1d6 0%, #ede4f6 100%)' } : undefined)
   const SEGMENTS = [
     { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
     { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
@@ -79,7 +79,7 @@ function SchoolsRace({ schools }) {
           <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px]">The Race</Eyebrow>
           <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
         </div>
-        <div className="inline-flex rounded-[24px] bg-[#6d93d8] p-1 font-cond uppercase leading-none tracking-[0.04em]">
+        <div className="inline-flex rounded-[24px] p-1 font-cond uppercase leading-none tracking-[0.04em]" style={{ background: 'var(--grad-lilac)' }}>
           {SEGMENTS.map((sg) => {
             const active = sort === sg.key
             return (
@@ -88,7 +88,7 @@ function SchoolsRace({ schools }) {
                 type="button"
                 onClick={() => setSort(sg.key)}
                 aria-pressed={active}
-                className={`flex w-[92px] flex-col items-center gap-1 rounded-[20px] px-2 py-2 text-green transition sm:w-[106px] ${active ? 'shadow-sm' : 'hover:bg-white/15'}`}
+                className={`flex w-[92px] flex-col items-center gap-1 rounded-[20px] px-2 py-2 transition sm:w-[106px] ${active ? 'text-navy shadow-sm' : 'text-white hover:bg-white/15'}`}
                 style={segStyle(active)}
               >
                 {sg.icon ? (
@@ -97,7 +97,7 @@ function SchoolsRace({ schools }) {
                   <span className="text-[22px] leading-none sm:text-[26px]">{sg.emoji}</span>
                 )}
                 <span className="text-[13px] leading-none sm:text-[15px]">{sg.label}</span>
-                <span className="text-[9.5px] font-semibold normal-case leading-tight tracking-normal text-navy/70">{sg.sub}</span>
+                <span className={`text-[9.5px] font-semibold normal-case leading-tight tracking-normal ${active ? 'text-navy/70' : 'text-white/85'}`}>{sg.sub}</span>
               </button>
             )
           })}
@@ -187,6 +187,21 @@ export default function Home() {
 
   const schools = schoolsData ?? []
   const platoons = platoonsData ?? []
+  const [openSchool, setOpenSchool] = useState(null)
+  const schoolById = Object.fromEntries(schools.map((s) => [s.id, s]))
+  const platoonGroups = []
+  {
+    const seen = new Map()
+    for (const p of platoons) {
+      let group = seen.get(p.schoolId)
+      if (!group) {
+        group = { schoolId: p.schoolId, school: p.school, items: [] }
+        seen.set(p.schoolId, group)
+        platoonGroups.push(group)
+      }
+      group.items.push(p)
+    }
+  }
   const q = query.trim().toLowerCase()
   const filtered = schools.filter(
     (s) => !q || s.name.toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q),
@@ -199,26 +214,32 @@ export default function Home() {
   return (
     <div>
       {/* Hero — the Weiss shul photo full-bleed with the brand glass panel on top. */}
-      <section className="relative isolate flex min-h-[420px] sm:min-h-[500px] md:min-h-[560px]">
+      <section className="relative isolate flex min-h-[420px] overflow-hidden sm:min-h-[500px] md:min-h-[560px]">
         <img
-          src={asset('design/hero-bg.jpg')}
+          src={asset('design/hero-bg.webp')}
           alt=""
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-center"
         />
-        {/* cool blue wash so the hero reads calm and on-brand over any photo */}
-        <div
-          className="absolute inset-0"
-          aria-hidden="true"
-          style={{ background: 'linear-gradient(135deg, rgba(15,35,80,0.42) 0%, rgba(23,53,111,0.32) 45%, rgba(42,95,184,0.2) 100%)' }}
+        <img
+          src={asset('design/hero-boy.webp')}
+          alt=""
+          draggable="false"
+          className="pointer-events-none absolute bottom-0 left-0 z-20 hidden h-[88%] w-auto max-w-[32%] select-none object-contain object-left-bottom md:block"
         />
-        <div className="relative mx-auto flex w-full max-w-[1400px] items-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
-          <div className="hero-glass relative z-30 w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
-            <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px] lg:text-[18px]">
+        <img
+          src={asset('design/hero-girl.webp')}
+          alt=""
+          draggable="false"
+          className="pointer-events-none absolute bottom-0 right-0 z-20 hidden h-[88%] w-auto max-w-[32%] select-none object-contain object-right-bottom md:block"
+        />
+        <div className="relative z-30 mx-auto flex w-full max-w-[1400px] items-center justify-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
+          <div className="hero-glass relative w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
+            <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-white sm:text-[15px] lg:text-[18px]">
               Shabbos Mevorchim {stats.year} · Worldwide Mivtza
             </p>
             <h1 className="mt-2 font-display text-[26px] font-black uppercase leading-[1.12] text-white sm:mt-4 sm:text-[38px] lg:text-[44px]">
-              Every soldier.<br />Every <span className="text-gold">Kapitel.</span>
+              Every soldier.<br />Every Kapitel.
             </h1>
             <p className="mt-3 font-display text-[14px] leading-[1.4] text-white/90 sm:mt-5 sm:text-[18px] lg:text-[20px]">
               Tzivos Hashem soldiers say Tehillim every Shabbos Mevorchim — climbing, kapitel by
@@ -259,7 +280,7 @@ export default function Home() {
 
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:gap-8">
             <Stat icon={asset('design/icon-school.png')} value={fmt(stats.schools)} label="Schools" />
-            <Stat icon={asset('design/flag.png')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
+            <Stat icon={asset('design/icon-platoon.webp')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
           </div>
         </Card>
       </section>
@@ -292,39 +313,62 @@ export default function Home() {
       </section>
 
       {/* Perfect Platoons */}
-      {platoons.length ? (
+      {platoonGroups.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
-              Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
-            </h2>
-            <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(platoons.length)} this month</span>
-          </div>
-          <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
-            A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota this month.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {platoons.slice(0, PERFECT_SHOWN).map((p) => (
-              <Link
-                key={`${p.schoolId}-${p.className}`}
-                to={`/s/${p.schoolId}`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20"
-                title={`${p.className} · ${p.school} · ${p.size} soldiers`}
-              >
-                <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
-                <span className="font-display font-bold text-navy">{p.className}</span>
-                <span className="text-navy/55">· {p.school}</span>
-              </Link>
-            ))}
+          <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
+                Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
+              </h2>
+              <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(platoons.length)} this month</span>
+            </div>
+            <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
+              A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota this month.
+            </p>
+            <div className="space-y-2">
+              {platoonGroups.map((g) => {
+                const open = openSchool === g.schoolId
+                const school = schoolById[g.schoolId] || { name: g.school, color: '#268ecd' }
+                return (
+                  <div key={g.schoolId} className="rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setOpenSchool(open ? null : g.schoolId)}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-black/[0.04]"
+                    >
+                      <SchoolLogo school={school} size={44} />
+                      <span className="min-w-0 flex-1 truncate font-display text-[17px] font-bold text-navy sm:text-[19px]">{g.school}</span>
+                      <span className="font-display text-[18px] font-black tabular-nums text-navy">× {g.items.length}</span>
+                    </button>
+                    {open ? (
+                      <div className="flex flex-wrap gap-2 px-3 pb-3 pl-16">
+                        {g.items.map((p) => (
+                          <Link
+                            key={`${p.schoolId}-${p.className}`}
+                            to={`/s/${p.schoolId}`}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70"
+                            title={`${p.className} · ${p.school} · ${p.size} soldiers`}
+                          >
+                            <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
+                            <span className="font-display font-bold text-navy">{p.className}</span>
+                            <span className="text-navy/55">· {p.school}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
             {platoons.length > PERFECT_SHOWN ? (
-              <Link
-                to="/perfect-platoons"
-                className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
-              >
-                +{fmt(platoons.length - PERFECT_SHOWN)} more — see all →
-              </Link>
+              <div className="mt-4">
+                <Link to="/perfect-platoons" className="text-sm font-semibold text-navy underline-offset-2 hover:underline">
+                  +{fmt(Math.max(0, platoons.length - PERFECT_SHOWN))} more — see all →
+                </Link>
+              </div>
             ) : null}
-          </div>
+          </Card>
         </section>
       ) : null}
 

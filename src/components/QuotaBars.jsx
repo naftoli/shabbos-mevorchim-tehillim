@@ -33,7 +33,7 @@ export default function QuotaBars({ kapitlach, minutes, soldiers, className = ''
         rightLabel="Kapitlach Said"
         rightValue={fmt(kapitlach.said)}
         pct={kapitlach.pct}
-        iconSrc={asset('design/icon-book.png')}
+        iconSrc={asset('design/icon-book.webp')}
         fill="linear-gradient(90deg, #d774b4 0%, #8a5fd0 100%)"
       />
       <Line

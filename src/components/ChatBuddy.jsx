@@ -7,6 +7,7 @@ import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
+import { asset } from '@/lib/asset.js'
 
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
 // the real choices out loud and saves the one the child accepts. Otherwise he
@@ -632,11 +633,11 @@ export default function ChatBuddy() {
         <button
           type="button"
           onClick={() => { openRef.current = true; setOpen(true) }}
-          className="fixed bottom-4 right-4 z-[70] flex items-center gap-2 rounded-full bg-navy py-2.5 pl-2.5 pr-4 text-white shadow-hover ring-1 ring-white/15 transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
+          className="fixed bottom-4 right-4 z-[70] flex items-center gap-2.5 rounded-full bg-[#1d2655] py-2 pl-2 pr-5 text-white shadow-hover ring-2 ring-white transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
           aria-label={`Chat with ${BOT_NAME}`}
         >
-          <Avatar size="h-9 w-9" text="text-xl" />
-          <span className="font-cond text-[15px] uppercase tracking-wide">Hi! Need help?</span>
+          <img src={asset('design/icon-book.webp')} alt="" aria-hidden="true" draggable="false" className="h-11 w-auto" />
+          <span className="font-display text-[16px] font-black leading-none text-white">Hi! Need help?</span>
         </button>
       ) : null}
 
