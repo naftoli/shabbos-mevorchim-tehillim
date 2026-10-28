@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { quotaFor } from '../../src/data/ladders.js'
-import { BOT_NAME, openingGreeting, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
-import { canListen, canSpeak, speak, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
+import { BOT_NAME, autoOpenFor, openingGreeting, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
+import { armVoice, canListen, canSpeak, speak, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
 
 const hello = (name) => `Hi ${name}. I'm ${BOT_NAME}, your virtual commander.`
 
@@ -108,9 +108,18 @@ test('no finished month yet stays on track', () => {
   }), 'ontrack')
 })
 
+test('the panel opens once per login and stays shut across a page change', () => {
+  assert.deepEqual(autoOpenFor(null, 'meir'), { openedFor: 'meir', open: true })
+  assert.equal(autoOpenFor('meir', 'meir'), null)
+  assert.deepEqual(autoOpenFor('meir', null), { openedFor: null, open: false })
+  assert.equal(autoOpenFor(null, null), null)
+  assert.deepEqual(autoOpenFor('meir', 'rochel'), { openedFor: 'rochel', open: true })
+})
+
 test('speech helpers no-op when the browser has no speech API', async () => {
   assert.equal(canSpeak(), false)
   assert.equal(canListen(), false)
+  armVoice()
   assert.equal(await speak('Hi there 👋'), 'unavailable')
   assert.equal(await speak('Hi', { muted: true }), 'muted')
   assert.equal(await speak('👋'), 'empty')

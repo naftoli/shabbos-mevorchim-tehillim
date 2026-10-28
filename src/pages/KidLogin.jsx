@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Band, Button, Card, Field, Input } from '@/components/ui.jsx'
 import { IS_DEMO } from '@/lib/liveMode.js'
+import { armVoice } from '@/lib/speech.js'
 import { demoKidCredentials } from '@/services/api.js'
 
 // Auto-format typed digits as MM/DD/YYYY so the numeric keypad can be used
@@ -38,6 +39,9 @@ export default function KidLogin() {
 
   async function submit(e) {
     e.preventDefault()
+    // Unlock speech and the mic on this click, before login awaits. The
+    // greeting is spoken a moment later, when the dashboard is up.
+    armVoice()
     setError('')
     const iso = toISO(dob)
     if (!iso) {

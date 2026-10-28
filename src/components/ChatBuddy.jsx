@@ -5,7 +5,7 @@ import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
-import { BOT_NAME, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
+import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
@@ -265,6 +265,8 @@ export default function ChatBuddy() {
   // Keep the first spoken greeting in the thread after a ladder is saved,
   // so the walk doesn't get replaced by the next situation line.
   const [pinnedGreeting, setPinnedGreeting] = useState(null)
+  // Which soldier already got the auto-opened panel this login.
+  const [openedFor, setOpenedFor] = useState(null)
   const kidId = kid?.id ?? null
   const [trackedKid, setTrackedKid] = useState(kidId)
   // Drop a previous soldier's live mic/voice when the signed-in kid changes.
@@ -292,6 +294,7 @@ export default function ChatBuddy() {
   const greetedId = useRef(null)
   const pendingSpeech = useRef(null)
   const focusLadderRef = useRef(null)
+  const listenAfterRef = useRef(() => {})
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social } = useLiveData(
@@ -329,6 +332,11 @@ export default function ChatBuddy() {
   }
   if (ctx && ctx.situation !== 'pick' && focusLadder != null) {
     setFocusLadder(null)
+  }
+  const autoOpen = autoOpenFor(openedFor, kidId)
+  if (autoOpen) {
+    setOpenedFor(autoOpen.openedFor)
+    setOpen(autoOpen.open)
   }
 
   // Latest values for async speech/mic callbacks. Written here, not during render.
@@ -426,6 +434,19 @@ export default function ChatBuddy() {
       },
     })
   }
+
+  // After he finishes a line, listen so the child can answer out loud.
+  function listenAfterSpeech() {
+    if (mutedRef.current || !openRef.current || !canListen()) return
+    setVoice(true)
+    window.setTimeout(() => {
+      if (mutedRef.current || !openRef.current || !voiceOnRef.current) return
+      beginListening()
+    }, 400)
+  }
+  useEffect(() => {
+    listenAfterRef.current = listenAfterSpeech
+  })
 
   async function send(raw) {
     const text = String(raw ?? inputRef.current).trim()
@@ -537,6 +558,7 @@ export default function ChatBuddy() {
       if (turnRef.current > 0) return
       void say(line).then((status) => {
         if (status === 'blocked') pendingSpeech.current = line
+        else if (status === 'spoken') listenAfterRef.current()
       })
     }, 60)
     return () => window.clearTimeout(timer)
@@ -556,6 +578,7 @@ export default function ChatBuddy() {
       pendingSpeech.current = null
       void say(line).then((status) => {
         if (status === 'blocked') pendingSpeech.current = line
+        else if (status === 'spoken') listenAfterRef.current()
       })
     }
     window.addEventListener('pointerdown', onGesture, true)
@@ -587,7 +610,7 @@ export default function ChatBuddy() {
     <>
       {/* Proactive greeting peek — only on the child's own page */}
       {showPeek ? (
-        <div className="fixed bottom-20 right-4 z-50 w-[19rem] max-w-[calc(100vw-2rem)] sm:bottom-24 sm:right-6">
+        <div className="fixed bottom-20 right-4 z-[70] w-[19rem] max-w-[calc(100vw-2rem)] sm:bottom-24 sm:right-6">
           <div className="relative rounded-2xl rounded-br-md bg-card p-3.5 pr-8 text-[14px] leading-snug text-navy shadow-hover ring-1 ring-line">
             <button type="button" onClick={() => setPeekClosed(true)} aria-label="Dismiss" className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-muted transition hover:bg-track">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -609,7 +632,7 @@ export default function ChatBuddy() {
         <button
           type="button"
           onClick={() => { openRef.current = true; setOpen(true) }}
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-navy py-2.5 pl-2.5 pr-4 text-white shadow-hover ring-1 ring-white/15 transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
+          className="fixed bottom-4 right-4 z-[70] flex items-center gap-2 rounded-full bg-navy py-2.5 pl-2.5 pr-4 text-white shadow-hover ring-1 ring-white/15 transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
           aria-label={`Chat with ${BOT_NAME}`}
         >
           <Avatar size="h-9 w-9" text="text-xl" />
@@ -619,7 +642,7 @@ export default function ChatBuddy() {
 
       {/* Panel */}
       {open ? (
-        <div className="fixed bottom-4 right-4 z-50 flex h-[32rem] max-h-[80vh] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[22px] bg-card shadow-hover ring-1 ring-line sm:bottom-6 sm:right-6">
+        <div className="fixed bottom-4 right-4 z-[70] flex h-[32rem] max-h-[80vh] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[22px] bg-card shadow-hover ring-1 ring-line sm:bottom-6 sm:right-6">
           <div className="hero-navy flex items-center gap-3 px-4 py-3">
             <Avatar />
             <div className="min-w-0 flex-1">
