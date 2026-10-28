@@ -69,7 +69,7 @@ function SchoolsRace({ schools }) {
   const segStyle = (active) => (active ? { background: 'linear-gradient(180deg, #c3b1d6 0%, #ede4f6 100%)' } : undefined)
   const SEGMENTS = [
     { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
-    { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
+    { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', icon: asset('design/icon-book.webp') },
     { key: 'time', label: '% Time', sub: 'goal completed', icon: asset('design/icon-clock.png') },
   ]
   return (
@@ -221,20 +221,20 @@ export default function Home() {
           draggable="false"
           className="absolute inset-0 h-full w-full select-none object-cover object-center"
         />
-        <img
-          src={asset('design/hero-boy.webp')}
-          alt=""
-          draggable="false"
-          className="pointer-events-none absolute bottom-0 left-0 z-20 hidden h-[88%] w-auto max-w-[32%] select-none object-contain object-left-bottom md:block"
-        />
-        <img
-          src={asset('design/hero-girl.webp')}
-          alt=""
-          draggable="false"
-          className="pointer-events-none absolute bottom-0 right-0 z-20 hidden h-[88%] w-auto max-w-[32%] select-none object-contain object-right-bottom md:block"
-        />
-        <div className="relative z-30 mx-auto flex w-full max-w-[1400px] items-center justify-center px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
-          <div className="hero-glass relative w-full max-w-[640px] rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
+        <div className="relative z-30 mx-auto flex w-full max-w-[640px] items-center px-4 py-10 sm:px-0 sm:py-14">
+          <img
+            src={asset('design/hero-boy.webp')}
+            alt=""
+            draggable="false"
+            className="pointer-events-none absolute bottom-0 right-[calc(100%-1.25rem)] z-20 hidden h-[92%] w-auto max-w-[min(30vw,340px)] select-none object-contain object-bottom min-[1100px]:block"
+          />
+          <img
+            src={asset('design/hero-girl.webp')}
+            alt=""
+            draggable="false"
+            className="pointer-events-none absolute bottom-0 left-[calc(100%-1.25rem)] z-20 hidden h-[92%] w-auto max-w-[min(30vw,340px)] select-none object-contain object-bottom min-[1100px]:block"
+          />
+          <div className="hero-glass relative z-30 w-full rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
             <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-white sm:text-[15px] lg:text-[18px]">
               Shabbos Mevorchim {stats.year} · Worldwide Mivtza
             </p>

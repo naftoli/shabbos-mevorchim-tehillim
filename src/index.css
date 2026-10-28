@@ -46,13 +46,13 @@
   --font-cond: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
   --font-heb: "FbTkuma", "Times New Roman", serif;
 
-  --shadow-card: 0 1px 2px rgba(15, 35, 80, 0.05), 0 10px 22px rgba(15, 35, 80, 0.08);
-  --shadow-hover: 0 14px 30px rgba(15, 35, 80, 0.16);
+  --shadow-card: 0 16px 36px rgba(38, 142, 205, 0.38), 0 4px 12px rgba(68, 200, 245, 0.28);
+  --shadow-hover: 0 22px 44px rgba(38, 142, 205, 0.46), 0 6px 14px rgba(68, 200, 245, 0.3);
 }
 
 /* Shared gradients / glass (referenced by class rules and inline styles). */
 :root {
-  --grad-cta-green: linear-gradient(90deg, #268ecd 0%, #1d2655 100%);
+  --grad-cta-green: linear-gradient(90deg, #62a0d6 0%, #4377bb 100%);
   --grad-cta-gold: linear-gradient(90deg, #9886bf 0%, #8464a6 100%);
   --grad-pill-green: linear-gradient(90deg, #ade7fd 0%, #44c8f5 100%);
   --grad-progress: linear-gradient(90deg, #44c8f5 0%, #268ecd 100%);
