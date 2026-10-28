@@ -40,6 +40,30 @@ export function stopSpeaking() {
   try { window.speechSynthesis.cancel() } catch { /* already idle */ }
 }
 
+// Call inside the Sign In click, before any await. A silent utterance counts as
+// the user gesture, so Chrome will allow the real greeting once the dashboard
+// is on screen. The mic permission is asked in that same gesture.
+export function armVoice() {
+  if (typeof window === 'undefined') return
+  try {
+    const synth = window.speechSynthesis
+    if (synth && typeof window.SpeechSynthesisUtterance === 'function') {
+      synth.resume?.()
+      const utter = new SpeechSynthesisUtterance('.')
+      utter.volume = 0
+      utter.rate = 2
+      synth.speak(utter)
+    }
+  } catch { /* speech missing or already busy */ }
+  try {
+    const ask = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices)
+    if (!ask) return
+    ask({ audio: true }).then((stream) => {
+      stream.getTracks().forEach((track) => track.stop())
+    }).catch(() => { /* permission dismissed; typing still works */ })
+  } catch { /* no media devices */ }
+}
+
 /**
  * Speak `text` aloud. Emoji are removed first.
  * Resolves: 'spoken' | 'muted' | 'empty' | 'unavailable' | 'blocked' | 'interrupted' | 'error'

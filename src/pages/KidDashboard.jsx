@@ -58,7 +58,9 @@ export default function KidDashboard() {
   )
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
-  const [welcomeOpen, setWelcomeOpen] = useState(true)
+  // General 613 walks a new soldier through the ladder out loud. Don't also
+  // pop the ladder modal over him; the button below still opens it.
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
   // Seed the report inputs from what's on record, re-seeding whenever the month
   // or its recorded values change. Adjusted during render (not in an effect) per
   // React's "adjusting state when a prop changes" guidance; typing into the
