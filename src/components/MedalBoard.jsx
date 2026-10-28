@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { MEDALS, MEDAL_THRESHOLDS } from '@/lib/medals.js'
-import { Card } from './ui.jsx'
+import { Card, CrownIcon } from './ui.jsx'
 import MedalCoin from './MedalCoin.jsx'
 import { fmt } from '@/lib/format.js'
 
@@ -55,7 +55,7 @@ export default function MedalBoard({ progress }) {
             style={{ width: `${pct}%`, background: next ? next.color : 'var(--color-green)' }}
           />
           <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-[11px] font-bold uppercase tracking-wide text-white">
-            {next ? <>{medal.missionsToNext} Mission{medal.missionsToNext === 1 ? '' : 's'} To {next.name}!</> : <>Campaign complete! 👑</>}
+            {next ? <>{medal.missionsToNext} Mission{medal.missionsToNext === 1 ? '' : 's'} To {next.name}!</> : <>Campaign complete! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>}
           </span>
         </div>
       </Card>

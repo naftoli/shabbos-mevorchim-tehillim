@@ -1,4 +1,6 @@
 import { QUOTA, MONTHS, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
+import { asset } from '@/lib/asset.js'
+import { CrownIcon } from '@/components/ui.jsx'
 
 // The whole-Tehillim climb: every Shabbos Mevorchim a child says kapitel א up to
 // their cumulative target, so their position on the climb to 150 is simply that
@@ -62,7 +64,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           <p className="sh">Your climb to the whole Tehillim</p>
           <p className="mt-1 font-display text-2xl font-black leading-none text-navy">
             {done ? (
-              <>You finished all 150! 👑</>
+              <>You finished all 150! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>
             ) : r > 0 ? (
               <>
                 Kapitel <span className="font-heb text-green">{toHebrewNumeral(r)}</span>
@@ -103,7 +105,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           const finish = m.v >= TOTAL
           const left = `${m.pos}%`
           const heb = (
-            <span className={`font-heb text-[12px] font-bold ${finish ? 'text-gold' : 'text-navy'}`}>{finish ? '👑' : m.heb}</span>
+            <span className={`font-heb text-[12px] font-bold ${finish ? '' : 'text-navy'}`}>{finish ? <CrownIcon className="h-4 w-auto" /> : m.heb}</span>
           )
           const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
           if (m.side === 'above') {
@@ -134,7 +136,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           className="pointer-events-none absolute -top-[18px] -translate-x-1/2 select-none text-2xl transition-[left] duration-1000 ease-out"
           style={{ left: `${pct(r)}%`, filter: 'drop-shadow(0 4px 6px rgba(15,35,80,.25))' }}
         >
-          {done ? '👑' : '🧗'}
+          {done ? <CrownIcon className="h-8 w-auto" /> : <img src={asset('design/icon-climber.webp')} alt="" draggable="false" className="h-10 w-auto" />}
         </span>
       </div>
 

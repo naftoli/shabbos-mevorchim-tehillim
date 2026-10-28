@@ -95,9 +95,9 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
     <>
       {/* month summary band */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile icon={asset('design/icon-soldier-hat.png')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
+        <StatTile icon={asset('design/icon-book.webp')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
         <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Schools" sub={`${fmt(totals.registered)} soldiers`} />
-        <StatTile icon={asset('design/flag.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
+        <StatTile icon={asset('design/icon-soldier-hat.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
         <StatTile icon={asset('design/medal-gold.png')} value={`${pctMet}%`} label="Completed Quota" sub={`${fmt(totals.met)} soldiers`} />
       </section>
 

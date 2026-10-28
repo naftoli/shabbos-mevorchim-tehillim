@@ -1,4 +1,5 @@
 import { MONTHS, MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
+import { CrownIcon } from '@/components/ui.jsx'
 
 // The month-by-month plan for a ladder, every grade from Pre-1A to its finish
 // grade. Each cell = the cumulative kapitel (Aleph-Beis) + minutes; 👑 = the
@@ -39,12 +40,12 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
                   <td
                     key={m}
                     className={`rounded px-2 py-1 leading-tight ${
-                      here ? 'bg-green/15 ring-2 ring-green' : finish ? 'bg-gold/30 font-bold text-navy' : 'odd:bg-card/60'
+                      here ? 'bg-green/15 ring-2 ring-green' : finish ? 'bg-[#c3b1d6]/70 font-bold text-navy' : 'odd:bg-card/60'
                     }`}
                   >
                     {cell ? (
                       <>
-                        <div className="font-heb text-[15px] text-navy">{finish ? '👑' : toHebrewNumeral(cell.v)}</div>
+                        <div className="font-heb text-[15px] text-navy">{finish ? <CrownIcon className="mx-auto h-4 w-auto" /> : toHebrewNumeral(cell.v)}</div>
                         <div className="text-[10px] text-muted">{cell.m}m</div>
                       </>
                     ) : (

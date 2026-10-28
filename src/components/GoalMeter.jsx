@@ -1,4 +1,5 @@
 import { fmt } from '@/lib/format.js'
+import { CrownIcon } from '@/components/ui.jsx'
 
 // Headline progress meter: kapitlach accomplished vs. quota. The crown marker
 // rides the fill.
@@ -23,7 +24,7 @@ export default function GoalMeter({ accomplished, quota, label }) {
           style={{ left: `calc(${pct}% - 10px)` }}
           aria-hidden
         >
-          👑
+          <CrownIcon className="h-5 w-auto" />
         </div>
       </div>
       {label ? <p className="mt-2 text-sm text-muted">{label}</p> : null}
