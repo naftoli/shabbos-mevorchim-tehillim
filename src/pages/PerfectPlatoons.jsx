@@ -19,7 +19,7 @@ export default function PerfectPlatoons() {
   const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId) : Promise.resolve(null)), [schoolId])
   const schoolName = school?.name ?? null
 
-  const { data: platoonsData } = useLiveData(() => getPerfectPlatoons(), [])
+  const { data: platoonsData, loading } = useLiveData(() => getPerfectPlatoons(), [])
   const all = useMemo(() => {
     const list = platoonsData ?? []
     return schoolId ? list.filter((p) => String(p.schoolId) === String(schoolId)) : list
@@ -31,6 +31,7 @@ export default function PerfectPlatoons() {
     () => (q ? all.filter((p) => `${p.className} ${perSchool ? '' : p.school} ${p.teacher || ''}`.toLowerCase().includes(q)) : all),
     [all, q, perSchool],
   )
+  const stillLoading = loading && platoonsData == null
 
   return (
     <>
@@ -43,16 +44,22 @@ export default function PerfectPlatoons() {
       <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 rounded-full bg-green/15 px-4 py-1.5 font-cond text-base font-bold uppercase tracking-wide text-green">
-            🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>
+            {stillLoading ? (
+              <>Loading… · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+            ) : (
+              <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+            )}
           </span>
-          {all.length ? (
+          {!stillLoading && all.length ? (
             <span className="text-sm font-semibold text-muted">
               {q ? `${fmt(filtered.length)} match${filtered.length === 1 ? '' : 'es'}` : 'Tap any platoon to open its school'}
             </span>
           ) : null}
         </div>
 
-        {all.length ? (
+        {stillLoading ? (
+          <p className="font-display text-[16px] italic text-muted">Loading perfect platoons…</p>
+        ) : all.length ? (
           <>
             <div className="mb-6 max-w-md">
               <Input

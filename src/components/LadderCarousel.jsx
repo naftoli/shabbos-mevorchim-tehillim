@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { availableLadders, finishGrade, GRADE_LABEL, QUOTA } from '@/data/ladders.js'
 import LadderBreakdown from './LadderBreakdown.jsx'
+import { CrownIcon } from '@/components/ui.jsx'
 
 // Kapitel reached by the END of each grade (Elul), for the whole ladder —
 // always from Pre-1A up to the grade the child finishes the whole Tehillim.
@@ -57,11 +58,11 @@ function LadderCard({ ladder, active, onPick, onBreakdown, preview, height }) {
         <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">You’ll say up to…</p>
         <ul className="space-y-1">
           {rows.map((r) => (
-            <li key={r.gradeLabel} className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${r.finish ? 'bg-gold/25 font-bold text-navy ring-1 ring-gold/60' : 'odd:bg-track/50'}`}>
+            <li key={r.gradeLabel} className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${r.finish ? 'bg-[#c3b1d6]/70 font-bold text-navy ring-1 ring-[#8464a6]/50' : 'odd:bg-track/50'}`}>
               <span className="font-semibold text-navy">{r.gradeLabel}</span>
               <span className="flex items-center gap-2">
                 <span className="font-heb text-[17px] text-navy">{r.k}</span>
-                <span className="text-muted">{r.finish ? '👑 150' : `(${r.v})`}</span>
+                <span className="inline-flex items-center gap-1 text-muted">{r.finish ? <><CrownIcon className="h-4 w-auto" /> 150</> : `(${r.v})`}</span>
               </span>
             </li>
           ))}

@@ -353,6 +353,9 @@ function wwtcDateForMonthIdx($idx): int
  * Shares one instance per date so a request that touches several endpoints does
  * not rebuild it. setArmyResults()/setSchoolResults() etc. are called by the
  * route handler that needs them.
+ *
+ * Always uses live date_tasks_marks (setUseLiveData) — the SPA needs current
+ * numbers even after a tehillim_backups freeze; HQ report pages keep the default.
  */
 function wwtcReport(?int $jd = null): ShabbosMevorchim
 {
@@ -360,6 +363,7 @@ function wwtcReport(?int $jd = null): ShabbosMevorchim
     $jd = $jd ?? wwtcCurrentDate();
     if (!isset($byDate[$jd])) {
         $obj = new ShabbosMevorchim(wwtcYear());
+        $obj->setUseLiveData(true);
         $obj->setReportDates($jd);
         $byDate[$jd] = $obj;
     }

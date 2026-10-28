@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
-import { Card } from '@/components/ui.jsx'
+import { Card, CrownIcon } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
@@ -95,7 +95,7 @@ export default function Medals() {
               {medal.next ? (
                 <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>.</span></>
               ) : (
-                <>Every medal earned — amazing! 👑</>
+                <>Every medal earned — amazing! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>
               )}
             </p>
           </div>

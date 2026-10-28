@@ -84,7 +84,7 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
     }),
     { registered: 0, goal: 0, accomplished: 0, participated: 0, met: 0 },
   )
-  const pctGoal = totals.goal ? Math.min(100, Math.round((totals.accomplished / totals.goal) * 100)) : 0
+  const pctGoal = totals.goal ? Math.round((totals.accomplished / totals.goal) * 100) : 0
   const pctPart = totals.registered ? Math.round((totals.participated / totals.registered) * 100) : 0
   const pctMet = totals.registered ? Math.round((totals.met / totals.registered) * 100) : 0
   const maxAcc = Math.max(1, ...report.rows.map((r) => r.accomplished))
@@ -95,9 +95,9 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
     <>
       {/* month summary band */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile icon={asset('design/icon-soldier-hat.png')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
+        <StatTile icon={asset('design/icon-book.webp')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
         <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Schools" sub={`${fmt(totals.registered)} soldiers`} />
-        <StatTile icon={asset('design/flag.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
+        <StatTile icon={asset('design/icon-soldier-hat.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
         <StatTile icon={asset('design/medal-gold.png')} value={`${pctMet}%`} label="Completed Quota" sub={`${fmt(totals.met)} soldiers`} />
       </section>
 

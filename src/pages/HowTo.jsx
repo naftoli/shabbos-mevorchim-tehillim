@@ -46,7 +46,7 @@ export default function HowTo() {
           {STEPS.map((s) => (
             <Card key={s.n} className="p-6">
               <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-full font-cond text-xl text-white" style={{ background: 'var(--grad-cta-green)' }}>{s.n}</span>
+                <span className="grid h-10 w-10 place-items-center rounded-full font-cond text-xl text-white" style={{ background: 'var(--grad-blue-lilac)' }}>{s.n}</span>
                 <h3 className="font-display text-xl font-black text-navy">{s.title}</h3>
               </div>
               <p className="mt-3 text-navy/80">{s.body}</p>

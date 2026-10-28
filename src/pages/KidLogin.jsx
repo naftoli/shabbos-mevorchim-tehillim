@@ -60,7 +60,7 @@ export default function KidLogin() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-12 sm:py-16">
-      <Card>
+      <Card className="login-card">
         <Band />
         <form onSubmit={submit} className="p-6 sm:p-8">
           <h1 className="font-display text-2xl font-black text-navy">Soldier Sign In</h1>

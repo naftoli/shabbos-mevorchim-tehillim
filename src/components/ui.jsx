@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { asset } from '../lib/asset.js'
 
+export function CrownIcon({ className = 'inline-block h-4 w-auto' }) {
+  return <img src={asset('design/icon-crown.webp')} alt="" aria-hidden="true" draggable="false" className={className} />
+}
+
 // The signature five-colour Tzivos Hashem brand band.
 export function Band({ className = '' }) {
   return (

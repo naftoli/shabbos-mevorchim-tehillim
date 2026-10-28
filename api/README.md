@@ -17,8 +17,9 @@ Reads — all implemented (same figures as the WWTC report pages):
 - `GET /campaign` — `{ year, currentMonth, currentMonthIndex, months[], monthDates }`
 - `GET /stats` — nationwide totals:
   `{ monthLabel, year, accomplished, quota, pct, minutes, minutesQuota, minutesPct, soldiers, schools, classes }`
-- `GET /running-totals` — `{ thisMonth, thisYear, allTime }` (all-time = this year +
-  `WWTC_ALLTIME_BASE`, since there is no historical kapitlach store).
+- `GET /running-totals` — `{ thisMonth, thisYear, allTime }` (all-time = prior-year
+  sealed totals from `tehillim_backups` + this year's live done + optional
+  `WWTC_ALLTIME_BASE`).
 - `GET /schools` (full per-school aggregate: kapitlach/minutes/pct + kids/met/pctMet),
   `GET /schools/:id`, `GET /schools/:id/class-leaderboard`,
   `GET /schools/:id/leaderboard` (public — full soldier names),

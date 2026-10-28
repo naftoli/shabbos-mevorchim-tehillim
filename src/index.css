@@ -9,23 +9,23 @@
    Here "green" is the BRAND color — now a royal blue, not green.
    ========================================================================= */
 @theme {
-  --color-ink: #0f2350;            /* body text = royal navy */
-  --color-navy: #0f2350;           /* headings / numbers / body on light */
-  --color-navy-dark: #0a1838;      /* darkest ground */
+  --color-ink: #1d2655;
+  --color-navy: #1d2655;
+  --color-navy-dark: #1d2655;
   --color-blue: #2a5fb8;           /* links / focus rings */
   --color-blue-bright: #3a72d6;
   --color-cyan: #0e8aa6;           /* secondary accent */
   --color-red: #c0392b;            /* danger / remove only */
-  --color-gold: #ffd54a;           /* highlight — crown gold on blue/dark */
-  --color-gold-dark: #8a6a00;      /* legible "gold" for labels on light */
-  --color-green: #17356f;          /* BRAND deep (royal blue) — Lulav's "green" slot */
-  --color-green-mid: #3f6fd0;      /* progress fills, active pills */
-  --color-green-light: #7aa0f0;    /* gradient light end */
+  --color-gold: #ade7fd;
+  --color-gold-dark: #1d2655;
+  --color-green: #1d2655;
+  --color-green-mid: #268ecd;
+  --color-green-light: #44c8f5;
   --color-orange: #d97706;
   --color-purple: #5b3fa8;
 
-  --color-sky: #c3ecff;            /* header bar / chips — bright cyan */
-  --color-mint: #ecd3ec;           /* page background (soft pink-lavender) */
+  --color-sky: #ade7fd;
+  --color-mint: #44c8f5;
   --color-blue-accent: #2246a8;    /* rank numerals */
 
   /* race bar palette — one per school, in rank order */
@@ -35,8 +35,8 @@
   --color-race-red: #eb635d;
   --color-race-teal: #0e8aa6;
 
-  --color-paper: #ecd3ec;          /* page background (soft pink-lavender — no white) */
-  --color-card: #dce8ff;           /* cards = soft sky blue (Lulav-style, not white) */
+  --color-paper: #44c8f5;
+  --color-card: #c3dcff;
   --color-line: #bccfee;           /* hairlines */
   --color-muted: #46557d;          /* muted text */
   --color-track: #cadcf8;          /* progress tracks / chips / soft fills */
@@ -44,19 +44,21 @@
   --font-display: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-sans: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-cond: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
-  --font-heb: "Frank Ruhl Libre", "Times New Roman", serif;
+  --font-heb: "FbTkuma", "Times New Roman", serif;
 
-  --shadow-card: 0 1px 2px rgba(15, 35, 80, 0.05), 0 10px 22px rgba(15, 35, 80, 0.08);
-  --shadow-hover: 0 14px 30px rgba(15, 35, 80, 0.16);
+  --shadow-card: 0 16px 36px rgba(38, 142, 205, 0.38), 0 4px 12px rgba(68, 200, 245, 0.28);
+  --shadow-hover: 0 22px 44px rgba(38, 142, 205, 0.46), 0 6px 14px rgba(68, 200, 245, 0.3);
 }
 
 /* Shared gradients / glass (referenced by class rules and inline styles). */
 :root {
-  --grad-cta-green: linear-gradient(90deg, #17356f 0%, #3f6fd0 100%);   /* primary CTA */
-  --grad-cta-gold: linear-gradient(90deg, #ffd54a 0%, #e0a21a 100%);    /* gold CTA */
-  --grad-pill-green: linear-gradient(90deg, #8fb4f5 0%, #6f93e6 100%);  /* nav active pill / toggle */
-  --grad-progress: linear-gradient(90deg, #6f93e6 0%, #2a5fb8 100%);    /* bar fills */
-  --glass-green: rgba(37, 86, 168, 0.56);                               /* hero glass panel — lighter royal blue, photo shows through */
+  --grad-cta-green: linear-gradient(90deg, #62a0d6 0%, #4377bb 100%);
+  --grad-cta-gold: linear-gradient(90deg, #9886bf 0%, #8464a6 100%);
+  --grad-pill-green: linear-gradient(90deg, #ade7fd 0%, #44c8f5 100%);
+  --grad-progress: linear-gradient(90deg, #44c8f5 0%, #268ecd 100%);
+  --grad-lilac: linear-gradient(90deg, #9886bf 0%, #8464a6 100%);
+  --grad-blue-lilac: linear-gradient(135deg, #44c8f5 0%, #8464a6 100%);
+  --glass-green: linear-gradient(160deg, rgba(68, 200, 245, 0.94) 0%, rgba(38, 142, 205, 0.9) 100%);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -80,16 +82,14 @@ h1, h2, h3, h4 { line-height: 1.15; }
   .font-cond { font-synthesis-weight: none; }
 }
 
-/* soft lavender page with a gentle orchid / gold glow */
 .bg-field {
-  background-color: var(--color-paper);
-  background-image:
-    radial-gradient(circle at 15% 18%, rgba(214, 176, 232, 0.45), transparent 45%),
-    radial-gradient(circle at 85% 8%, rgba(255, 213, 74, 0.10), transparent 42%);
+  background-color: #44c8f5;
+  background-image: none;
 }
 
 /* subtle brand strip (used on login cards) */
-.band { height: 6px; display: block; background: linear-gradient(90deg, var(--color-gold), var(--color-green-mid) 55%, var(--color-green)); }
+.band { height: 6px; display: block; background: linear-gradient(90deg, #44c8f5, #62a0d6 40%, #9886bf 75%, #8464a6); }
+.login-card { background: linear-gradient(165deg, #44c8f5 0%, #c3b1d6 55%, #8464a6 100%) !important; }
 .band > i { display: none; }
 
 /* small section label / card eyebrow — brand-blue Exo caps */
@@ -132,7 +132,7 @@ h1, h2, h3, h4 { line-height: 1.15; }
   /* primary CTA — royal blue, white text */
   .btn-p, .btn-s, .btn-navy { background: var(--grad-cta-green); color: #fff; box-shadow: 0 2px 8px rgba(15, 35, 80, 0.16); }
   /* gold CTA — gold gradient, navy text */
-  .btn-gold { background: var(--grad-cta-gold); color: var(--color-navy); box-shadow: 0 2px 8px rgba(15, 35, 80, 0.12); }
+  .btn-gold { background: var(--grad-cta-gold); color: #fff; box-shadow: 0 2px 8px rgba(29, 38, 85, 0.16); }
   /* light blue pill — nav login item, toggles */
   .btn-green { background: var(--grad-pill-green); color: var(--color-green); }
   .btn-red { background: var(--color-red); color: #fff; }
@@ -145,24 +145,51 @@ h1, h2, h3, h4 { line-height: 1.15; }
   .btn-ghost:hover { background: rgba(23, 53, 111, 0.08); filter: none; }
 }
 
-/* hero band — royal blue with a soft gold glow (class name kept for stability) */
+/* Page banners use the same blue as the home hero text box. */
 .hero-navy {
   position: relative;
   overflow: hidden;
   color: #fff;
-  background:
-    radial-gradient(900px 360px at 12% -20%, rgba(255, 213, 74, 0.16), transparent 60%),
-    linear-gradient(135deg, #0f2350 0%, #17356f 55%, #3f6fd0 100%);
+  background: linear-gradient(135deg, #44c8f5 0%, #268ecd 100%);
 }
+.hero-navy .text-gold { color: #fff; }
 
-/* glass panel: brand at ~80% over the hero, big radius, soft blur */
 .hero-glass {
   color: #fff;
   background: var(--glass-green);
   -webkit-backdrop-filter: blur(9px);
   backdrop-filter: blur(9px);
   border-radius: 40px;
-  box-shadow: 0 24px 60px -30px rgba(15, 35, 80, 0.45);
+  box-shadow: 0 24px 60px -30px rgba(29, 38, 85, 0.35);
+}
+
+@font-face {
+  font-family: "FbTkuma";
+  src: url("./fonts/FbTkuma-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "FbTkuma";
+  src: url("./fonts/FbTkuma-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "FbTkuma";
+  src: url("./fonts/FbTkuma-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "FbTkuma";
+  src: url("./fonts/FbTkuma-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 /* animations */

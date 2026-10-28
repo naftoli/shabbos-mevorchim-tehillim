@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
-import { Button, Card, Avatar, Field, Input } from '@/components/ui.jsx'
+import { Button, Card, Avatar, Field, Input, CrownIcon } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import FirstLadderModal from '@/components/FirstLadderModal.jsx'
 import GoalBar from '@/components/GoalBar.jsx'
@@ -12,7 +12,7 @@ import TehillimTraining from '@/components/TehillimTraining.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
@@ -51,11 +51,22 @@ export default function KidDashboard() {
 
   const cur = progress?.current
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
-  // Furthest kapitel actually climbed this year = highest completed month's target.
-  const reached = useMemo(
-    () => (progress ? progress.months.reduce((mx, m) => (m.met ? Math.max(mx, m.quota) : mx), 0) : 0),
-    [progress],
-  )
+  // Climb position comes from the same ladder table as "Your Ladder" (grade +
+  // month + ladder → cumulative kapitel). Do not use progress.months[].quota —
+  // that is the DB date_tasks quantity, which can disagree when user_tracks.level
+  // is out of sync with the child's grade (e.g. level 10 → 11 kapitlach while
+  // Ladder 9 in 6th grade is 73/74).
+  const reached = useMemo(() => {
+    if (!progress?.months || !kid?.ladder) return 0
+    return progress.months.reduce((mx, m) => {
+      if (!m.met) return mx
+      const v = quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0
+      return Math.max(mx, Number(v) || 0)
+    }, 0)
+  }, [progress, kid?.grade, kid?.ladder])
+  const climbTarget = cur && kid?.ladder
+    ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0)
+    : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
   // General 613 walks a new soldier through the ladder out loud. Don't also
@@ -174,13 +185,13 @@ export default function KidDashboard() {
           <div className="hero-navy relative px-5 pb-5 pt-5">
             <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-50" viewBox="0 0 400 120" aria-hidden="true">
               <g fill="#fff"><circle cx="30" cy="24" r="2" /><circle cx="360" cy="30" r="2.5" /><circle cx="330" cy="86" r="1.8" /></g>
-              <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#ffd54a" opacity=".7" />
+              <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#c3b1d6" opacity=".9" />
             </svg>
             <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
             <div className="relative mt-3 flex items-end justify-between gap-4">
               {/* Kapitlach quota — book */}
               <div className="flex items-end gap-3">
-                <span className="text-4xl leading-none" aria-hidden="true">📖</span>
+                <img src={asset('design/icon-book.webp')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
                 <div>
                   <div className="text-xs text-white/80">Your kapitlach</div>
                   <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
@@ -202,7 +213,7 @@ export default function KidDashboard() {
           {/* Report form — just enter kapitlach + minutes */}
           <div className="p-5 sm:p-6">
             {cur.met ? (
-              <p className="mb-4 text-center font-display text-lg font-black text-green">👑 Mission Complete — you said it all!</p>
+              <p className="mb-4 flex items-center justify-center gap-2 text-center font-display text-lg font-black text-green"><CrownIcon className="h-6 w-auto" /> Mission Complete — you said it all!</p>
             ) : cur.said > 0 ? (
               <p className="mb-4 text-center text-sm font-semibold text-navy">
                 You reported {fmt(cur.said)} of {cur.quota} kapitlach{cur.saidMinutes > 0 ? <> in {fmt(cur.saidMinutes)} minutes</> : null}.
@@ -230,7 +241,7 @@ export default function KidDashboard() {
                   </div>
                   <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.quota > 0 ? Math.round((cur.said / cur.quota) * 100) : 0}%</p>
                 </div>
-                <GoalBar percent={cur.quota > 0 ? (cur.said / cur.quota) * 100 : 0} icon="📖" className="mt-4 sm:mr-14" />
+                <GoalBar percent={cur.quota > 0 ? (cur.said / cur.quota) * 100 : 0} iconSrc={asset('design/icon-book.webp')} className="mt-4 sm:mr-14" />
               </div>
               <div>
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
@@ -329,7 +340,7 @@ export default function KidDashboard() {
             <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
-            Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · 👑 = the whole Tehillim ·{' '}
+            Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
             <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
           </p>
         </Card>
@@ -338,7 +349,7 @@ export default function KidDashboard() {
         <Card className="overflow-hidden">
           <ClimbMeter
             reached={reached}
-            target={cur.quota}
+            target={climbTarget}
             ladder={kid.ladder}
             finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
           />
