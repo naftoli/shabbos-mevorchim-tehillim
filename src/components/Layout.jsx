@@ -123,7 +123,7 @@ export default function Layout({ children }) {
         </div>
       </footer>
 
-      {/* Floating Tehillim commander — shows only when a soldier is signed in. */}
+      {/* General 613 — shows only when a soldier is signed in. */}
       <ChatBuddy />
     </div>
   )

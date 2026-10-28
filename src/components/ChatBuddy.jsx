@@ -1,20 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
+import { BOT_NAME, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
+import { canListen, canSpeak, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 
-// A warm, caring Tehillim helper (NOT a commander). It greets the child by name
-// and opens with a nudge that fits how they're actually doing — behind on quota,
-// way ahead, or still finding their feet — then chats from the data on record.
-// Scripted, client-side, kid-safe. Rename the helper here:
-const BOT_NAME = 'Mendy'
+// General 613, the Tehillim Club's talking general. With no ladder yet he walks
+// the real choices out loud and saves the one the child accepts. Otherwise he
+// greets for a missed month, a quota they beat, or a soldier on track. Kids can
+// type or talk back. Scripted, client-side, kid-safe when the AI endpoint is down.
 
 // Real-AI endpoint on the PHP backend (served under the app's base path). When
 // it's unreachable — the static Netlify file, offline, or no API key set — the
-// chat falls back to the scripted answers below, so Mendy always works.
+// chat falls back to the scripted answers below, so General 613 always works.
 const AI_ENDPOINT = `${import.meta.env.BASE_URL}api/chat`
 
 // A compact, non-sensitive snapshot of the child's data for the AI prompt.
@@ -26,9 +27,15 @@ function aiContext(ctx) {
   const sm = ctx.sMevorchim
   return {
     name: ctx.firstName,
+    childGrade: ctx.grade ?? null,
+    childGradeLabel: ctx.childGradeLabel ?? null,
     ladder: ctx.ladder ?? null,
     finishTrainingByGrade: ctx.gradeLabel ?? null,
+    focusLadder: ctx.focusLadder ?? null,
     situation: ctx.situation,
+    greeting: ctx.greeting ?? null,
+    monthEn: ctx.monthEn ?? null,
+    ladderChoices: ctx.ladderChoices ?? [],
     thisMonth: cur
       ? { month: ctx.monthHeb, kapitlachQuota: cur.quota, kapitlachLabel: cur.quotaLabel, kapitlachSaid: cur.said, minutesQuota: cur.minutes, minutesSaid: cur.saidMinutes, done: cur.met }
       : null,
@@ -63,49 +70,6 @@ async function aiReply(message, history, ctx) {
   }
 }
 
-// Which situation is the child in right now? Drives the opening greeting.
-function readSituation(ctx) {
-  const { ladder, progress } = ctx
-  if (!ladder) return 'pick'
-  const prior = (progress?.months ?? []).filter((m) => !m.isCurrent)
-  const last = prior[prior.length - 1]
-  if (last && !last.met) return 'behind'
-  const last3 = prior.slice(-3)
-  if (last3.length >= 3 && last3.every((m) => m.said > m.quota) && ladder > 5) return 'ahead'
-  return 'ontrack'
-}
-
-function openingGreeting(ctx) {
-  const { firstName, ladder, progress } = ctx
-  switch (ctx.situation) {
-    case 'pick':
-      return `Hi ${firstName}! 👋 Do you need help picking your ladder, or understanding how the Tehillim Club works? I'm here for you.`
-    case 'behind': {
-      const prior = progress.months.filter((m) => !m.isCurrent)
-      const last = prior[prior.length - 1]
-      const heb = last ? MONTH_HEB[last.month] : ''
-      return `Hi ${firstName}. I noticed you didn't finish your Tehillim${heb ? ` for ${heb}` : ' last month'} — is everything okay? Your class, your school, and the whole army are counting on you. Even a little gets you right back on track. 💙`
-    }
-    case 'ahead':
-      return `Hi ${firstName}! 🌟 You've been doing even more than your quota 3 months running — amazing! Ready for a bigger challenge? You could move up to Ladder ${ladder - 1}. Want to hear about it?`
-    default:
-      return `Hi ${firstName}! 👋 So good to see you — you're doing beautifully, ${progress?.missionsTotal ?? 0} missions done. Need anything? I can show your mission this month or how you're doing.`
-  }
-}
-
-function quickRepliesFor(ctx) {
-  switch (ctx.situation) {
-    case 'pick':
-      return ['Help me pick my ladder', 'How does it work?']
-    case 'behind':
-      return ['What do I say this month?', 'How does it work?']
-    case 'ahead':
-      return [`Tell me about Ladder ${ctx.ladder - 1}`, 'How am I doing?']
-    default:
-      return ['My mission this month', 'How am I doing?', 'My medals']
-  }
-}
-
 function buildReply(text, ctx) {
   const t = ` ${text.toLowerCase()} `
   const has = (...ks) => ks.some((k) => t.includes(k))
@@ -116,7 +80,7 @@ function buildReply(text, ctx) {
 
   // --- who / what are you ---
   if (has('who are you', 'your name', 'what are you', 'are you a robot', 'are you real', 'are you a person', 'are you ai', 'who r u', 'who made you')) {
-    return `I'm ${BOT_NAME}, your Tehillim helper! 😊 I'm here to help with your Tehillim, your ladder, your missions and medals — and to cheer you on. What can I help with?`
+    return `I'm ${BOT_NAME}, your Tehillim general! 😊 I'm here to help with your Tehillim, your ladder, your missions and medals — and to cheer you on. What can I help with?`
   }
   // --- help / menu ---
   if (has('what can you', 'what do you do', 'what can i ask', 'help me with', ' menu ', 'what can i do here', 'what should i ask')) {
@@ -158,7 +122,7 @@ function buildReply(text, ctx) {
     return `You're on Ladder ${ladder} — you're training to say the whole Sefer Tehillim by ${gradeLabel} grade. One step every Shabbos Mevorchim! 🪜`
   }
   // --- pick / choose / change ladder ---
-  if (has('help me pick', 'help me choose', 'help pick', 'help choose', ' pick', 'choose', 'which ladder', 'what ladder', 'recommend', 'should i be on', 'change my ladder', 'change ladder', 'switch my ladder', 'how do i change', 'how do i switch', 'what is a ladder', 'how do ladders')) {
+  if (has('help me pick', 'help me choose', 'help pick', 'help choose', ' pick', 'choose', 'which ladder', 'what ladder', 'recommend', 'should i be on', 'change my ladder', 'change ladder', 'switch my ladder', 'how do i change', 'how do i switch', 'what is a ladder', 'how do ladders', 'tell me about ladder')) {
     return `A ladder is your training plan — the grade you'll finish training to say the whole Tehillim by. A lower number means a little more each month, a higher number is a gentler climb. Pick whatever feels right; you can always change it later. Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page and I'll be right here. 🪜`
   }
   // --- harder / easier ladder ---
@@ -245,7 +209,7 @@ function buildReply(text, ctx) {
   if (has(' yes ', ' yeah ', ' sure ', ' okay ', ' ok ', "let's", ' lets ', ' yep ', ' yup ')) return `Love it! 🌟 Tap “${ladder ? 'Switch my ladder' : 'Pick my ladder'}” on your page, or ask me anything else.`
   if (has(' no ', ' nope ', 'not now', ' nah ')) return `No problem, ${firstName}! I'm right here whenever you need me. 💙`
   // --- greeting ---
-  if (has(' hi ', ' hi!', 'hello', ' hey', 'shalom', 'sholom', 'heya', 'good morning', 'good afternoon', 'hi mendy')) return `Hi ${firstName}! 👋 How can I help you today?`
+  if (has(' hi ', ' hi!', 'hello', ' hey', 'shalom', 'sholom', 'heya', 'good morning', 'good afternoon', 'hi general', 'general 613')) return `Hi ${firstName}! 👋 How can I help you today?`
   // --- bye ---
   if (has(' bye', 'goodbye', 'good shabbos', 'gut shabbos', 'good shabbat', 'see you', 'good night', 'gotta go')) return `Gut Shabbos, ${firstName}! Don't forget your Tehillim. 💙`
 
@@ -256,17 +220,78 @@ function Avatar({ size = 'h-10 w-10', text = 'text-2xl' }) {
   return <span className={`grid ${size} flex-none place-items-center rounded-full bg-gold/90 ${text}`} aria-hidden="true">📖</span>
 }
 
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+    </svg>
+  )
+}
+
+function SpeakerIcon({ muted }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 10v4h3l4 3V7L7 10H4z" />
+      {muted ? <path d="M16 9l5 6M21 9l-5 6" /> : (
+        <>
+          <path d="M16 9a4 4 0 0 1 0 6" />
+          <path d="M18.5 7a7 7 0 0 1 0 10" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+const MUTE_KEY = 'wwtc_general_muted'
+
 export default function ChatBuddy() {
-  const { kid } = useAuth()
+  const { kid, changeLadder } = useAuth()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const [peekClosed, setPeekClosed] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
+  const [muted, setMuted] = useState(() => {
+    try { return localStorage.getItem(MUTE_KEY) === '1' } catch { return false }
+  })
+  const [listening, setListening] = useState(false)
+  const [voiceOn, setVoiceOn] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const [micNote, setMicNote] = useState('')
+  const [focusLadder, setFocusLadder] = useState(null)
+  // Keep the first spoken greeting in the thread after a ladder is saved,
+  // so the walk doesn't get replaced by the next situation line.
+  const [pinnedGreeting, setPinnedGreeting] = useState(null)
+  const kidId = kid?.id ?? null
+  const [trackedKid, setTrackedKid] = useState(kidId)
+  // Drop a previous soldier's live mic/voice when the signed-in kid changes.
+  if (trackedKid !== kidId) {
+    setTrackedKid(kidId)
+    setVoiceOn(false)
+    setListening(false)
+    setSpeaking(false)
+    setMicNote('')
+    setFocusLadder(null)
+    setPinnedGreeting(null)
+  }
   const scrollRef = useRef(null)
   const convoRef = useRef([])
   const msgSeq = useRef(0) // monotonic message ids (no impure Date.now in render)
+  const mutedRef = useRef(muted)
+  const openRef = useRef(open)
+  const inputRef = useRef(input)
+  const ctxRef = useRef(null)
+  const greetingRef = useRef('')
+  const voiceOnRef = useRef(false)
+  const listenHandle = useRef(null)
+  const turnRef = useRef(0)
+  const sayGen = useRef(0)
+  const greetedId = useRef(null)
+  const pendingSpeech = useRef(null)
+  const focusLadderRef = useRef(null)
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social } = useLiveData(
@@ -274,51 +299,289 @@ export default function ChatBuddy() {
     [kid],
   )
 
+  const reportMonth = progress && progress.current ? progress.current.month : null
   const ctx = useMemo(() => {
     if (!kid || !progress) return null
+    const monthEn = reportMonth || nextShabbosMevorchim()?.monthEn || null
     const base = {
       firstName: (kid.name || 'friend').split(' ')[0],
       ladder: kid.ladder,
+      grade: kid.grade,
+      childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
+      monthEn,
+      focusLadder,
+      ladderChoices: ladderMenu(kid.grade, monthEn),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
-      monthHeb: progress?.current ? MONTH_HEB[progress.current.month] : '',
+      monthHeb: monthEn ? MONTH_HEB[monthEn] ?? '' : '',
     }
-    return { ...base, situation: readSituation(base) }
-  }, [kid, progress, social])
+    const situation = readSituation(base)
+    const withSituation = { ...base, situation }
+    return { ...withSituation, greeting: openingGreeting(withSituation) }
+  }, [kid, progress, social, focusLadder, reportMonth])
 
-  const greeting = useMemo(() => (ctx ? openingGreeting(ctx) : ''), [ctx])
+  const greeting = ctx?.greeting ?? ''
   const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
+  if (kid && ctx && (pinnedGreeting == null || pinnedGreeting.id !== kid.id)) {
+    setPinnedGreeting({ id: kid.id, text: ctx.greeting, situation: ctx.situation })
+  }
+  if (ctx && ctx.situation !== 'pick' && focusLadder != null) {
+    setFocusLadder(null)
+  }
+
+  // Latest values for async speech/mic callbacks. Written here, not during render.
+  useEffect(() => {
+    mutedRef.current = muted
+    openRef.current = open
+    inputRef.current = input
+    ctxRef.current = ctx
+    greetingRef.current = greeting
+    focusLadderRef.current = focusLadder
+  })
+
+  function setVoice(on) {
+    voiceOnRef.current = on
+    setVoiceOn(on)
+  }
+
+  function stopListening() {
+    listenHandle.current?.stop()
+    listenHandle.current = null
+    setListening(false)
+  }
+
+  function endVoice() {
+    setVoice(false)
+    stopListening()
+  }
+
+  // Speak one line. Latest call wins; emoji are stripped inside speak().
+  const say = useCallback((text) => {
+    const gen = ++sayGen.current
+    const willTalk = !mutedRef.current && canSpeak() && !!stripForSpeech(text)
+    if (willTalk) setSpeaking(true)
+    const done = speak(text, { muted: mutedRef.current })
+    done.finally(() => {
+      if (gen === sayGen.current) setSpeaking(false)
+    })
+    return done
+  }, [])
+
+  function beginListening() {
+    if (!canListen() || !openRef.current || !voiceOnRef.current) return
+    stopListening()
+    const draft = inputRef.current
+    let lastPartial = ''
+    setListening(true)
+    setMicNote('')
+    listenHandle.current = startRecognition({
+      onPartial: (text) => {
+        lastPartial = text
+        inputRef.current = text
+        setInput(text)
+      },
+      onFinal: (text) => {
+        lastPartial = ''
+        setListening(false)
+        listenHandle.current = null
+        inputRef.current = ''
+        setInput('')
+        void send(text)
+      },
+      onSilence: () => {
+        setListening(false)
+        listenHandle.current = null
+        inputRef.current = draft
+        setInput(draft)
+        setVoice(false)
+      },
+      onError: (code) => {
+        setListening(false)
+        listenHandle.current = null
+        inputRef.current = draft
+        setInput(draft)
+        setVoice(false)
+        setMicNote(
+          code === 'not-allowed' || code === 'service-not-allowed'
+            ? 'The microphone is blocked in this browser. You can still type.'
+            : 'I could not use the microphone. You can still type.',
+        )
+      },
+      onEnd: () => {
+        setListening(false)
+        listenHandle.current = null
+        if (lastPartial.trim()) {
+          const text = lastPartial.trim()
+          lastPartial = ''
+          inputRef.current = ''
+          setInput('')
+          void send(text)
+          return
+        }
+        inputRef.current = draft
+        setInput(draft)
+        setVoice(false)
+      },
+    })
+  }
+
+  async function send(raw) {
+    const text = String(raw ?? inputRef.current).trim()
+    if (!text || !ctxRef.current) return
+    inputRef.current = ''
+    setInput('')
+    setMicNote('')
+    stopListening()
+    const myTurn = ++turnRef.current
+    const kidMsg = { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }
+    setMessages((m) => [...m, kidMsg])
+    setTyping(true)
+    const greet = greetingRef.current
+    const history = [...(greet ? [{ from: 'bot', text: greet }] : []), ...convoRef.current, kidMsg].slice(-9)
+    const snapshot = { ...ctxRef.current, focusLadder: focusLadderRef.current }
+    // The owner's ladder, quota, and medal lines stay exact. Other questions
+    // still go to the AI, then the keyword fallback.
+    const scripted = scriptedTurn(text, snapshot)
+    let reply
+    if (scripted) {
+      reply = scripted.reply
+      focusLadderRef.current = scripted.focusLadder
+      setFocusLadder(scripted.focusLadder)
+      if (scripted.pickLadder != null) {
+        const saved = await changeLadder(scripted.pickLadder)
+        if (!saved) {
+          reply = `I couldn't save ladder ${scripted.pickLadder} yet. Tap Pick my ladder on your page and choose it there.`
+        }
+      }
+    } else {
+      try {
+        reply = await aiReply(text, history, snapshot) // real AI via the backend
+      } catch {
+        reply = buildReply(text, snapshot) // scripted fallback (static file / offline / no key)
+      }
+    }
+    if (myTurn !== turnRef.current) return
+    setTyping(false)
+    const botMsg = { id: `b${(msgSeq.current += 1)}`, from: 'bot', text: reply }
+    setMessages((m) => [...m, botMsg])
+    if (!openRef.current) return
+    const status = await say(reply)
+    if (myTurn !== turnRef.current) return
+    if (status === 'blocked' && !voiceOnRef.current) pendingSpeech.current = reply
+    if (!voiceOnRef.current || !openRef.current) return
+    // Wait a beat after real speech so the mic doesn't hear General 613.
+    window.setTimeout(() => {
+      if (myTurn !== turnRef.current || !voiceOnRef.current || !openRef.current) return
+      beginListening()
+    }, status === 'spoken' ? 400 : 0)
+  }
+
+  function toggleMic() {
+    if (voiceOnRef.current) {
+      endVoice()
+      return
+    }
+    stopSpeaking()
+    pendingSpeech.current = null
+    setMicNote('')
+    setVoice(true)
+    beginListening()
+  }
+
+  function toggleMute() {
+    setMuted((was) => {
+      const next = !was
+      mutedRef.current = next
+      try { localStorage.setItem(MUTE_KEY, next ? '1' : '0') } catch { /* private mode */ }
+      if (next) {
+        pendingSpeech.current = null
+        stopSpeaking()
+      }
+      return next
+    })
+  }
+
+  function closePanel() {
+    setOpen(false)
+    openRef.current = false
+    endVoice()
+    stopSpeaking()
+  }
 
   useEffect(() => {
     convoRef.current = messages
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, typing])
 
+  // Greet out loud once each time a soldier is here. Login is a click, so speech
+  // usually starts right away; if the browser blocks it, the next tap or key says it.
+  useEffect(() => {
+    if (!kid) {
+      greetedId.current = null
+      pendingSpeech.current = null
+      voiceOnRef.current = false
+      listenHandle.current?.stop()
+      listenHandle.current = null
+      stopSpeaking()
+      return
+    }
+    if (!greeting) return
+    if (greetedId.current === kid.id) return
+    const id = kid.id
+    const line = greeting
+    const timer = window.setTimeout(() => {
+      if (greetedId.current === id) return
+      greetedId.current = id
+      if (turnRef.current > 0) return
+      void say(line).then((status) => {
+        if (status === 'blocked') pendingSpeech.current = line
+      })
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [kid, greeting, say])
+
+  useEffect(() => {
+    const onGesture = () => {
+      if (canSpeak()) {
+        try {
+          window.speechSynthesis.resume()
+          window.speechSynthesis.getVoices()
+        } catch { /* ignore */ }
+      }
+      if (voiceOnRef.current) return
+      const line = pendingSpeech.current
+      if (!line || mutedRef.current) return
+      pendingSpeech.current = null
+      void say(line).then((status) => {
+        if (status === 'blocked') pendingSpeech.current = line
+      })
+    }
+    window.addEventListener('pointerdown', onGesture, true)
+    window.addEventListener('keydown', onGesture, true)
+    return () => {
+      window.removeEventListener('pointerdown', onGesture, true)
+      window.removeEventListener('keydown', onGesture, true)
+    }
+  }, [say])
+
+  useEffect(() => () => {
+    listenHandle.current?.stop()
+    stopSpeaking()
+  }, [])
+
   if (!kid) return null
-  const showPeek = !open && !peekClosed && pathname === '/me' && !!greeting
+  const peek = ctx ? peekText(ctx) : ''
+  const shownGreeting = pinnedGreeting?.id === kid.id && pinnedGreeting.situation === 'pick'
+    ? pinnedGreeting.text
+    : greeting
+  const showPeek = !open && !peekClosed && pathname === '/me' && !!peek
+  const micOk = canListen()
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
-  const thread = greeting ? [{ id: 'w', from: 'bot', text: greeting }, ...messages] : messages
-
-  async function send(raw) {
-    const text = (raw ?? input).trim()
-    if (!text) return
-    setInput('')
-    const kidMsg = { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }
-    setMessages((m) => [...m, kidMsg])
-    setTyping(true)
-    const history = [...convoRef.current, kidMsg].slice(-9)
-    let reply
-    try {
-      reply = await aiReply(text, history, ctx) // real AI via the backend
-    } catch {
-      reply = buildReply(text, ctx) // scripted fallback (static file / offline / no key)
-    }
-    setTyping(false)
-    setMessages((m) => [...m, { id: `b${(msgSeq.current += 1)}`, from: 'bot', text: reply }])
-  }
+  const thread = shownGreeting ? [{ id: 'w', from: 'bot', text: shownGreeting }, ...messages] : messages
+  const statusLine = listening ? 'Listening…' : speaking ? 'Speaking…' : 'Your Tehillim general'
 
   return (
     <>
@@ -329,12 +592,12 @@ export default function ChatBuddy() {
             <button type="button" onClick={() => setPeekClosed(true)} aria-label="Dismiss" className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-muted transition hover:bg-track">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
-            <button type="button" onClick={() => setOpen(true)} className="block text-left">
+            <button type="button" onClick={() => { openRef.current = true; setOpen(true) }} className="block text-left">
               <span className="mb-1 flex items-center gap-2">
                 <Avatar size="h-7 w-7" text="text-base" />
                 <span className="font-display text-[14px] font-black text-navy">{BOT_NAME}</span>
               </span>
-              {greeting}
+              {peek}
               <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>
             </button>
           </div>
@@ -345,7 +608,7 @@ export default function ChatBuddy() {
       {!open ? (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => { openRef.current = true; setOpen(true) }}
           className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-navy py-2.5 pl-2.5 pr-4 text-white shadow-hover ring-1 ring-white/15 transition hover:-translate-y-0.5 sm:bottom-6 sm:right-6"
           aria-label={`Chat with ${BOT_NAME}`}
         >
@@ -361,9 +624,18 @@ export default function ChatBuddy() {
             <Avatar />
             <div className="min-w-0 flex-1">
               <p className="font-display text-[17px] font-black leading-none text-white">{BOT_NAME}</p>
-              <p className="mt-0.5 text-[12px] text-white/70">Your Tehillim helper</p>
+              <p className="mt-0.5 text-[12px] text-white/70">{statusLine}</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full text-white/80 transition hover:bg-white/10">
+            <button
+              type="button"
+              onClick={toggleMute}
+              aria-pressed={muted}
+              aria-label={muted ? `Unmute ${BOT_NAME}` : `Mute ${BOT_NAME}`}
+              className={`grid h-8 w-8 place-items-center rounded-full transition hover:bg-white/10 ${muted ? 'text-gold' : 'text-white/80'}`}
+            >
+              <SpeakerIcon muted={muted} />
+            </button>
+            <button type="button" onClick={closePanel} aria-label="Close chat" className="grid h-8 w-8 place-items-center rounded-full text-white/80 transition hover:bg-white/10">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
@@ -395,11 +667,34 @@ export default function ChatBuddy() {
             ))}
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); send() }} className="flex items-center gap-2 border-t border-line bg-card px-3 py-2.5">
+          {micNote ? (
+            <p className="border-t border-line bg-card px-3 pt-2 text-[12px] font-semibold text-navy" role="status">{micNote}</p>
+          ) : null}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              stopListening()
+              void send()
+            }}
+            className="flex items-center gap-2 border-t border-line bg-card px-3 py-2.5"
+          >
+            {micOk ? (
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-pressed={voiceOn}
+                aria-label={voiceOn ? `Stop talking with ${BOT_NAME}` : `Talk to ${BOT_NAME}`}
+                className={`grid h-9 w-9 flex-none place-items-center rounded-full transition ${listening ? 'animate-pulse bg-gold text-navy ring-2 ring-navy/30' : voiceOn ? 'bg-gold text-navy' : 'bg-track text-navy hover:bg-gold/80'}`}
+              >
+                <MicIcon />
+              </button>
+            ) : null}
             <input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Ask ${BOT_NAME}…`}
+              onChange={(e) => { inputRef.current = e.target.value; setInput(e.target.value) }}
+              onKeyDown={() => { if (listenHandle.current) stopListening() }}
+              placeholder={listening ? 'Listening…' : `Ask ${BOT_NAME}…`}
               aria-label="Message"
               className="min-w-0 flex-1 rounded-full border border-line bg-[#eef4ff] px-3.5 py-2 text-[14px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25"
             />
