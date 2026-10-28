@@ -311,8 +311,12 @@ export async function setKidLadder(id, ladder) {
   const found = locate(id)
   if (!found) return null
   const { kid } = found
-  if (!availableLadders(kid.grade).includes(Number(ladder))) return null
-  kid.ladder = Number(ladder)
+  const next = Number(ladder)
+  if (!availableLadders(kid.grade).includes(next)) return null
+  // The dashboard re-applies the session ladder on every read. Skip the
+  // notify when nothing changed, or that read refreshes itself forever.
+  if (kid.ladder === next) return demoKidProgress(id)
+  kid.ladder = next
   let met = 0
   for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
   kid.metThisYear = met

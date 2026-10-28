@@ -61,8 +61,10 @@ Claude Messages API with a tightly scoped system prompt: General 613 only answer
 about the child's Tehillim Club participation (progress, ladder, this month's
 kapitlach, missions, medals, rank, next Shabbos Mevorchim, how it works —
 including picking a ladder, the quota, and marking it done) and politely refuses
-anything off-topic. Replies are written to be spoken aloud: one or two short,
-simple sentences. The child's data is passed in `context` (the same snapshot the
+anything off-topic. Ordinary replies are one or two short spoken sentences.
+With no ladder yet, the page itself speaks the ladder walk (real grade, month,
+and quota) and saves the ladder when the child says yes. The child's data is
+passed in `context` (the same snapshot the
 SPA already shows, plus the greeting they just heard); no DB read is required.
 The SPA falls back to its built-in scripted answers whenever this endpoint is
 unavailable, so the static Netlify build keeps working. The browser speaks with

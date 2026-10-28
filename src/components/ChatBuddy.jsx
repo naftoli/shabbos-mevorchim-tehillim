@@ -5,13 +5,13 @@ import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
-import { BOT_NAME, openingGreeting, quickRepliesFor, readSituation } from '@/lib/general613.js'
+import { BOT_NAME, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 
-// General 613, the Tehillim Club's talking general. He greets the child out loud
-// for how they're actually doing — no ladder yet, missed last month, beat last
-// month's quota, or on track — then keeps talking. Kids can type or talk back.
-// Scripted, client-side, kid-safe when the AI endpoint is down.
+// General 613, the Tehillim Club's talking general. With no ladder yet he walks
+// the real choices out loud and saves the one the child accepts. Otherwise he
+// greets for a missed month, a quota they beat, or a soldier on track. Kids can
+// type or talk back. Scripted, client-side, kid-safe when the AI endpoint is down.
 
 // Real-AI endpoint on the PHP backend (served under the app's base path). When
 // it's unreachable — the static Netlify file, offline, or no API key set — the
@@ -27,10 +27,15 @@ function aiContext(ctx) {
   const sm = ctx.sMevorchim
   return {
     name: ctx.firstName,
+    childGrade: ctx.grade ?? null,
+    childGradeLabel: ctx.childGradeLabel ?? null,
     ladder: ctx.ladder ?? null,
     finishTrainingByGrade: ctx.gradeLabel ?? null,
+    focusLadder: ctx.focusLadder ?? null,
     situation: ctx.situation,
     greeting: ctx.greeting ?? null,
+    monthEn: ctx.monthEn ?? null,
+    ladderChoices: ctx.ladderChoices ?? [],
     thisMonth: cur
       ? { month: ctx.monthHeb, kapitlachQuota: cur.quota, kapitlachLabel: cur.quotaLabel, kapitlachSaid: cur.said, minutesQuota: cur.minutes, minutesSaid: cur.saidMinutes, done: cur.met }
       : null,
@@ -242,7 +247,7 @@ function SpeakerIcon({ muted }) {
 const MUTE_KEY = 'wwtc_general_muted'
 
 export default function ChatBuddy() {
-  const { kid } = useAuth()
+  const { kid, changeLadder } = useAuth()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const [peekClosed, setPeekClosed] = useState(false)
@@ -256,6 +261,10 @@ export default function ChatBuddy() {
   const [voiceOn, setVoiceOn] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [micNote, setMicNote] = useState('')
+  const [focusLadder, setFocusLadder] = useState(null)
+  // Keep the first spoken greeting in the thread after a ladder is saved,
+  // so the walk doesn't get replaced by the next situation line.
+  const [pinnedGreeting, setPinnedGreeting] = useState(null)
   const kidId = kid?.id ?? null
   const [trackedKid, setTrackedKid] = useState(kidId)
   // Drop a previous soldier's live mic/voice when the signed-in kid changes.
@@ -265,6 +274,8 @@ export default function ChatBuddy() {
     setListening(false)
     setSpeaking(false)
     setMicNote('')
+    setFocusLadder(null)
+    setPinnedGreeting(null)
   }
   const scrollRef = useRef(null)
   const convoRef = useRef([])
@@ -280,6 +291,7 @@ export default function ChatBuddy() {
   const sayGen = useRef(0)
   const greetedId = useRef(null)
   const pendingSpeech = useRef(null)
+  const focusLadderRef = useRef(null)
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social } = useLiveData(
@@ -287,24 +299,37 @@ export default function ChatBuddy() {
     [kid],
   )
 
+  const reportMonth = progress && progress.current ? progress.current.month : null
   const ctx = useMemo(() => {
     if (!kid || !progress) return null
+    const monthEn = reportMonth || nextShabbosMevorchim()?.monthEn || null
     const base = {
       firstName: (kid.name || 'friend').split(' ')[0],
       ladder: kid.ladder,
+      grade: kid.grade,
+      childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
+      monthEn,
+      focusLadder,
+      ladderChoices: ladderMenu(kid.grade, monthEn),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
-      monthHeb: progress?.current ? MONTH_HEB[progress.current.month] : '',
+      monthHeb: monthEn ? MONTH_HEB[monthEn] ?? '' : '',
     }
     const situation = readSituation(base)
     const withSituation = { ...base, situation }
     return { ...withSituation, greeting: openingGreeting(withSituation) }
-  }, [kid, progress, social])
+  }, [kid, progress, social, focusLadder, reportMonth])
 
   const greeting = ctx?.greeting ?? ''
   const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
+  if (kid && ctx && (pinnedGreeting == null || pinnedGreeting.id !== kid.id)) {
+    setPinnedGreeting({ id: kid.id, text: ctx.greeting, situation: ctx.situation })
+  }
+  if (ctx && ctx.situation !== 'pick' && focusLadder != null) {
+    setFocusLadder(null)
+  }
 
   // Latest values for async speech/mic callbacks. Written here, not during render.
   useEffect(() => {
@@ -313,6 +338,7 @@ export default function ChatBuddy() {
     inputRef.current = input
     ctxRef.current = ctx
     greetingRef.current = greeting
+    focusLadderRef.current = focusLadder
   })
 
   function setVoice(on) {
@@ -414,12 +440,27 @@ export default function ChatBuddy() {
     setTyping(true)
     const greet = greetingRef.current
     const history = [...(greet ? [{ from: 'bot', text: greet }] : []), ...convoRef.current, kidMsg].slice(-9)
-    const snapshot = ctxRef.current
+    const snapshot = { ...ctxRef.current, focusLadder: focusLadderRef.current }
+    // The owner's ladder, quota, and medal lines stay exact. Other questions
+    // still go to the AI, then the keyword fallback.
+    const scripted = scriptedTurn(text, snapshot)
     let reply
-    try {
-      reply = await aiReply(text, history, snapshot) // real AI via the backend
-    } catch {
-      reply = buildReply(text, snapshot) // scripted fallback (static file / offline / no key)
+    if (scripted) {
+      reply = scripted.reply
+      focusLadderRef.current = scripted.focusLadder
+      setFocusLadder(scripted.focusLadder)
+      if (scripted.pickLadder != null) {
+        const saved = await changeLadder(scripted.pickLadder)
+        if (!saved) {
+          reply = `I couldn't save ladder ${scripted.pickLadder} yet. Tap Pick my ladder on your page and choose it there.`
+        }
+      }
+    } else {
+      try {
+        reply = await aiReply(text, history, snapshot) // real AI via the backend
+      } catch {
+        reply = buildReply(text, snapshot) // scripted fallback (static file / offline / no key)
+      }
     }
     if (myTurn !== turnRef.current) return
     setTyping(false)
@@ -531,11 +572,15 @@ export default function ChatBuddy() {
   }, [])
 
   if (!kid) return null
-  const showPeek = !open && !peekClosed && pathname === '/me' && !!greeting
+  const peek = ctx ? peekText(ctx) : ''
+  const shownGreeting = pinnedGreeting?.id === kid.id && pinnedGreeting.situation === 'pick'
+    ? pinnedGreeting.text
+    : greeting
+  const showPeek = !open && !peekClosed && pathname === '/me' && !!peek
   const micOk = canListen()
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
-  const thread = greeting ? [{ id: 'w', from: 'bot', text: greeting }, ...messages] : messages
+  const thread = shownGreeting ? [{ id: 'w', from: 'bot', text: shownGreeting }, ...messages] : messages
   const statusLine = listening ? 'Listening…' : speaking ? 'Speaking…' : 'Your Tehillim general'
 
   return (
@@ -552,7 +597,7 @@ export default function ChatBuddy() {
                 <Avatar size="h-7 w-7" text="text-base" />
                 <span className="font-display text-[14px] font-black text-navy">{BOT_NAME}</span>
               </span>
-              {greeting}
+              {peek}
               <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>
             </button>
           </div>
