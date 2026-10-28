@@ -12,7 +12,7 @@ import TehillimTraining from '@/components/TehillimTraining.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
@@ -51,11 +51,22 @@ export default function KidDashboard() {
 
   const cur = progress?.current
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
-  // Furthest kapitel actually climbed this year = highest completed month's target.
-  const reached = useMemo(
-    () => (progress ? progress.months.reduce((mx, m) => (m.met ? Math.max(mx, m.quota) : mx), 0) : 0),
-    [progress],
-  )
+  // Climb position comes from the same ladder table as "Your Ladder" (grade +
+  // month + ladder → cumulative kapitel). Do not use progress.months[].quota —
+  // that is the DB date_tasks quantity, which can disagree when user_tracks.level
+  // is out of sync with the child's grade (e.g. level 10 → 11 kapitlach while
+  // Ladder 9 in 6th grade is 73/74).
+  const reached = useMemo(() => {
+    if (!progress?.months || !kid?.ladder) return 0
+    return progress.months.reduce((mx, m) => {
+      if (!m.met) return mx
+      const v = quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0
+      return Math.max(mx, Number(v) || 0)
+    }, 0)
+  }, [progress, kid?.grade, kid?.ladder])
+  const climbTarget = cur && kid?.ladder
+    ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0)
+    : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
   // General 613 walks a new soldier through the ladder out loud. Don't also
@@ -338,7 +349,7 @@ export default function KidDashboard() {
         <Card className="overflow-hidden">
           <ClimbMeter
             reached={reached}
-            target={cur.quota}
+            target={climbTarget}
             ladder={kid.ladder}
             finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
           />

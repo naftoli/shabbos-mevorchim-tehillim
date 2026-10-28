@@ -26,21 +26,21 @@ function wwtcRoutePath(): string
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = wwtcRoutePath();
 
-/** min(round(done/quota*100), 100), 0 when there is no quota. */
+/** round(done/quota*100), uncapped (can exceed 100); 0 when there is no quota. */
 function wwtcPct($done, $quota): int
 {
     $quota = (float) $quota;
     if ($quota <= 0) {
         return 0;
     }
-    return (int) min(100, round(((float) $done / $quota) * 100));
+    return (int) round(((float) $done / $quota) * 100);
 }
 
 /**
- * One eligible school's aggregate row for a month, from the army arrays (setASR,
- * backup-first — the report figures) and the mission-mark completion counts.
- * The single source for a school's headline numbers, used by both /schools (the
- * list) and /schools/:id (the detail), so the two never disagree.
+ * One eligible school's aggregate row for a month, from the army arrays (setASR
+ * with live marks — WWTC always uses setUseLiveData) and the mission-mark
+ * completion counts. The single source for a school's headline numbers, used by
+ * both /schools (the list) and /schools/:id (the detail), so the two never disagree.
  */
 function wwtcSchoolRow(int $id, string $name, array $kapGoal, array $kapDone, array $minGoal, array $minDone, array $counts): array
 {
@@ -65,6 +65,41 @@ function wwtcSchoolRow(int $id, string $name, array $kapGoal, array $kapDone, ar
         'minutesQuotaMonth' => $minQ,
         'minutesPct' => wwtcPct($minSaid, $minQ),
     ];
+}
+
+/**
+ * Home "The Race" default order: % soldiers who met, then % kapitlach, % minutes,
+ * raw kapitlach, name. Personal-page schoolRank must use this same order.
+ */
+function wwtcCmpSchoolRace(array $a, array $b): int
+{
+    return $b['pctMet'] <=> $a['pctMet']
+        ?: $b['pct'] <=> $a['pct']
+        ?: $b['minutesPct'] <=> $a['minutesPct']
+        ?: $b['saidMonth'] <=> $a['saidMonth']
+        ?: strcmp($a['name'], $b['name']);
+}
+
+/** Nationwide school rows for the current (or given) SM date, Race-sorted. */
+function wwtcNationwideSchools(?int $date = null): array
+{
+    $date = $date ?? wwtcCurrentDate();
+    $sm = wwtcReport($date);
+    $sm->setArmyResults();
+    $sm->setASR($date);
+    $names = $sm->getSchools();
+    $kapGoal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];
+    $kapDone = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
+    $minGoal = $sm->getArmySchoolsResults()['Minutes'] ?? [];
+    $minDone = $sm->getArmySchoolsDoneResults()['Minutes'] ?? [];
+    $counts = wwtcCompletionCounts($date);
+
+    $rows = [];
+    foreach ($names as $id => $name) {
+        $rows[] = wwtcSchoolRow((int) $id, (string) $name, $kapGoal, $kapDone, $minGoal, $minDone, $counts);
+    }
+    usort($rows, 'wwtcCmpSchoolRace');
+    return $rows;
 }
 
 /**
@@ -157,7 +192,8 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
  * A soldier's elapsed-month progress (quota/said/minutes per month, met), by
  * direct per-month queries mirroring ShabbosMevorchim::setStudentResults(): the
  * quota is the soldier's own date_tasks row for their track/level, the done is
- * MAX(done_qty) with the tehillim_backups fallback for sealed months.
+ * MAX(done_qty) from live date_tasks_marks (no tehillim_backups — same as
+ * setUseLiveData on the report class).
  */
 function wwtcKidMonths(array $kid): array
 {
@@ -181,10 +217,6 @@ function wwtcKidMonths(array $kid): array
           WHERE dtm.user_id = :uid AND dtmm.start_date = :d AND dtmm.end_date = :d
             AND dt.grid_id = :grid AND dtmm.subject_id = ' . WWTC_SUBJECT_ID
     );
-    $backupStmt = $MASHPIA_DB->prepare(
-        'SELECT IFNULL(SUM(done_qty), 0) FROM tehillim_backups
-          WHERE sm_date = :d AND grid_id = :grid AND user_id = :uid'
-    );
 
     $qFor = function (int $grid, int $d) use ($quotaStmt, $kid): int {
         $quotaStmt->execute([
@@ -193,12 +225,7 @@ function wwtcKidMonths(array $kid): array
         ]);
         return (int) ($quotaStmt->fetchColumn() ?: 0);
     };
-    $dFor = function (int $grid, int $d) use ($doneStmt, $backupStmt, $kid): int {
-        $backupStmt->execute([':d' => $d, ':grid' => $grid, ':uid' => (int) $kid['user_id']]);
-        $backup = (int) ($backupStmt->fetchColumn() ?: 0);
-        if ($backup > 0) {
-            return $backup;
-        }
+    $dFor = function (int $grid, int $d) use ($doneStmt, $kid): int {
         $doneStmt->execute([':uid' => (int) $kid['user_id'], ':d' => $d, ':grid' => $grid]);
         return (int) ($doneStmt->fetchColumn() ?: 0);
     };
@@ -223,6 +250,22 @@ function wwtcKidMonths(array $kid): array
 }
 
 /**
+ * Lifetime Tehillim missions earned (medal board / training count), from the
+ * first mark the child has — not just this campaign year. Same source as
+ * Soldier::medalBoard(): SUM(mission_count) on date_tasks_mission_marks.
+ */
+function wwtcKidMissionsLifetime(int $userId): int
+{
+    global $MASHPIA_DB;
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT IFNULL(SUM(mission_count), 0) FROM date_tasks_mission_marks
+          WHERE user_id = :uid AND subject_id = ' . WWTC_SUBJECT_ID
+    );
+    $stmt->execute([':uid' => $userId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
  * The signed-in soldier's progress payload (GET /me/progress, and the fresh
  * state POST /me/report returns). medal stays null — medal logic is client-side.
  */
@@ -237,11 +280,15 @@ function wwtcKidProgress(array $kid): array
             $current = $mo;
         }
     }
+    $missionsTotal = wwtcKidMissionsLifetime((int) $kid['user_id']);
+    // Prefer lifetime − this-year SM months; never go negative if marks include
+    // RH/YK or other occasions beyond the elapsed-month list.
+    $priorMissions = max(0, $missionsTotal - $metThisYear);
     return array_merge(wwtcSafeKid($kid), [
         'months' => $months,
         'metThisYear' => $metThisYear,
-        'missionsTotal' => $metThisYear, // no cross-year history here
-        'priorMissions' => 0,
+        'missionsTotal' => $missionsTotal,
+        'priorMissions' => $priorMissions,
         'medal' => null,
         'current' => $current,
     ]);
@@ -386,16 +433,19 @@ if ($method === 'GET' && $path === '/stats') {
 }
 
 // ---- running totals (home headline) ----------------------------------------
-// This month's kapitlach, the year so far (sum of the army's done across elapsed
-// Shabbos-Mevorchim months), and an all-time figure. There is no historical
-// kapitlach store, so all-time = this year + WWTC_ALLTIME_BASE (set it to the
-// prior-years total when one is available; defaults to 0).
+// This month / this year: live army done across elapsed SM months (setUseLiveData).
+// All-time: sealed kapitlach from tehillim_backups for every prior SM date, plus
+// this year's live total (so post-backup marks still count), plus optional
+// WWTC_ALLTIME_BASE for any pre-backup history HQ wants to include.
 if ($method === 'GET' && $path === '/running-totals') {
+    global $MASHPIA_DB;
     $current = wwtcCurrentDate();
     $thisMonth = 0;
     $thisYear = 0;
+    $elapsedJds = [];
     foreach (wwtcElapsedMonths() as $mo) {
         $jd = (int) $mo['jd'];
+        $elapsedJds[] = $jd;
         $r = wwtcReport($jd);
         $r->setArmyResults();
         $v = (int) ($r->getArmyDoneResults()['Kapitelach'][$jd] ?? 0);
@@ -404,34 +454,31 @@ if ($method === 'GET' && $path === '/running-totals') {
             $thisMonth = $v;
         }
     }
+
+    // Prior years (and any sealed months outside this year's elapsed set).
+    $priorSql = 'SELECT IFNULL(SUM(done_qty), 0) FROM tehillim_backups
+                  WHERE grid_id = ' . WWTC_GRID_KAPITELACH;
+    if ($elapsedJds) {
+        $in = implode(',', array_map('intval', $elapsedJds));
+        $priorSql .= " AND sm_date NOT IN ($in)";
+    }
+    $priorYears = (int) $MASHPIA_DB->query($priorSql)->fetchColumn();
     $base = (int) (wwtcEnv('WWTC_ALLTIME_BASE') ?: 0);
-    wwtcJson(['thisMonth' => $thisMonth, 'thisYear' => $thisYear, 'allTime' => $base + $thisYear]);
+    $allTime = $priorYears + $thisYear + $base;
+
+    wwtcJson([
+        'thisMonth' => $thisMonth,
+        'thisYear' => $thisYear,
+        'allTime' => $allTime,
+    ]);
 }
 
 // ---- nationwide school list ------------------------------------------------
 
 if ($method === 'GET' && $path === '/schools') {
     $current = wwtcCurrentDate();
-    // Same computation the WWTC summary report uses (shabbos_mevorchim_summary.php):
-    // setASR() fills the per-school goal/done arrays that generateArmyAccomplishedReport
-    // renders — backup-first done, id 61 included — so these match the report exactly.
-    $sm = wwtcReport($current);
-    $sm->setArmyResults();
-    $sm->setASR($current);
-    $names = $sm->getSchools();                                     // [id => name]
-    $kapGoal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];    // [id => goal]
-    $kapDone = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];// [id => done]
-    $minGoal = $sm->getArmySchoolsResults()['Minutes'] ?? [];
-    $minDone = $sm->getArmySchoolsDoneResults()['Minutes'] ?? [];
-    $counts = wwtcCompletionCounts($current); // met/size per school (mission marks)
-
-    $rows = [];
-    foreach ($names as $id => $name) {
-        $rows[] = wwtcSchoolRow((int) $id, (string) $name, $kapGoal, $kapDone, $minGoal, $minDone, $counts);
-    }
-    usort($rows, static function ($a, $b) {
-        return $b['saidMonth'] <=> $a['saidMonth'] ?: strcmp($a['name'], $b['name']);
-    });
+    // Same Race order as Home (pctMet-first) and /me/social schoolRank.
+    $rows = wwtcNationwideSchools($current);
     wwtcJson(['month' => wwtcMonthForDate($current), 'schools' => $rows]);
 }
 
@@ -764,27 +811,41 @@ if ($method === 'GET' && $path === '/me/social') {
         }
     }
 
-    // School standing nationwide, by kapitlach this month (same source as /schools).
-    // This is a second pass over the whole army, separate from the school-scoped
-    // wwtcSchoolData above; setASR() is cached (Cache::remember), so it's cheap.
-    $current = wwtcCurrentDate();
-    $rankSm = wwtcReport($current);
-    $rankSm->setArmyResults();
-    $rankSm->setASR($current);
-    $rankDone = $rankSm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
-    $ranked = [];
-    foreach ($rankSm->getSchools() as $sid => $name) {
-        $ranked[$sid] = (int) ($rankDone[$sid] ?? 0);
+    // School standing nationwide — same Race order as Home (% soldiers met first).
+    // Previously ranked by raw kapitlach said, which disagreed with the main page.
+    $ranked = wwtcNationwideSchools();
+    $schoolRank = 0;
+    foreach ($ranked as $i => $row) {
+        if ((int) $row['id'] === $schoolId) {
+            $schoolRank = $i + 1;
+            break;
+        }
     }
-    arsort($ranked);
-    $schoolRank = array_search($schoolId, array_keys($ranked), true);
-    $schoolRank = $schoolRank === false ? 0 : $schoolRank + 1;
+
+    // How many more classmates finishing would pass the class ahead (pctMet).
+    $needToPass = 0;
+    if ($classRank > 1 && $classSize > 0) {
+        $mine = null;
+        $ahead = null;
+        foreach ($classes as $i => $c) {
+            if ($c['id'] === $myClassId) {
+                $mine = $c;
+                $ahead = $i > 0 ? $classes[$i - 1] : null;
+                break;
+            }
+        }
+        if ($mine && $ahead && $mine['met'] < $mine['size']) {
+            $targetMet = (int) floor(($ahead['pctMet'] / 100) * $mine['size']) + 1;
+            $needToPass = max(1, min($mine['size'] - $mine['met'], $targetMet - $mine['met']));
+        }
+    }
 
     wwtcJson([
         'className' => $className,
         'classRank' => $classRank,
         'totalClasses' => count($classes),
         'classAheadName' => $aheadName,
+        'needToPass' => $needToPass,
         'myRankInClass' => $myRank,
         'classSize' => $classSize,
         'schoolName' => $kid['school_name'] ?? null,

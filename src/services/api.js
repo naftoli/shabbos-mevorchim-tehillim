@@ -4,6 +4,7 @@
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
+import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import * as mashpia from './mashpia.js'
@@ -56,9 +57,9 @@ function schoolAgg(school) {
       saidYear += kidSaidYear(kid)
     }
   }
-  const pct = quotaMonth > 0 ? Math.min(Math.round((saidMonth / quotaMonth) * 100), 100) : 0
+  const pct = quotaMonth > 0 ? Math.round((saidMonth / quotaMonth) * 100) : 0
   const pctMet = kids > 0 ? Math.round((metMonth / kids) * 100) : 0
-  const minutesPct = minutesQuotaMonth > 0 ? Math.min(Math.round((minutesSaidMonth / minutesQuotaMonth) * 100), 100) : 0
+  const minutesPct = minutesQuotaMonth > 0 ? Math.round((minutesSaidMonth / minutesQuotaMonth) * 100) : 0
   return {
     id: school.id,
     name: school.name,
@@ -116,10 +117,10 @@ export async function getGlobalStats() {
     year: CAMPAIGN_YEAR,
     accomplished: acc,
     quota,
-    pct: quota > 0 ? Math.min(Math.round((acc / quota) * 100), 100) : 0,
+    pct: quota > 0 ? Math.round((acc / quota) * 100) : 0,
     minutes,
     minutesQuota,
-    minutesPct: minutesQuota > 0 ? Math.min(Math.round((minutes / minutesQuota) * 100), 100) : 0,
+    minutesPct: minutesQuota > 0 ? Math.round((minutes / minutesQuota) * 100) : 0,
     metSoldiers,
     pctSoldiersMet: soldiers > 0 ? Math.round((metSoldiers / soldiers) * 100) : 0,
     soldiers,
@@ -362,8 +363,8 @@ export async function getKidSocial(id) {
     if (mine.met >= mine.size) needToPass = 0
   }
 
-  // School standing worldwide, by kapitlach this month.
-  const schoolRanked = schools().slice().sort((a, b) => b.saidMonth - a.saidMonth)
+  // School standing worldwide — same Race order as Home (% soldiers met first).
+  const schoolRanked = schools().slice().sort(cmpSchoolRace)
   const schoolRank = schoolRanked.findIndex((s) => s.id === school.id)
 
   return {
@@ -417,9 +418,9 @@ function demoSchool(id) {
       size,
       said,
       quota,
-      pct: quota > 0 ? Math.min(Math.round((said / quota) * 100), 100) : 0,
+      pct: quota > 0 ? Math.round((said / quota) * 100) : 0,
       pctMet: size > 0 ? Math.round((met / size) * 100) : 0,
-      minutesPct: minsQuota > 0 ? Math.min(Math.round((minsSaid / minsQuota) * 100), 100) : 0,
+      minutesPct: minsQuota > 0 ? Math.round((minsSaid / minsQuota) * 100) : 0,
       met,
       perfect: size > 0 && met === size,
     }

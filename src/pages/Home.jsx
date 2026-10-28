@@ -5,14 +5,20 @@ import {
   getRunningTotals,
   getSchools,
   getPerfectPlatoons,
+  CAMPAIGN_YEAR,
+  CURRENT_MONTH,
 } from '@/services/api.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
+import { rankSchools, raceMetric } from '@/lib/schoolRace.js'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { PageHero } from './_page.jsx'
 import { Button, Card, Pill, SchoolLogo, Input } from '@/components/ui.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
+
+function Skeleton({ className = '' }) {
+  return <span className={`inline-block animate-pulse rounded-md bg-track ${className}`} aria-hidden="true" />
+}
 
 const RACE_FILLS = [
   'linear-gradient(90deg, #86a8db 0%, var(--color-race-blue) 55%, #1f4f9e 100%)',
@@ -53,18 +59,10 @@ function SchoolsRace({ schools }) {
   const [sort, setSort] = useState('finished')
   const [visible, setVisible] = useState(10)
   // Three percentage metrics: % of kids who finished, % of the kapitlach goal
-  // said, and % of the minutes goal reached. Ties fall through the other metrics
-  // then total kapitlach then name, so the order is always stable.
-  const metric = (s) => (sort === 'finished' ? s.pctMet : sort === 'kapitlach' ? s.pct : s.minutesPct)
-  const ranked = [...schools].sort(
-    (a, b) =>
-      metric(b) - metric(a) ||
-      b.pctMet - a.pctMet ||
-      b.pct - a.pct ||
-      b.minutesPct - a.minutesPct ||
-      b.saidMonth - a.saidMonth ||
-      a.name.localeCompare(b.name),
-  )
+  // said, and % of the minutes goal reached. Ties share cmpSchoolRace so the
+  // personal-page schoolRank (finished/default) always matches this list.
+  const ranked = rankSchools(schools, sort)
+  const metric = (s) => raceMetric(s, sort)
   const shown = ranked.slice(0, visible)
   const segStyle = (active) => (active ? { background: 'linear-gradient(180deg, #c3b1d6 0%, #ede4f6 100%)' } : undefined)
   const SEGMENTS = [
@@ -179,12 +177,14 @@ function SchoolCard({ s, color }) {
 }
 
 export default function Home() {
-  const { data: stats } = useLiveData(() => getGlobalStats(), [])
-  const { data: totals } = useLiveData(() => getRunningTotals(), [])
-  const { data: schoolsData } = useLiveData(() => getSchools(), [])
-  const { data: platoonsData } = useLiveData(() => getPerfectPlatoons(), [])
+  const { data: stats, loading: statsLoading } = useLiveData(() => getGlobalStats(), [])
+  const { data: totals, loading: totalsLoading } = useLiveData(() => getRunningTotals(), [])
+  const { data: schoolsData, loading: schoolsLoading } = useLiveData(() => getSchools(), [])
+  const { data: platoonsData, loading: platoonsLoading } = useLiveData(() => getPerfectPlatoons(), [])
   const [query, setQuery] = useState('')
 
+  const year = stats?.year ?? CAMPAIGN_YEAR
+  const monthLabel = stats?.monthLabel ?? CURRENT_MONTH
   const schools = schoolsData ?? []
   const platoons = platoonsData ?? []
   const [openSchool, setOpenSchool] = useState(null)
@@ -207,10 +207,8 @@ export default function Home() {
     (s) => !q || s.name.toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q),
   )
 
-  if (!stats || !totals) {
-    return <PageHero eyebrow="Worldwide Tehillim Club" title="Loading…">One moment…</PageHero>
-  }
-
+  // Hero + shell render immediately; numbers fill in as each request lands so
+  // the page never sits on a full-screen "Loading…" while the army aggregates.
   return (
     <div>
       {/* Hero — the Weiss shul photo full-bleed with the brand glass panel on top. */}
@@ -236,7 +234,7 @@ export default function Home() {
           />
           <div className="hero-glass relative z-30 w-full rounded-[22px] p-5 sm:rounded-[36px] sm:p-8 lg:p-10">
             <p className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-white sm:text-[15px] lg:text-[18px]">
-              Shabbos Mevorchim {stats.year} · Worldwide Mivtza
+              Shabbos Mevorchim {year} · Worldwide Mivtza
             </p>
             <h1 className="mt-2 font-display text-[26px] font-black uppercase leading-[1.12] text-white sm:mt-4 sm:text-[38px] lg:text-[44px]">
               Every soldier.<br />Every Kapitel.
@@ -266,21 +264,33 @@ export default function Home() {
         <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Eyebrow icon={asset('design/flag.png')} iconClass="h-6 sm:h-7">
-              Worldwide Tehillim · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span> {stats.year}
+              Worldwide Tehillim · <span className="font-heb">{MONTH_HEB[monthLabel]}</span> {year}
             </Eyebrow>
-            {stats.pct >= 100 && <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill>}
+            {stats?.pct >= 100 && <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill>}
           </div>
 
-          <QuotaBars
-            className="mt-6 sm:mt-7"
-            kapitlach={{ quota: stats.quota, said: stats.accomplished, pct: stats.pct }}
-            minutes={{ quota: stats.minutesQuota, said: stats.minutes, pct: stats.minutesPct }}
-            soldiers={{ total: stats.soldiers, finished: stats.metSoldiers, pct: stats.pctSoldiersMet }}
-          />
+          {stats ? (
+            <QuotaBars
+              className="mt-6 sm:mt-7"
+              kapitlach={{ quota: stats.quota, said: stats.accomplished, pct: stats.pct }}
+              minutes={{ quota: stats.minutesQuota, said: stats.minutes, pct: stats.minutesPct }}
+              soldiers={{ total: stats.soldiers, finished: stats.metSoldiers, pct: stats.pctSoldiersMet }}
+            />
+          ) : (
+            <div className="mt-6 space-y-6 sm:mt-7" aria-busy="true" aria-label="Loading worldwide stats">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-3">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-5 w-full" />
+                </div>
+              ))}
+              {statsLoading ? <p className="text-sm font-semibold text-muted">Loading numbers…</p> : null}
+            </div>
+          )}
 
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:gap-8">
-            <Stat icon={asset('design/icon-school.png')} value={fmt(stats.schools)} label="Schools" />
-            <Stat icon={asset('design/icon-platoon.webp')} value={fmt(stats.perfectPlatoons)} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
+            <Stat icon={asset('design/icon-school.png')} value={stats ? fmt(stats.schools) : '…'} label="Schools" />
+            <Stat icon={asset('design/icon-platoon.webp')} value={stats ? fmt(stats.perfectPlatoons) : '…'} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
           </div>
         </Card>
       </section>
@@ -290,15 +300,17 @@ export default function Home() {
         <p className="sh mb-3">Kapitlach Said</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
-            { value: totals.thisYear, label: stats.year, sub: 'this year', heb: true, emoji: '📖' },
-            { value: totals.allTime, label: 'All-Time', sub: 'every year', heb: false, emoji: '🌍' },
+            { value: totals?.thisYear, label: year, sub: 'this year', heb: true, emoji: '📖' },
+            { value: totals?.allTime, label: 'All-Time', sub: 'every year', heb: false, emoji: '🌍' },
           ].map((c) => (
             <Card key={c.sub} className="relative overflow-hidden p-5 sm:p-6">
               <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{c.emoji}</span>
               <div className="relative flex items-center gap-4">
                 <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
                 <div className="min-w-0">
-                  <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">{fmt(c.value)}</div>
+                  <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">
+                    {c.value != null ? fmt(c.value) : (totalsLoading ? '…' : '—')}
+                  </div>
                   <div className={`mt-1.5 text-sm font-semibold uppercase tracking-wide text-green ${c.heb ? 'font-heb text-base' : ''}`}>{c.label}</div>
                   <div className="text-xs text-muted">{c.sub}</div>
                 </div>
@@ -309,16 +321,26 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 sm:pt-12 lg:px-10">
-        <SchoolsRace schools={schools} />
+        {schoolsLoading && !schools.length ? (
+          <Card className="rounded-[32px] p-8 text-center sm:rounded-[40px]">
+            <p className="font-display text-lg font-semibold text-muted">Loading the school race…</p>
+          </Card>
+        ) : (
+          <SchoolsRace schools={schools} />
+        )}
       </section>
 
       {/* Perfect Platoons */}
-      {platoonGroups.length ? (
+      {platoonsLoading && !platoonGroups.length ? (
+        <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
+          <p className="font-display text-[16px] italic text-muted">Loading perfect platoons…</p>
+        </section>
+      ) : platoonGroups.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
           <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
-                Perfect Platoons · <span className="font-heb">{MONTH_HEB[stats.monthLabel]}</span>
+                Perfect Platoons · <span className="font-heb">{MONTH_HEB[monthLabel]}</span>
               </h2>
               <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(platoons.length)} this month</span>
             </div>
@@ -385,7 +407,9 @@ export default function Home() {
             aria-label="Search schools by name"
           />
         </div>
-        {filtered.length > 0 ? (
+        {schoolsLoading && !schools.length ? (
+          <p className="font-display text-[16px] italic text-muted">Loading schools…</p>
+        ) : filtered.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((s, i) => <SchoolCard key={s.id} s={s} color={SCHOOL_COLORS[i % SCHOOL_COLORS.length]} />)}
           </div>

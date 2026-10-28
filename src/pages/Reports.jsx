@@ -84,7 +84,7 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
     }),
     { registered: 0, goal: 0, accomplished: 0, participated: 0, met: 0 },
   )
-  const pctGoal = totals.goal ? Math.min(100, Math.round((totals.accomplished / totals.goal) * 100)) : 0
+  const pctGoal = totals.goal ? Math.round((totals.accomplished / totals.goal) * 100) : 0
   const pctPart = totals.registered ? Math.round((totals.participated / totals.registered) * 100) : 0
   const pctMet = totals.registered ? Math.round((totals.met / totals.registered) * 100) : 0
   const maxAcc = Math.max(1, ...report.rows.map((r) => r.accomplished))
