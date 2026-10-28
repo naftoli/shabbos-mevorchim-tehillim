@@ -4,7 +4,7 @@ import { quotaFor } from '../../src/data/ladders.js'
 import { BOT_NAME, autoOpenFor, openingGreeting, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
 import { armVoice, canListen, canSpeak, pickVoice, speak, speechChunks, spokenText, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
 
-const hello = (name) => `Hi ${name}. I'm ${BOT_NAME}, your virtual commander.`
+const hello = (name) => `Hi ${name}, I'm your virtual commander.`
 
 test('no ladder yet walks the real easiest and hardest ladders', () => {
   const ctx = {
@@ -197,9 +197,13 @@ test('a quota with no minutes leaves the minutes out', () => {
   assert.equal(quotaWords({ v: 1, m: 1 }), '1 kapitel and 1 minute')
 })
 
-test('speech says six thirteen and keeps General 613 on screen', () => {
-  assert.equal(spokenText("Hi, I'm General 613."), "Hi, I'm General six thirteen.")
+test('a spoken 613 is six thirteen, and the greeting uses your virtual commander', () => {
+  assert.equal(spokenText('613'), 'six thirteen')
   assert.equal(spokenText('General 613\'s turn. 613'), 'General six thirteen\'s turn. six thirteen')
+  const greeting = openingGreeting({ ladder: null, firstName: 'Meir', grade: '1', monthEn: 'Cheshvan', situation: 'pick', progress: { missionsTotal: 0, months: [] } })
+  assert.equal(BOT_NAME, 'Your Virtual Commander')
+  assert.match(greeting, /^Hi Meir, I'm your virtual commander\./)
+  assert.equal(greeting.includes('613'), false)
   assert.equal(speechChunks("Hi, I'm General 613.").join(' '), "Hi, I'm General six thirteen.")
   const long = 'This is a full sentence about the ladder. '.repeat(12).trim()
   const chunks = speechChunks(long)

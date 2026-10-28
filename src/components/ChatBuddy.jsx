@@ -80,7 +80,7 @@ function buildReply(text, ctx) {
 
   // --- who / what are you ---
   if (has('who are you', 'your name', 'what are you', 'are you a robot', 'are you real', 'are you a person', 'are you ai', 'who r u', 'who made you')) {
-    return `I'm ${BOT_NAME}, your Tehillim general! 😊 I'm here to help with your Tehillim, your ladder, your missions and medals — and to cheer you on. What can I help with?`
+    return `I'm your virtual commander, your Tehillim general! 😊 I'm here to help with your Tehillim, your ladder, your missions and medals — and to cheer you on. What can I help with?`
   }
   // --- help / menu ---
   if (has('what can you', 'what do you do', 'what can i ask', 'help me with', ' menu ', 'what can i do here', 'what should i ask')) {

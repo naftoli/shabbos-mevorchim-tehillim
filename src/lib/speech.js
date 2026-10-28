@@ -17,7 +17,7 @@ export function stripForSpeech(text) {
     .trim()
 }
 
-// On-screen text stays "General 613". Speech says the name the way the client does.
+// If a "613" is still spoken, say "six thirteen", not "six hundred and thirteen".
 export function spokenText(text) {
   return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
 }
