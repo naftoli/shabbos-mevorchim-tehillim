@@ -289,7 +289,7 @@ export default function Home() {
           )}
 
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:gap-8">
-            <Stat icon={asset('design/icon-school.png')} value={stats ? fmt(stats.schools) : '…'} label="Schools" />
+            <Stat icon={asset('design/icon-school-building.png')} value={stats ? fmt(stats.schools) : '…'} label="Schools" />
             <Stat icon={asset('design/icon-platoon.webp')} value={stats ? fmt(stats.perfectPlatoons) : '…'} label="Perfect Platoons" hint="Classes where every single soldier finished their quota" />
           </div>
         </Card>
