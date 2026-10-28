@@ -11,8 +11,70 @@ export function stripForSpeech(text) {
     .replace(/\p{Extended_Pictographic}/gu, '')
     .replace(/\u200d/g, '')
     .replace(/\ufe0f/g, '')
+    // Dashes are read as a hard stop. A comma keeps the sentence moving.
+    .replace(/[—–]/g, ', ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// On-screen text stays "General 613". Speech says the name the way the client does.
+export function spokenText(text) {
+  return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+}
+
+// Chrome drops an utterance that runs much past 15 seconds. Stay under that,
+// and only break where a sentence already ends.
+const CHUNK_CHARS = 180
+
+export function speechChunks(text) {
+  const clean = spokenText(text)
+  if (!clean) return []
+  if (clean.length <= CHUNK_CHARS) return [clean]
+  const sentences = clean.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [clean]
+  const chunks = []
+  let buf = ''
+  for (const raw of sentences) {
+    const sentence = raw.trim()
+    if (!sentence) continue
+    const next = buf ? `${buf} ${sentence}` : sentence
+    if (buf && next.length > CHUNK_CHARS) {
+      chunks.push(buf)
+      buf = sentence
+    } else {
+      buf = next
+    }
+  }
+  if (buf) chunks.push(buf)
+  return chunks
+}
+
+function voiceScore(voice) {
+  const name = voice?.name || ''
+  const lang = String(voice?.lang || '').toLowerCase().replace('_', '-')
+  if (/microsoft/i.test(name) && /online \(natural\)/i.test(name)) return 400
+  if (/google us english/i.test(name)) return 300
+  if (/en-us/.test(lang) && /\b(samantha|ava)\b/i.test(name)) return 200
+  if (/en-us/.test(lang) && /premium|enhanced/i.test(name)) return 150
+  if (/en-us/.test(lang)) return 50
+  if (/^en-/.test(lang)) return 10
+  return 0
+}
+
+// Best English voice the browser actually offers. Empty list returns null.
+// A paid neural voice is not used here. If none of these exist, the browser
+// default is the fallback; a neural service could be added later behind the
+// PHP /chat proxy without changing the on-screen text.
+export function pickVoice(voices) {
+  let best = null
+  let bestScore = 0
+  for (const voice of voices || []) {
+    const score = voiceScore(voice)
+    if (score > bestScore) {
+      best = voice
+      bestScore = score
+    }
+  }
+  return best
 }
 
 export function canSpeak() {
@@ -27,11 +89,30 @@ export function canListen() {
   return typeof Ctor === 'function'
 }
 
-function englishVoice(synth) {
-  const voices = synth.getVoices?.() || []
-  return voices.find((v) => /^en(-|_)/i.test(v.lang) && v.localService)
-    || voices.find((v) => /^en(-|_)/i.test(v.lang))
-    || null
+function voicesReady(synth) {
+  const current = () => synth.getVoices?.() || []
+  if (current().length) return Promise.resolve(current())
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      const list = current()
+      if (!list.length) return
+      settled = true
+      synth.removeEventListener?.('voiceschanged', finish)
+      window.clearTimeout(timer)
+      resolve(list)
+    }
+    const timer = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      synth.removeEventListener?.('voiceschanged', finish)
+      resolve(current())
+    }, 1500)
+    synth.addEventListener?.('voiceschanged', finish)
+    // Chrome loads the list only after getVoices() is called.
+    current()
+  })
 }
 
 export function stopSpeaking() {
@@ -49,9 +130,12 @@ export function armVoice() {
     const synth = window.speechSynthesis
     if (synth && typeof window.SpeechSynthesisUtterance === 'function') {
       synth.resume?.()
+      // Silent, same rate as real speech, so the unlock doesn't chirp
+      // or leave a fast utterance for the greeting to cut off.
       const utter = new SpeechSynthesisUtterance('.')
       utter.volume = 0
-      utter.rate = 2
+      utter.rate = 1
+      utter.pitch = 1
       synth.speak(utter)
     }
   } catch { /* speech missing or already busy */ }
@@ -71,20 +155,19 @@ export function armVoice() {
  * can retry from a user gesture. Never throws.
  */
 export function speak(text, { muted = false } = {}) {
-  const clean = stripForSpeech(text)
+  const chunks = speechChunks(text)
   const my = ++token
   const synth = canSpeak() ? window.speechSynthesis : null
-  const wasBusy = !!(synth && (synth.speaking || synth.pending))
 
   const cancelNow = () => {
     if (!synth) return
     try { synth.cancel() } catch { /* ignore */ }
   }
 
-  if (muted || !clean || !synth) {
+  if (muted || !chunks.length || !synth) {
     cancelNow()
     if (muted) return Promise.resolve('muted')
-    if (!clean) return Promise.resolve('empty')
+    if (!chunks.length) return Promise.resolve('empty')
     return Promise.resolve('unavailable')
   }
 
@@ -94,6 +177,7 @@ export function speak(text, { muted = false } = {}) {
     let startTimer = 0
     let safetyTimer = 0
     let safetyTries = 0
+    const totalChars = chunks.reduce((n, chunk) => n + chunk.length, 0)
     const finish = (status) => {
       if (settled) return
       settled = true
@@ -104,58 +188,73 @@ export function speak(text, { muted = false } = {}) {
     const safety = () => {
       if (settled) return
       if (my !== token) { finish('interrupted'); return }
-      if ((synth.speaking || synth.pending) && safetyTries < 60) {
+      // Keep waiting while this queue is still playing. Cancelling here
+      // would cut him off mid-sentence.
+      if ((synth.speaking || synth.pending) && safetyTries < 180) {
         safetyTries += 1
         safetyTimer = window.setTimeout(safety, 1000)
         return
       }
-      if (synth.speaking || synth.pending) cancelNow()
       finish(started ? 'spoken' : 'blocked')
     }
-    const go = () => {
-      try {
-        if (my !== token) { finish('interrupted'); return }
-        const utter = new SpeechSynthesisUtterance(clean)
+    const queue = (voice) => {
+      if (my !== token) { finish('interrupted'); return }
+      const last = chunks.length - 1
+      chunks.forEach((chunk, index) => {
+        const utter = new SpeechSynthesisUtterance(chunk)
         utter.lang = 'en-US'
         utter.rate = 1
-        // A listed voice can be stale or not a real SpeechSynthesisVoice. Skip it
-        // and let the browser use its default rather than throwing.
+        utter.pitch = 1
         try {
-          const voice = englishVoice(synth)
           if (voice) utter.voice = voice
         } catch { /* default voice */ }
-        utter.onstart = () => {
-          started = true
-          window.clearTimeout(startTimer)
+        if (index === 0) {
+          utter.onstart = () => {
+            started = true
+            window.clearTimeout(startTimer)
+          }
         }
-        utter.onend = () => finish(my === token ? 'spoken' : 'interrupted')
+        utter.onend = () => {
+          if (index !== last || settled) return
+          finish(my === token ? 'spoken' : 'interrupted')
+        }
         utter.onerror = (event) => {
           const err = event?.error || ''
           if (my !== token || err === 'interrupted' || err === 'canceled' || err === 'cancelled') finish('interrupted')
           else if (err === 'not-allowed') finish('blocked')
-          else finish('error')
+          else if (index === last || !started) finish('error')
         }
-        // If nothing starts, autoplay was blocked (or this browser has no voice).
-        // Cancel so a late start can't talk over the retry.
-        startTimer = window.setTimeout(() => {
-          if (settled || started || my !== token) return
-          cancelNow()
-          finish('blocked')
-        }, 2500)
-        safetyTimer = window.setTimeout(safety, Math.min(50000, 5000 + clean.length * 80))
-        synth.resume?.()
         synth.speak(utter)
+      })
+      // One queue, no gaps and no cancel between sentences.
+      startTimer = window.setTimeout(() => {
+        if (settled || started || my !== token) return
+        cancelNow()
+        finish('blocked')
+      }, 2500)
+      safetyTimer = window.setTimeout(safety, Math.min(180000, 8000 + totalChars * 90))
+    }
+    const go = async () => {
+      try {
+        const voices = await voicesReady(synth)
+        if (my !== token) { finish('interrupted'); return }
+        // A newer line replaced this one. That cancel already happened.
+        if (synth.speaking || synth.pending) {
+          cancelNow()
+          await new Promise((r) => { window.setTimeout(r, 70) })
+        }
+        if (my !== token) { finish('interrupted'); return }
+        synth.resume?.()
+        queue(pickVoice(voices))
       } catch {
         finish('blocked')
       }
     }
-    // Chrome drops an utterance that starts in the same turn as cancel().
-    if (wasBusy) {
-      cancelNow()
-      window.setTimeout(go, 70)
-    } else {
-      go()
-    }
+    // A different line may interrupt. Chunks of this line are queued together
+    // and are not cancelled. Chrome drops speech started in the same turn as cancel.
+    const busy = synth.speaking || synth.pending
+    if (busy) cancelNow()
+    window.setTimeout(go, busy ? 70 : 0)
   })
 }
 

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { quotaFor } from '../../src/data/ladders.js'
 import { BOT_NAME, autoOpenFor, openingGreeting, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
-import { armVoice, canListen, canSpeak, speak, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
+import { armVoice, canListen, canSpeak, pickVoice, speak, speechChunks, spokenText, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
 
 const hello = (name) => `Hi ${name}. I'm ${BOT_NAME}, your virtual commander.`
 
@@ -195,6 +195,33 @@ test('a quota with no minutes leaves the minutes out', () => {
   assert.equal(quotaWords({ v: 5, m: 25 }), '5 kapitlach and 25 minutes')
   assert.equal(quotaWords({ v: 5 }), '5 kapitlach')
   assert.equal(quotaWords({ v: 1, m: 1 }), '1 kapitel and 1 minute')
+})
+
+test('speech says six thirteen and keeps General 613 on screen', () => {
+  assert.equal(spokenText("Hi, I'm General 613."), "Hi, I'm General six thirteen.")
+  assert.equal(spokenText('General 613\'s turn. 613'), 'General six thirteen\'s turn. six thirteen')
+  assert.equal(speechChunks("Hi, I'm General 613.").join(' '), "Hi, I'm General six thirteen.")
+  const long = 'This is a full sentence about the ladder. '.repeat(12).trim()
+  const chunks = speechChunks(long)
+  assert.ok(chunks.length > 1)
+  assert.equal(chunks.join(' '), long)
+  for (const chunk of chunks) assert.match(chunk, /ladder\.$/)
+  const huge = `${'word '.repeat(80).trim()}.`
+  assert.deepEqual(speechChunks(huge), [huge])
+})
+
+test('the best available English voice is chosen', () => {
+  const natural = { name: 'Microsoft Aria Online (Natural) - English (United States)', lang: 'en-US' }
+  const google = { name: 'Google US English', lang: 'en-US' }
+  const samantha = { name: 'Samantha', lang: 'en-US' }
+  const us = { name: 'Alex', lang: 'en-US' }
+  const british = { name: 'Daniel', lang: 'en-GB' }
+  assert.equal(pickVoice([british, us, samantha, google, natural]), natural)
+  assert.equal(pickVoice([us, british, google, samantha]), google)
+  assert.equal(pickVoice([british, us, samantha]), samantha)
+  assert.equal(pickVoice([british, us]), us)
+  assert.equal(pickVoice([british]), british)
+  assert.equal(pickVoice([]), null)
 })
 
 test('stripForSpeech drops emoji and keeps the words', () => {

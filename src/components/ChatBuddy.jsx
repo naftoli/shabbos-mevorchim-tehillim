@@ -367,6 +367,10 @@ export default function ChatBuddy() {
 
   // Speak one line. Latest call wins; emoji are stripped inside speak().
   const say = useCallback((text) => {
+    // The mic must be off while he talks, or it hears him and starts a new line.
+    listenHandle.current?.stop()
+    listenHandle.current = null
+    setListening(false)
     const gen = ++sayGen.current
     const willTalk = !mutedRef.current && canSpeak() && !!stripForSpeech(text)
     if (willTalk) setSpeaking(true)
