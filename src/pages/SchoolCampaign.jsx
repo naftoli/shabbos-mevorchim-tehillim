@@ -71,7 +71,7 @@ export default function SchoolCampaign() {
     <>
       <section className="hero-navy">
         <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-10 sm:px-6 lg:px-10">
-          <SchoolLogo school={school} size={72} className="!bg-white/10 ring-2 ring-white/30" />
+          <SchoolLogo school={school} size={72} className="ring-2 ring-white/30" />
           <div className="min-w-0">
             <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
             <h1 className="font-display text-3xl font-black text-white sm:text-4xl">{school.name}</h1>

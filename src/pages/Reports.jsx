@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { Card, Pill } from '@/components/ui.jsx'
+import { Card, Pill, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -15,15 +15,6 @@ import {
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
-
-function Mono({ name, color }) {
-  const initials = name.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
-  return (
-    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl font-cond text-lg text-white shadow-sm" style={{ background: color }}>
-      {initials}
-    </span>
-  )
-}
 
 function Bar({ pct, color = 'var(--grad-progress)', track = 'var(--color-track)' }) {
   return (
@@ -125,7 +116,7 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
                 <span className="grid w-8 place-items-center">
                   {i < 3 ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} className="h-8 w-auto" /> : <span className="font-display text-lg font-bold italic text-blue-accent">{i + 1}</span>}
                 </span>
-                <Mono name={r.name} color={color} />
+                <SchoolLogo school={{ name: r.name, color, logo: r.logo }} size={44} />
                 <span className="min-w-0">
                   <span className="block truncate font-display text-[17px] font-bold text-navy">{r.name}</span>
                   <span className="text-xs text-muted">{fmt(r.registered)} soldiers</span>

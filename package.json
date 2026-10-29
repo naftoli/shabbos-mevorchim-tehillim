@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "test": "npm run test:web && npm run test:php",
     "test:web": "node --test 'tests/web/*.test.js'",
-    "test:php": "php tests/php/MarkingTest.php"
+    "test:php": "php tests/php/MarkingTest.php && php tests/php/SchoolLogoTest.php"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

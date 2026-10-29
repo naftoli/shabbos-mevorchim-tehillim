@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/marking.php';
+require __DIR__ . '/schoolLogo.php';
 
 function wwtcRoutePath(): string
 {
@@ -55,6 +56,8 @@ function wwtcSchoolRow(int $id, string $name, array $kapGoal, array $kapDone, ar
         'name' => $name,
         'city' => null,  // Mashpia has no school city; the SPA hides it when null
         'color' => null, // SchoolLogo falls back to initials + a default colour
+        // Uploaded school logo (same URL Lulav sends). Null keeps the initials tile.
+        'logo' => wwtcSchoolLogos()[$id] ?? null,
         'kids' => $kids,
         'saidMonth' => $said,
         'quotaMonth' => $q,
@@ -78,6 +81,38 @@ function wwtcCmpSchoolRace(array $a, array $b): int
         ?: $b['minutesPct'] <=> $a['minutesPct']
         ?: $b['saidMonth'] <=> $a['saidMonth']
         ?: strcmp($a['name'], $b['name']);
+}
+
+/**
+ * [school_id => logo URL|null] for the WWTC roster. One query, cached for the
+ * request: /schools, /schools/:id and the army report all read it.
+ */
+function wwtcSchoolLogos(): array
+{
+    global $MASHPIA_DB;
+    static $logos;
+    if ($logos !== null) {
+        return $logos;
+    }
+    $ids = array_map('intval', array_keys(wwtcEligibleSchools()));
+    $logos = [];
+    if (!$ids) {
+        return $logos;
+    }
+    $in = implode(',', $ids);
+    $rows = $MASHPIA_DB->query(
+        "SELECT school_id, logo, school_logo_id, school_logo_kiosk_id
+           FROM schools
+          WHERE school_id IN ($in)"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $logos[(int) $row['school_id']] = wwtcSchoolLogoUrl(
+            $row['logo'] ?? '',
+            $row['school_logo_id'] ?? 0,
+            $row['school_logo_kiosk_id'] ?? 0
+        );
+    }
+    return $logos;
 }
 
 /** Nationwide school rows for the current (or given) SM date, Race-sorted. */
@@ -644,6 +679,7 @@ if ($method === 'GET' && $path === '/reports/army') {
         $participated[(int) $r['school_id']] = (int) $r['n'];
     }
 
+    $logos = wwtcSchoolLogos();
     $rows = [];
     foreach ($names as $id => $name) {
         $id = (int) $id;
@@ -655,6 +691,7 @@ if ($method === 'GET' && $path === '/reports/army') {
         $rows[] = [
             'id' => $id,
             'name' => (string) $name,
+            'logo' => $logos[$id] ?? null,
             'registered' => $registered,
             'goal' => $g,
             'accomplished' => $d,
