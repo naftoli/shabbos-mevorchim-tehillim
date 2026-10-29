@@ -1,6 +1,9 @@
-// Browser speech for General 613. Uses the built-in Web Speech API only —
+// Browser speech for the virtual commander. Uses the built-in Web Speech API only —
 // speechSynthesis to talk, SpeechRecognition to listen. No key, no paid service.
 // Both are optional: callers keep working when a browser doesn't have them.
+// Hebrew and Yiddish are respelled in spokenText. The chat text is not changed.
+
+import { pronounce, voiceHasPronunciationLexicon } from './pronounce.js'
 
 const SILENCE_MS = 8000
 
@@ -17,17 +20,22 @@ export function stripForSpeech(text) {
     .trim()
 }
 
-// If a "613" is still spoken, say "six thirteen", not "six hundred and thirteen".
-export function spokenText(text) {
-  return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+// What the voice actually says. "613" is "six thirteen". Hebrew and Yiddish
+// words are respelled for an English voice. Nothing here is shown in the chat.
+// A voice with its own lexicon (ElevenLabs) keeps the spelling, because that
+// lexicon is what pronounces them. The browser voices have no lexicon.
+export function spokenText(text, voice) {
+  const clean = stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+  if (voiceHasPronunciationLexicon(voice)) return clean
+  return pronounce(clean)
 }
 
 // Chrome drops an utterance that runs much past 15 seconds. Stay under that,
 // and only break where a sentence already ends.
 const CHUNK_CHARS = 180
 
-export function speechChunks(text) {
-  const clean = spokenText(text)
+export function speechChunks(text, voice) {
+  const clean = spokenText(text, voice)
   if (!clean) return []
   if (clean.length <= CHUNK_CHARS) return [clean]
   const sentences = clean.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [clean]
@@ -195,7 +203,6 @@ export function speak(text, { muted = false } = {}) {
     let startTimer = 0
     let safetyTimer = 0
     let safetyTries = 0
-    const totalChars = chunks.reduce((n, chunk) => n + chunk.length, 0)
     const finish = (status) => {
       if (settled) return
       settled = true
@@ -217,8 +224,10 @@ export function speak(text, { muted = false } = {}) {
     }
     const queue = (voice) => {
       if (my !== token) { finish('interrupted'); return }
-      const last = chunks.length - 1
-      chunks.forEach((chunk, index) => {
+      const lines = speechChunks(text, voice)
+      const totalChars = lines.reduce((n, chunk) => n + chunk.length, 0)
+      const last = lines.length - 1
+      lines.forEach((chunk, index) => {
         const utter = new SpeechSynthesisUtterance(chunk)
         utter.lang = 'en-US'
         utter.rate = 1
