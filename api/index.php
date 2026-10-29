@@ -173,6 +173,8 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
     $students = [];
     $sizeBy = [];
     $metBy = [];
+    $minQuotaBy = [];
+    $minDoneBy = [];
     $minQuota = 0;
     $minDone = 0;
     foreach (($quotaRows[$date] ?? []) as $classId => $usersByKey) {
@@ -181,8 +183,12 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
             $q = (int) ($byKey['Kapitelach'] ?? 0);
             $d = (int) ($doneRows[$date][$classId][$uid]['Kapitelach'] ?? 0);
             $isMet = $q > 0 && $d >= $q;
-            $minQuota += (int) ($byKey['Minutes'] ?? 0);
-            $minDone += (int) ($doneRows[$date][$classId][$uid]['Minutes'] ?? 0);
+            $mq = (int) ($byKey['Minutes'] ?? 0);
+            $md = (int) ($doneRows[$date][$classId][$uid]['Minutes'] ?? 0);
+            $minQuota += $mq;
+            $minDone += $md;
+            $minQuotaBy[$classId] = ($minQuotaBy[$classId] ?? 0) + $mq;
+            $minDoneBy[$classId] = ($minDoneBy[$classId] ?? 0) + $md;
             $sizeBy[$classId] = ($sizeBy[$classId] ?? 0) + 1;
             $metBy[$classId] = ($metBy[$classId] ?? 0) + ($isMet ? 1 : 0);
             $students[] = [
@@ -204,6 +210,8 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
         $said = (int) ($classDone[$classId] ?? 0);
         $size = (int) ($sizeBy[$classId] ?? 0);
         $met = (int) ($metBy[$classId] ?? 0);
+        $minQ = (int) ($minQuotaBy[$classId] ?? 0);
+        $minD = (int) ($minDoneBy[$classId] ?? 0);
         $classes[] = [
             'id' => (int) $classId,
             'name' => (string) $m['grade'],
@@ -215,6 +223,9 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
             'pct' => wwtcPct($said, $quota),
             'met' => $met,
             'pctMet' => $size > 0 ? (int) round($met / $size * 100) : 0,
+            'minutesSaid' => $minD,
+            'minutesQuota' => $minQ,
+            'minutesPct' => wwtcPct($minD, $minQ),
             'perfect' => $size > 0 && $met === $size,
         ];
     }
