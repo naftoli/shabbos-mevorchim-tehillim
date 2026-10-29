@@ -8,7 +8,7 @@
 
 import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
 
-export const BOT_NAME = 'General 613'
+export const BOT_NAME = 'Your Virtual Commander'
 
 // Open the panel once each time a soldier signs in. A later page change keeps
 // the same kid id, so a panel they closed stays closed. Logout clears it.
@@ -94,7 +94,7 @@ export function ladderMenu(grade, month) {
 
 function hello(ctx) {
   const name = ctx?.firstName || 'friend'
-  return `Hi ${name}. I'm ${BOT_NAME}, your virtual commander.`
+  return `Hi ${name}, I'm your virtual commander.`
 }
 
 function choicesParagraph(easy, hard) {

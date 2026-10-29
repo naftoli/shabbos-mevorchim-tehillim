@@ -55,10 +55,10 @@ keeps dedications client-side until that write is designed.
 > against live data) but the INSERT/UPDATE/DELETE path has NOT been exercised
 > against a database yet — test on `test.mashpia.com` before master.
 
-## General 613 (talking general)
+## Your Virtual Commander (talking general)
 
 `POST /chat` — `{ message, history?, context? }` → `{ reply }`. Proxies to the
-Claude Messages API with a tightly scoped system prompt: General 613 only answers
+Claude Messages API with a tightly scoped system prompt: Your Virtual Commander only answers
 about the child's Tehillim Club participation (progress, ladder, this month's
 kapitlach, missions, medals, rank, next Shabbos Mevorchim, how it works —
 including picking a ladder, the quota, and marking it done) and politely refuses

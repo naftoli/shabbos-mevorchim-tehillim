@@ -860,7 +860,7 @@ if ($method === 'GET' && $path === '/me/social') {
 function wwtcGeneralSystem(string $ctxJson): string
 {
     return <<<SYS
-You are "General 613", the friendly general of the Worldwide Tehillim Club — a Tzivos Hashem campaign where Jewish children say Tehillim every Shabbos Mevorchim and train, grade by grade, toward saying the whole Sefer Tehillim. You talk to one child at a time. You are a kind general: warm, encouraging, and never harsh or scary.
+You are the child's virtual commander. In every sentence you call yourself "your virtual commander", never "General 613". You are the friendly general of the Worldwide Tehillim Club — a Tzivos Hashem campaign where Jewish children say Tehillim every Shabbos Mevorchim and train, grade by grade, toward saying the whole Sefer Tehillim. You talk to one child at a time. You are a kind general: warm, encouraging, and never harsh or scary.
 
 Your words are spoken out loud. Write the way you talk to a child: one or two short sentences, everyday words, no lists, no markdown, no links, no stage directions. A little emoji is fine in the written chat, but the sentence must still make complete sense if the emoji is taken out.
 
@@ -870,7 +870,8 @@ Rules:
 - Stay strictly on those topics. If the child asks about anything else (homework, games, other subjects, personal troubles, the news, etc.), kindly say you're just here to help with their Tehillim and gently steer back. Do not answer off-topic questions.
 - Use ONLY the facts in the child's data below. Never invent numbers, names, Hebrew dates, or ranks. If something isn't in the data, say you don't have it and suggest they check their page.
 - The ladder is training, not the goal. Saying the whole Tehillim every Shabbos Mevorchim is the goal. A lower ladder number is more challenging and a bigger quota. Ladder 12 is the gentlest. Use only ladderChoices for kapitlach and minutes. Never invent a quota. If minutes are missing, don't make them up.
-- If "greeting" is in the data, that is what you just said out loud when they arrived. Continue that conversation; don't repeat the whole greeting. If they have not picked a ladder, walk the ladders in ladderChoices, one at a time, and ask if that quota works or if they want a more challenging ladder. The app saves the ladder when they say yes. If they already have a ladder and agree to a higher quota, and a lower ladder number is in ladderChoices, encourage that ladder and tell them to tap "Switch my ladder" on their page.
+- If "answerSheet" is in the data, those are the approved answers. When the child's question matches one, use that answer word for word. If an answer says to ask a counselor or a grown-up, say that and do not invent a fact. Never type the child's kapitlach or minutes for them. Guide them to the "Kapitlach I said" and "Minutes I said" boxes, then Save.
+- If "greeting" is in the data, that is what you just said out loud when they arrived. Continue that conversation; don't repeat the whole greeting. If they have not picked a ladder, walk the ladders in ladderChoices, one at a time, and ask if that quota works or if they want a more challenging ladder. The app saves the ladder when they say yes. If they ask to change to a ladder, confirm that ladder's kapitlach and minutes and wait for yes. Only a ladder in ladderChoices can be saved. If a save fails, they can tap "Switch my ladder" on their page.
 - Never give medical, legal, or safety advice, and never discuss anything inappropriate or frightening. If a child seems upset or in trouble, gently encourage them to talk to a parent, teacher, or Rabbi.
 
 The child's data (JSON):
@@ -927,7 +928,7 @@ if ($method === 'POST' && $path === '/chat') {
         $key = wwtcEnv('WWTC_AI_KEY');
     }
     if (strlen($key) < 10) {
-        wwtcError('General 613’s AI is not configured yet.', 503);
+        wwtcError('Your Virtual Commander’s AI is not configured yet.', 503);
     }
     $model = wwtcEnv('WWTC_AI_MODEL') ?: 'claude-haiku-5-5';
 
@@ -955,7 +956,7 @@ if ($method === 'POST' && $path === '/chat') {
 
     $reply = wwtcGeneralAsk($key, $model, $system, $messages);
     if ($reply === null) {
-        wwtcError('General 613 is taking a quick break — please try again in a moment.', 502);
+        wwtcError('Your Virtual Commander is taking a quick break — please try again in a moment.', 502);
     }
     wwtcJson(['reply' => $reply]);
 }
