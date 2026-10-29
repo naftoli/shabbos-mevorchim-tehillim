@@ -113,3 +113,29 @@ The current Shabbos-Mevorchim date and the English month spellings (matching the
 SPA's `ladders.js`) are computed in `wwtcMonthDates()` / `wwtcCurrentDate()`.
 Note a leap year (like 5787) splits Adar into `Adar I` / `Adar II`, which the
 SPA's 12-month list does not yet model.
+
+## Caching the heavy aggregates
+
+The report engine rebuilds the whole army (~9k soldiers) for `/stats`,
+`/schools`, `/me/social` and the reports — ~60s each. Its built-in cache is
+Redis-backed and Redis is not enabled on this host (`$global_redis_enabled` is
+never set), so every request recomputed from scratch, and the SPA's 30s poll
+kept re-triggering it.
+
+`bootstrap.php` adds a small Redis-free file cache (`wwtcCached()`): the
+expensive, deterministic-per-SM-date building blocks — `wwtcArmyAggregates()`,
+`wwtcSchoolData()`, `wwtcCompletionCounts()`, and the `/running-totals`
+response — are stored on disk and served **stale-while-revalidate**. A visitor
+always gets an instant answer (a cached copy, at most TTL seconds stale); when a
+copy is stale the slow rebuild runs in the background after the response is
+flushed (`fastcgi_finish_request`), guarded by a per-key lock so concurrent
+requests never stampede. Only the signed-in soldier's own figures
+(`/me/progress`) stay uncached, so a kid's own marks always show immediately;
+the nationwide/aggregate numbers may lag up to the TTL.
+
+- Cache dir: `logs/wwtc-cache/` (outside the web root). Delete it to flush.
+- TTL: `WWTC_CACHE_TTL` seconds (default 120, floor 10).
+- Cold start (a brand-new SM month, or a flushed cache) still costs one ~60s
+  rebuild for the first request of each key. `scripts/warm-cache.sh` pre-warms
+  the public endpoints; run it from cron if that first hit matters, e.g.
+  `*/5 * * * * WWTC_BASE_URL=https://mashpia.com/shabbos-mevorchim-tehillim/api /path/to/scripts/warm-cache.sh`.

@@ -112,6 +112,156 @@ function wwtcEnv(string $name, string $default = ''): string
     return (string) $value;
 }
 
+// ---- file-based report cache -----------------------------------------------
+// The ShabbosMevorchim report engine rebuilds the whole army (~9k soldiers) for
+// /stats, /schools, /me/social, the reports, etc. — ~60s each. Its own cache is
+// Redis-backed and Redis is not enabled here, so every request recomputed. This
+// is a small, Redis-free stand-in: results are deterministic for a given SM date
+// (they change only as kids mark), so we keep each on disk and serve it with
+// stale-while-revalidate. A visitor always gets an instant (possibly up-to-TTL-
+// stale) answer; the slow rebuild runs in the background after the response is
+// flushed. Aggregate/nationwide numbers lagging a minute or two is fine; the
+// signed-in kid's own figures come from the uncached /me/progress.
+
+$GLOBALS['wwtcDeferred'] = $GLOBALS['wwtcDeferred'] ?? [];
+
+function wwtcCacheTtl(): int
+{
+    return max(10, (int) (wwtcEnv('WWTC_CACHE_TTL') ?: 120));
+}
+
+function wwtcCacheDir(): string
+{
+    $base = defined('MASHPIA_LOG_DIR') ? MASHPIA_LOG_DIR : sys_get_temp_dir();
+    $dir = $base . '/wwtc-cache';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    return $dir;
+}
+
+function wwtcCacheFile(string $key): string
+{
+    return wwtcCacheDir() . '/' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $key) . '.json';
+}
+
+function wwtcCacheRead(string $file): ?array
+{
+    $raw = @file_get_contents($file);
+    if ($raw === false) {
+        return null;
+    }
+    $decoded = json_decode($raw, true);
+    return (is_array($decoded) && array_key_exists('data', $decoded)) ? $decoded : null;
+}
+
+/** Compute $producer, write it to $file atomically, return it. */
+function wwtcCacheWrite(string $file, callable $producer)
+{
+    $data = $producer();
+    $tmp = $file . '.' . getmypid() . '.tmp';
+    if (@file_put_contents($tmp, json_encode(['at' => time(), 'data' => $data])) !== false) {
+        @rename($tmp, $file); // atomic replace so readers never see a half-written file
+    } else {
+        @unlink($tmp);
+    }
+    return $data;
+}
+
+/** Non-blocking refresh: whoever gets the lock rebuilds; everyone else skips. */
+function wwtcTryRefresh(string $file, callable $producer)
+{
+    $lock = @fopen($file . '.lock', 'c');
+    if (!$lock) {
+        return null;
+    }
+    if (!flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        return null; // another worker is already rebuilding this key
+    }
+    try {
+        return wwtcCacheWrite($file, $producer);
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+/** Cold miss: serialize concurrent first-computes so the army is built once. */
+function wwtcColdCompute(string $file, callable $producer)
+{
+    $lock = @fopen($file . '.lock', 'c');
+    if (!$lock) {
+        return $producer(); // can't lock (unwritable dir) — compute uncached
+    }
+    flock($lock, LOCK_EX); // block: let the first request build it, others wait
+    try {
+        $entry = wwtcCacheRead($file); // another worker may have just filled it
+        if ($entry !== null && (time() - (int) ($entry['at'] ?? 0)) <= wwtcCacheTtl()) {
+            return $entry['data'];
+        }
+        return wwtcCacheWrite($file, $producer);
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+/**
+ * Cache $producer's result under $key with stale-while-revalidate semantics.
+ * Fresh (<= TTL): return it. Stale: return it now and queue a background rebuild
+ * (or, where the response can't be flushed early, rebuild inline). Cold: build
+ * once, under a lock. $producer must return a JSON-serializable array.
+ */
+function wwtcCached(string $key, callable $producer)
+{
+    $file = wwtcCacheFile($key);
+    $entry = wwtcCacheRead($file);
+
+    if ($entry !== null) {
+        $age = time() - (int) ($entry['at'] ?? 0);
+        if ($age <= wwtcCacheTtl()) {
+            return $entry['data']; // fresh
+        }
+        // Stale. Serve the stale copy; refresh in the background if we can flush
+        // the response first, otherwise refresh inline (falling back to stale).
+        if (function_exists('fastcgi_finish_request')) {
+            $GLOBALS['wwtcDeferred'][] = static function () use ($file, $producer) {
+                wwtcTryRefresh($file, $producer);
+            };
+            return $entry['data'];
+        }
+        $fresh = wwtcTryRefresh($file, $producer);
+        return $fresh === null ? $entry['data'] : $fresh;
+    }
+
+    return wwtcColdCompute($file, $producer);
+}
+
+/**
+ * The army-wide aggregates behind /stats, /schools and /reports/army — the
+ * setArmyResults()+setASR() pass, which is the ~60s cost. Deterministic per SM
+ * date, so cached. Returns plain arrays (JSON-safe) read straight off the report.
+ */
+function wwtcArmyAggregates(?int $date = null): array
+{
+    $date = $date ?? wwtcCurrentDate();
+    return wwtcCached("army_aggregates.$date", static function () use ($date) {
+        $sm = wwtcReport($date);
+        $sm->setArmyResults();
+        $sm->setASR($date);
+        return [
+            'schools'  => $sm->getSchools(),
+            'army'     => $sm->getArmyResults(),
+            'armyDone' => $sm->getArmyDoneResults(),
+            'kapGoal'  => $sm->getArmySchoolsResults()['Kapitelach'] ?? [],
+            'kapDone'  => $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [],
+            'minGoal'  => $sm->getArmySchoolsResults()['Minutes'] ?? [],
+            'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
+        ];
+    });
+}
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -143,7 +293,32 @@ function wwtcJson($data, int $status = 200): void
         exit;
     }
     echo $json;
+    wwtcRunDeferred();
     exit;
+}
+
+/**
+ * Run any background work queued during this request (stale cache refreshes).
+ * Under FastCGI we flush the response to the client first, so the refresh of a
+ * slow report never makes the visitor wait — they already have the stale copy.
+ */
+function wwtcRunDeferred(): void
+{
+    $tasks = $GLOBALS['wwtcDeferred'] ?? [];
+    $GLOBALS['wwtcDeferred'] = [];
+    if (!$tasks) {
+        return;
+    }
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    }
+    foreach ($tasks as $task) {
+        try {
+            $task();
+        } catch (\Throwable $e) {
+            error_log('WWTC cache refresh failed: ' . $e->getMessage());
+        }
+    }
 }
 
 function wwtcError(string $message, int $status = 400, array $details = []): void
@@ -497,6 +672,7 @@ function wwtcCompletionCounts(int $date): array
         return $cache[$date];
     }
 
+    return $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
     $met = $MASHPIA_DB->prepare(
         'SELECT u.school_id, u.class_id, COUNT(*) n
            FROM date_tasks_mission_marks mm
@@ -531,5 +707,6 @@ function wwtcCompletionCounts(int $date): array
         $out['sizeByClass'][$sid][$cid] = $n;
         $out['sizeBySchool'][$sid] = ($out['sizeBySchool'][$sid] ?? 0) + $n;
     }
-    return $cache[$date] = $out;
+    return $out;
+    });
 }

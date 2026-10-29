@@ -119,19 +119,21 @@ function wwtcSchoolLogos(): array
 function wwtcNationwideSchools(?int $date = null): array
 {
     $date = $date ?? wwtcCurrentDate();
-    $sm = wwtcReport($date);
-    $sm->setArmyResults();
-    $sm->setASR($date);
-    $names = $sm->getSchools();
-    $kapGoal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];
-    $kapDone = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
-    $minGoal = $sm->getArmySchoolsResults()['Minutes'] ?? [];
-    $minDone = $sm->getArmySchoolsDoneResults()['Minutes'] ?? [];
+    $agg = wwtcArmyAggregates($date);
+    $names = $agg['schools'];
     $counts = wwtcCompletionCounts($date);
 
     $rows = [];
     foreach ($names as $id => $name) {
-        $rows[] = wwtcSchoolRow((int) $id, (string) $name, $kapGoal, $kapDone, $minGoal, $minDone, $counts);
+        $rows[] = wwtcSchoolRow(
+            (int) $id,
+            (string) $name,
+            $agg['kapGoal'],
+            $agg['kapDone'],
+            $agg['minGoal'],
+            $agg['minDone'],
+            $counts
+        );
     }
     usort($rows, 'wwtcCmpSchoolRace');
     return $rows;
@@ -150,6 +152,7 @@ function wwtcNationwideSchools(?int $date = null): array
 function wwtcSchoolData(int $schoolId, ?int $date = null): array
 {
     $date = $date ?? wwtcCurrentDate();
+    return wwtcCached("school_data.$schoolId.$date", static function () use ($schoolId, $date) {
     $report = wwtcReport($date);
     $report->setSchool($schoolId);
     $report->setSchoolResults($schoolId);
@@ -221,6 +224,7 @@ function wwtcSchoolData(int $schoolId, ?int $date = null): array
         'minutes' => $minDone,
         'minutesQuota' => $minQuota,
     ];
+    });
 }
 
 /**
@@ -413,18 +417,14 @@ if ($method === 'GET' && $path === '/campaign') {
 
 if ($method === 'GET' && $path === '/stats') {
     $current = wwtcCurrentDate();
-    $report = wwtcReport($current);
-    $report->setArmyResults();
-    $army = $report->getArmyResults();          // [Kapitelach][jd] => quota
-    $armyDone = $report->getArmyDoneResults();   // [Kapitelach][jd] => done
-    $quota = (int) ($army['Kapitelach'][$current] ?? 0);
-    $done = (int) ($armyDone['Kapitelach'][$current] ?? 0);
+    $agg = wwtcArmyAggregates($current);
+    $quota = (int) ($agg['army']['Kapitelach'][$current] ?? 0);
+    $done = (int) ($agg['armyDone']['Kapitelach'][$current] ?? 0);
 
-    // Minutes: setArmyResults() covers Kapitelach only, so read the Minutes task
-    // off setASR() — the same per-school figures the summary's Minutes chart uses.
-    $report->setASR($current);
-    $minutesQuota = (int) array_sum($report->getArmySchoolsResults()['Minutes'] ?? []);
-    $minutes = (int) array_sum($report->getArmySchoolsDoneResults()['Minutes'] ?? []);
+    // Minutes: the army result covers Kapitelach only, so the Minutes totals come
+    // from the per-school figures (setASR) — the same the summary's Minutes chart uses.
+    $minutesQuota = (int) array_sum($agg['minGoal']);
+    $minutes = (int) array_sum($agg['minDone']);
 
     // Counts, with the same roster filters the army query uses.
     $soldiers = (int) $MASHPIA_DB->query(
@@ -435,7 +435,7 @@ if ($method === 'GET' && $path === '/stats') {
            JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
           WHERE u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE
     )->fetchColumn();
-    $schools = count($report->getSchools()); // setASR()'s school roster
+    $schools = count($agg['schools']); // setASR()'s school roster
     $classes = (int) $MASHPIA_DB->query(
         'SELECT COUNT(DISTINCT c.class_id)
            FROM classes c
@@ -481,8 +481,9 @@ if ($method === 'GET' && $path === '/stats') {
 // this year's live total (so post-backup marks still count), plus optional
 // WWTC_ALLTIME_BASE for any pre-backup history HQ wants to include.
 if ($method === 'GET' && $path === '/running-totals') {
-    global $MASHPIA_DB;
     $current = wwtcCurrentDate();
+    wwtcJson(wwtcCached("running_totals.$current", static function () use ($current) {
+    global $MASHPIA_DB;
     $thisMonth = 0;
     $thisYear = 0;
     $elapsedJds = [];
@@ -509,11 +510,12 @@ if ($method === 'GET' && $path === '/running-totals') {
     $base = (int) (wwtcEnv('WWTC_ALLTIME_BASE') ?: 0);
     $allTime = $priorYears + $thisYear + $base;
 
-    wwtcJson([
+    return [
         'thisMonth' => $thisMonth,
         'thisYear' => $thisYear,
         'allTime' => $allTime,
-    ]);
+    ];
+    }));
 }
 
 // ---- nationwide school list ------------------------------------------------
@@ -536,16 +538,14 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
     // Header totals from the same source as the /schools list (so they match);
     // the class breakdown from the per-student report.
     $current = wwtcCurrentDate();
-    $sm = wwtcReport($current);
-    $sm->setArmyResults();
-    $sm->setASR($current);
+    $agg = wwtcArmyAggregates($current);
     $row = wwtcSchoolRow(
         $id,
         (string) $names[$id],
-        $sm->getArmySchoolsResults()['Kapitelach'] ?? [],
-        $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [],
-        $sm->getArmySchoolsResults()['Minutes'] ?? [],
-        $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
+        $agg['kapGoal'],
+        $agg['kapDone'],
+        $agg['minGoal'],
+        $agg['minDone'],
         wwtcCompletionCounts($current)
     );
     $data = wwtcSchoolData($id);
@@ -661,12 +661,10 @@ if ($method === 'GET' && $path === '/reports/army') {
     // per school, Goal / Accomplished, from setASR() — identical to
     // shabbos_mevorchim_summary.php — plus registered + % met (mission marks).
     $date = wwtcDateForMonthIdx($_GET['monthIdx'] ?? null);
-    $sm = wwtcReport($date);
-    $sm->setArmyResults();
-    $sm->setASR($date);
-    $names = $sm->getSchools();
-    $goal = $sm->getArmySchoolsResults()['Kapitelach'] ?? [];
-    $done = $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [];
+    $agg = wwtcArmyAggregates($date);
+    $names = $agg['schools'];
+    $goal = $agg['kapGoal'];
+    $done = $agg['kapDone'];
     $counts = wwtcCompletionCounts($date);
 
     // Participation (soldiers with any kapitlach recorded, per school) is distinct
