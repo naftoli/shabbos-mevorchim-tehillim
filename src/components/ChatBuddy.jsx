@@ -5,9 +5,13 @@ import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
+import { IS_DEMO } from '@/lib/liveMode.js'
 import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerQuestion, answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
+import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
+import { decideLadderChange, transcriptOffersLadder } from '@/lib/ladderTool.js'
+import { connectRealtimeCall } from '@/lib/realtimeCall.js'
 import { asset } from '@/lib/asset.js'
 
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
@@ -263,6 +267,9 @@ export default function ChatBuddy() {
   const [listening, setListening] = useState(false)
   const [voiceOn, setVoiceOn] = useState(false)
   const [speaking, setSpeaking] = useState(false)
+  const [engine, setEngine] = useState('scripted')
+  const engineRef = useRef('scripted')
+  const liveCallRef = useRef(null)
   const [micNote, setMicNote] = useState('')
   const [focusLadder, setFocusLadder] = useState(null)
   // Keep the first spoken greeting in the thread after a ladder is saved,
@@ -281,6 +288,7 @@ export default function ChatBuddy() {
     setMicNote('')
     setFocusLadder(null)
     setPinnedGreeting(null)
+    setEngine('scripted')
   }
   const scrollRef = useRef(null)
   const convoRef = useRef([])
@@ -304,6 +312,12 @@ export default function ChatBuddy() {
   const listenAfterRef = useRef(() => {})
   const talkRef = useRef(() => Promise.resolve('unavailable'))
   const lastSpokenRef = useRef('')
+  const bootGen = useRef(0)
+  const lastUserRef = useRef('')
+  const offerSpokenRef = useRef(false)
+  const streamIdRef = useRef(null)
+  const skipAssistantRef = useRef(false)
+  const liveHandlersRef = useRef(() => ({}))
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social } = useLiveData(
@@ -361,6 +375,11 @@ export default function ChatBuddy() {
   function setVoice(on) {
     voiceOnRef.current = on
     setVoiceOn(on)
+  }
+
+  function setEngineMode(next) {
+    engineRef.current = next
+    setEngine(next)
   }
 
   function stopListening() {
@@ -517,6 +536,133 @@ export default function ChatBuddy() {
     }
   })
 
+  function liveHandlers() {
+    return {
+      isEcho: (text) => looksLikeEcho(text, speakingTextRef.current) || looksLikeEcho(text, lastSpokenRef.current),
+      offersLadder: transcriptOffersLadder,
+      planText: turnPlan,
+      onListening: (on) => setListening(on),
+      onSpeaking: (on) => {
+        speakingRef.current = on
+        setSpeaking(on)
+        if (!on) setTyping(false)
+      },
+      onQuiet: () => {
+        rememberMute(true)
+        liveCallRef.current?.setMuted(true)
+      },
+      onUnmute: () => {
+        rememberMute(false)
+        liveCallRef.current?.setMuted(false)
+      },
+      onUserText: (text) => {
+        const clean = String(text || '').trim()
+        if (!clean) return
+        lastUserRef.current = clean
+        const command = voiceCommand(clean)
+        if (command === 'stop') {
+          rememberMute(true)
+          liveCallRef.current?.setMuted(true)
+        }
+        if (command === 'unmute') {
+          rememberMute(false)
+          liveCallRef.current?.setMuted(false)
+        }
+        setMessages((m) => [...m, { id: `k${(msgSeq.current += 1)}`, from: 'kid', text: clean }])
+        setTyping(true)
+      },
+      onAssistantDelta: (delta) => {
+        if (skipAssistantRef.current || !delta) return
+        setTyping(false)
+        setSpeaking(true)
+        setMessages((m) => {
+          const id = streamIdRef.current
+          if (id && m.some((row) => row.id === id)) {
+            return m.map((row) => (row.id === id ? { ...row, text: `${row.text}${delta}` } : row))
+          }
+          const nextId = `b${(msgSeq.current += 1)}`
+          streamIdRef.current = nextId
+          return [...m, { id: nextId, from: 'bot', text: delta }]
+        })
+      },
+      onAssistantDone: (text) => {
+        const clean = String(text || '').trim()
+        if (clean) lastSpokenRef.current = clean
+        if (transcriptOffersLadder(clean)) offerSpokenRef.current = true
+        setTyping(false)
+        setSpeaking(false)
+        if (skipAssistantRef.current) {
+          skipAssistantRef.current = false
+          streamIdRef.current = null
+          return
+        }
+        if (!clean) return
+        setMessages((m) => {
+          const id = streamIdRef.current
+          streamIdRef.current = null
+          if (id && m.some((row) => row.id === id)) {
+            return m.map((row) => (row.id === id ? { ...row, text: clean } : row))
+          }
+          return [...m, { id: `b${(msgSeq.current += 1)}`, from: 'bot', text: clean }]
+        })
+      },
+      onTool: async (name, args, info) => {
+        if (name === 'get_my_progress') return JSON.stringify(aiContext(ctxRef.current))
+        if (name !== 'change_ladder') return 'That tool is not available. Do not invent a result.'
+        const choices = ctxRef.current?.ladderChoices || []
+        const decision = decideLadderChange({
+          ladder: args?.ladder,
+          allowed: choices.map((row) => row.ladder),
+          lastUserText: info?.lastUser || lastUserRef.current,
+          offerSpoken: !!(info?.offerSpoken || offerSpokenRef.current),
+        })
+        if (!decision.apply) return decision.output
+        const saved = await changeLadder(decision.ladder)
+        if (!saved) {
+          return `Could not save. Tell the child: I couldn't save ladder ${decision.ladder} yet. Tap Switch my ladder on your page and choose it there.`
+        }
+        offerSpokenRef.current = false
+        return `Saved. Tell the child exactly: ${ladderConfirmedReply(decision.ladder)}`
+      },
+      onDown: () => {
+        if (engineRef.current !== 'live') return
+        liveCallRef.current = null
+        setEngineMode('scripted')
+        armCall()
+      },
+    }
+  }
+
+  useEffect(() => {
+    liveHandlersRef.current = liveHandlers
+  })
+
+  function sendLive(text) {
+    const command = voiceCommand(text)
+    lastUserRef.current = text
+    setMessages((m) => [...m, { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }])
+    if (command === 'stop' || topicDecision(text) === 'quiet') {
+      rememberMute(true)
+      liveCallRef.current?.setMuted(true)
+      setTyping(false)
+      return
+    }
+    if (command === 'unmute') {
+      rememberMute(false)
+      liveCallRef.current?.setMuted(false)
+      setTyping(true)
+      liveCallRef.current?.sayExact("I'm back!")
+      return
+    }
+    if (command === 'repeat') {
+      setTyping(true)
+      liveCallRef.current?.sayExact(lastSpokenRef.current || greetingRef.current || 'I am right here.')
+      return
+    }
+    setTyping(true)
+    liveCallRef.current.sendText(text)
+  }
+
   async function send(raw) {
     const text = String(raw ?? inputRef.current).trim()
     if (!text || !ctxRef.current) return
@@ -524,6 +670,10 @@ export default function ChatBuddy() {
     setInput('')
     setMicNote('')
     stopListening()
+    if (liveCallRef.current && engineRef.current === 'live') {
+      sendLive(text)
+      return
+    }
     const myTurn = ++turnRef.current
     const kidMsg = { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }
     setMessages((m) => [...m, kidMsg])
@@ -584,12 +734,14 @@ export default function ChatBuddy() {
         reply = stepped?.reply
         pendingLadderRef.current = stepped?.confirm ? stepped.pickLadder : null
       } else {
-        const stepped = ladderStepReply(text, snapshot)
-        if (stepped) {
-          reply = stepped.reply
-          pendingLadderRef.current = stepped.confirm ? stepped.pickLadder : null
-        } else {
-          const known = answerQuestion(text, snapshot)
+          const stepped = ladderStepReply(text, snapshot)
+          if (stepped) {
+            reply = stepped.reply
+            pendingLadderRef.current = stepped.confirm ? stepped.pickLadder : null
+          } else if (topicDecision(text) === 'refuse') {
+            reply = OFF_TOPIC_REPLY
+          } else {
+            const known = answerQuestion(text, snapshot)
           if (known) {
             reply = known.reply
           } else {
@@ -645,6 +797,7 @@ export default function ChatBuddy() {
       const next = !was
       mutedRef.current = next
       try { localStorage.setItem(MUTE_KEY, next ? '1' : '0') } catch { /* private mode */ }
+      liveCallRef.current?.setMuted(next)
       if (next) {
         pendingSpeech.current = null
         stopSpeaking()
@@ -657,6 +810,7 @@ export default function ChatBuddy() {
     setOpen(false)
     openRef.current = false
     callModeRef.current = false
+    liveCallRef.current?.setMicOpen(false)
     endVoice()
     stopSpeaking()
   }
@@ -664,6 +818,11 @@ export default function ChatBuddy() {
   function openPanel() {
     openRef.current = true
     setOpen(true)
+    if (liveCallRef.current) {
+      liveCallRef.current.setMicOpen(true)
+      liveCallRef.current.unlockAudio()
+      return
+    }
     window.setTimeout(() => armCall(), 200)
   }
 
@@ -676,9 +835,14 @@ export default function ChatBuddy() {
   // usually starts right away; if the browser blocks it, the next tap or key says it.
   useEffect(() => {
     if (!kid) {
+      bootGen.current += 1
+      liveCallRef.current?.close()
+      liveCallRef.current = null
+      engineRef.current = 'scripted'
       greetedId.current = null
       pendingSpeech.current = null
       pendingLadderRef.current = null
+      offerSpokenRef.current = false
       callModeRef.current = false
       voiceOnRef.current = false
       listenHandle.current?.stop()
@@ -689,23 +853,57 @@ export default function ChatBuddy() {
     }
     if (!greeting) return
     if (greetedId.current === kid.id) return
+    liveCallRef.current?.close()
+    liveCallRef.current = null
+    engineRef.current = 'scripted'
     const id = kid.id
     const line = greeting
+    const gen = ++bootGen.current
     const timer = window.setTimeout(() => {
-      if (greetedId.current === id) return
+      if (greetedId.current === id || gen !== bootGen.current) return
       greetedId.current = id
       if (turnRef.current > 0) return
-      void talkRef.current(line).then((status) => {
+      void (async () => {
+        let live = null
+        if (!IS_DEMO) {
+          setEngineMode('pending')
+          try {
+            live = await connectRealtimeCall({
+              demo: false,
+              context: aiContext(ctxRef.current),
+              handlers: liveHandlersRef.current(),
+            })
+          } catch {
+            live = null
+          }
+        }
+        if (gen !== bootGen.current) {
+          live?.close()
+          return
+        }
+        if (live) {
+          liveCallRef.current = live
+          setEngineMode('live')
+          stopListening()
+          callModeRef.current = false
+          skipAssistantRef.current = true
+          live.greet(line)
+          return
+        }
+        setEngineMode('scripted')
+        const status = await talkRef.current(line)
         if (status === 'blocked') pendingSpeech.current = line
         if (status === 'interrupted') return
         listenAfterRef.current()
-      })
+      })()
     }, 60)
     return () => window.clearTimeout(timer)
   }, [kid, greeting, say])
 
   useEffect(() => {
     const onGesture = () => {
+      liveCallRef.current?.unlockAudio()
+      if (engineRef.current === 'live') return
       if (canSpeak()) {
         try {
           window.speechSynthesis.resume()
@@ -732,6 +930,7 @@ export default function ChatBuddy() {
   useEffect(() => () => {
     listenHandle.current?.stop()
     stopSpeaking()
+    liveCallRef.current?.close()
   }, [])
 
   if (!kid) return null
@@ -744,7 +943,11 @@ export default function ChatBuddy() {
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
   const thread = shownGreeting ? [{ id: 'w', from: 'bot', text: shownGreeting }, ...messages] : messages
-  const statusLine = speaking ? 'Speaking…' : listening ? 'Listening…' : voiceOn ? 'On the call' : 'Your Tehillim general'
+  const statusLine = engine === 'pending'
+    ? 'Connecting…'
+    : engine === 'live'
+      ? (speaking ? 'Speaking…' : listening ? 'Listening…' : 'On the line')
+      : speaking ? 'Speaking…' : listening ? 'Listening…' : voiceOn ? 'On the call' : 'Your Tehillim general'
 
   return (
     <>
@@ -842,7 +1045,12 @@ export default function ChatBuddy() {
             }}
             className="flex items-center gap-2 border-t border-line bg-card px-3 py-2.5"
           >
-            {micOk ? (
+            {engine === 'live' ? (
+              <span className="grid h-9 w-9 flex-none place-items-center text-navy" aria-label="Microphone open" title="Microphone open">
+                <MicIcon />
+              </span>
+            ) : null}
+            {micOk && engine !== 'live' && engine !== 'pending' ? (
               <button
                 type="button"
                 onClick={toggleMic}
