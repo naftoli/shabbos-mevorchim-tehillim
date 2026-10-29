@@ -20,6 +20,10 @@ const memoryTokens = { kid: null, admin: null }
 const listeners = new Set()
 let timer = null
 
+export function getKidToken() {
+  return readToken('kid')
+}
+
 function readToken(role) {
   try {
     const saved = JSON.parse(localStorage.getItem(TOKEN_KEYS[role]) || 'null')

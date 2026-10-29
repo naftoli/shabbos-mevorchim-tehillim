@@ -78,6 +78,63 @@ server-side only, never shipped to the browser. Optional `WWTC_AI_MODEL`
 SPA uses the scripted helper. Note: this bills per message and is used by
 children — consider adding rate-limiting/abuse protection before heavy use.
 
+## Your Virtual Commander — realtime phone call
+
+`POST /realtime-session` turns the commander into a real speech-to-speech call
+(OpenAI Realtime over WebRTC, default model `gpt-realtime-2.1`). The browser
+never sees the API key. It only receives a short-lived ephemeral token (`ek_…`,
+about 10 minutes, used only to open the call). The mic stays open, server VAD
+lets the child interrupt, and the model can call `change_ladder` (only after it
+asks out loud and the child says yes, and only a ladder that child can pick)
+and `get_my_progress`.
+
+Until this endpoint is deployed and the key is set, or on a static host with no
+PHP (the Netlify preview), the page keeps the scripted hands-free voice. A
+missing key returns **503** and does not log the soldier out.
+
+### What Naftoli does on mashpia.com
+
+1. Deploy these files with the app (the existing `/api/*` rewrite already sends
+   them through `api/index.php`):
+   - `api/realtime-session.php`
+   - `api/commander-prompt.php`
+   - `api/index.php` (the new route)
+   - `src/data/kidQuestions.js` (the question sheet the prompt reads)
+   - the built SPA
+2. Put the OpenAI key where PHP can read **`OPENAI_API_KEY`**. Do not commit it,
+   and do not put it in the JS bundle, Netlify, or any browser env.
+   - Preferred: a real environment variable on the PHP process (Apache
+     `SetEnv OPENAI_API_KEY "sk-..."` or the host's env config).
+   - The API bootstrap already loads `mashpia.com/includes/globals.php`
+     (gitignored). Either of these works there:
+
+     ```php
+     putenv('OPENAI_API_KEY=sk-...');
+     // or
+     define('OPENAI_API_KEY', 'sk-...');
+     ```
+3. Optional: `OPENAI_REALTIME_MODEL` (default `gpt-realtime-2.1`; `gpt-realtime`
+   still works) and `OPENAI_REALTIME_VOICE` (default `marin`).
+4. Check with a soldier token, not from a browser page source:
+
+   ```bash
+   curl -s -X POST -H "Authorization: Bearer $SOLDIER_TOKEN" \
+     -H 'Content-Type: application/json' \
+     -d '{"context":{"name":"Test"}}' \
+     https://mashpia.com/shabbos-mevorchim-tehillim/api/realtime-session
+   ```
+
+   A good response is `{"value":"ek_...","expires_at":...,"model":"gpt-realtime-2.1"}`.
+   It must not contain `sk-`. No token, or an admin token, is rejected.
+   No key is **503**.
+
+Rough cost on `gpt-realtime-2.1` (audio tokens, not a per-minute plan): about
+**$0.02 per minute of the child speaking** and **$0.08 per minute of the
+commander speaking**. A normal back-and-forth minute is about **5–10 cents**.
+Silence with the mic open is not billed as a full minute of speech. Input
+transcription adds a small extra. `gpt-realtime-2.1-mini` is roughly a third of
+that if you set `OPENAI_REALTIME_MODEL`.
+
 ## Setup
 
 1. **Token secret.** Set `WWTC_TOKEN_SECRET` in `mashpia.com/includes/globals.php`
