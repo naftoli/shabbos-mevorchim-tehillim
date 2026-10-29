@@ -64,7 +64,7 @@ export default function AdminDashboard() {
   const [schoolId, setSchoolId] = useState(admin?.schoolId || null)
   const activeId = isSuper ? schoolId : (admin?.schoolId ?? null)
   // reloadSchool re-reads after editing the dedication (and on the live poll).
-  const { data: school, reload: reloadSchool } = useLiveData(
+  const { data: school, error: schoolError, reload: reloadSchool } = useLiveData(
     () => (activeId ? getSchool(activeId) : Promise.resolve(null)),
     [activeId],
   )
@@ -108,8 +108,17 @@ export default function AdminDashboard() {
           </Card>
         ) : null}
 
-        {!school ? (
+        {!activeId ? (
+          // Genuinely nothing selected — only an HQ admin who hasn't picked yet.
           <Card className="p-6 text-center text-muted">Pick a school above to manage it.</Card>
+        ) : schoolError ? (
+          <Card className="p-6 text-center text-muted">
+            Couldn’t load this school.{' '}
+            <button type="button" className="underline" onClick={reloadSchool}>Try again</button>
+          </Card>
+        ) : !school ? (
+          // A school is selected (or this is a school admin) but its data is still loading.
+          <Card className="p-6 text-center text-muted">Loading {isSuper ? 'the school' : 'your school'}…</Card>
         ) : (
           <>
             {/* School snapshot */}
@@ -123,9 +132,9 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="flex gap-6 text-right">
-                  <div><p className="text-xs uppercase text-muted">Said</p><p className="font-display text-2xl font-black text-green">{fmt(school.saidMonth)}</p></div>
                   <div><p className="text-xs uppercase text-muted">Quota</p><p className="font-display text-2xl font-black text-navy">{fmt(school.quotaMonth)}</p></div>
-                  <div><p className="text-xs uppercase text-muted">Met</p><p className="font-display text-2xl font-black text-navy">{school.pctMet}%</p></div>
+                  <div><p className="text-xs uppercase text-muted">Said</p><p className="font-display text-2xl font-black text-green">{fmt(school.saidMonth)}</p></div>
+                  <div><p className="max-w-[9rem] text-xs uppercase text-muted">% of soldiers that met their quota</p><p className="font-display text-2xl font-black text-navy">{school.pctMet}%</p></div>
                 </div>
               </div>
               <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
