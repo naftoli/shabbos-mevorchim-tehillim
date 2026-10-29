@@ -121,6 +121,17 @@ export function stopSpeaking() {
   try { window.speechSynthesis.cancel() } catch { /* already idle */ }
 }
 
+// Drop the echo-cancelled mic kept open for the call. Logout uses this.
+export function releaseCallMic() {
+  if (typeof window === 'undefined') return
+  const stream = window.__wwtcCallMic
+  if (!stream) return
+  window.__wwtcCallMic = null
+  try {
+    stream.getTracks().forEach((track) => track.stop())
+  } catch { /* already stopped */ }
+}
+
 // Call inside the Sign In click, before any await. A silent utterance counts as
 // the user gesture, so Chrome will allow the real greeting once the dashboard
 // is on screen. The mic permission is asked in that same gesture.
@@ -142,8 +153,15 @@ export function armVoice() {
   try {
     const ask = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices)
     if (!ask) return
-    ask({ audio: true }).then((stream) => {
-      stream.getTracks().forEach((track) => track.stop())
+    ask({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    }).then((stream) => {
+      // Keep the cleaned-up mic open for the call so the browser can
+      // cancel the commander's own voice. Speech recognition uses this session.
+      stream.getTracks().forEach((track) => {
+        track.enabled = true
+      })
+      window.__wwtcCallMic = stream
     }).catch(() => { /* permission dismissed; typing still works */ })
   } catch { /* no media devices */ }
 }
