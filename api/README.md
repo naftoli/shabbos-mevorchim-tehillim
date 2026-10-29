@@ -68,8 +68,16 @@ and quota) and saves the ladder when the child says yes. The child's data is
 passed in `context` (the same snapshot the
 SPA already shows, plus the greeting they just heard); no DB read is required.
 The SPA falls back to its built-in scripted answers whenever this endpoint is
-unavailable, so the static Netlify build keeps working. The browser speaks with
-`speechSynthesis` and can listen with `SpeechRecognition`; neither needs this key.
+unavailable, so the static Netlify build keeps working. The child can listen
+with `SpeechRecognition`, which needs no key.
+
+`POST /speak` — `{ script }` → `audio/wav`. The script is the eSpeak phoneme
+line from the SPA (`[[x'ESvn]]` and the rest). Ches (ח) and chaf (כ) are the
+phoneme `x`, the guttural in "loch", not a k and not "tch". The browser's
+`speechSynthesis` voice cannot say that sound, so the page plays this WAV.
+The API host needs the `espeak-ng` binary (`WWTC_ESPEAK` overrides the path).
+If `/speak` is down, the page falls back to `speechSynthesis`, which will not
+pronounce ches correctly.
 
 Setup: set **`WWTC_AI_KEY`** (an Anthropic API key) in
 `mashpia.com/includes/globals.php` (gitignored) or the environment — the key is

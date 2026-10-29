@@ -18,6 +18,13 @@ ini_set('max_execution_time', '0');
 $_SERVER['HTTP_HOST'] = 'localhost';
 
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+// Speaking does not need the Mashpia database. Handle it before bootstrap.
+if ($method === 'POST' && preg_match('#/api/speak$#', (string) $uri)) {
+    require __DIR__ . '/speak.php';
+    wwtcSpeakHttp();
+    return true;
+}
 if (preg_match('#^/shabbos-mevorchim-tehillim/api(?:/|$)#', (string) $uri)) {
     require __DIR__ . '/index.php';
     return true;

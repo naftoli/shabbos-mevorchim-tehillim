@@ -951,6 +951,12 @@ function wwtcGeneralAsk(string $key, string $model, string $system, array $messa
     return $text === '' ? null : $text;
 }
 
+if ($method === 'POST' && $path === '/speak') {
+    require_once __DIR__ . '/speak.php';
+    wwtcSpeakHttp();
+    exit;
+}
+
 if ($method === 'POST' && $path === '/chat') {
     $in = wwtcInput();
     $message = trim((string) ($in['message'] ?? ''));
