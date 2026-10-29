@@ -371,9 +371,17 @@ if ($method === 'POST' && $path === '/admin/login') {
     }
     // Auth::login returns the admin's session keys; adapt to the SPA's admin shape.
     $adminId = (int) ($login['admin_id'] ?? $login['id'] ?? 0);
-    $stmt = $MASHPIA_DB->prepare('SELECT admin_id, auth, first, last, username, school_id FROM admins WHERE admin_id = :id LIMIT 1');
+    $stmt = $MASHPIA_DB->prepare('SELECT admin_id, auth, first, last, username FROM admins WHERE admin_id = :id LIMIT 1');
     $stmt->execute([':id' => $adminId]);
     $admin = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    // A school admin's school isn't a column on `admins` — it's an admin_auths row
+    // of type 'school' (the mapping Admin::getAuthIds('school') reads). Take the
+    // first, matching the SPA's single-school admin shape; HQ ('super') has none.
+    $schoolStmt = $MASHPIA_DB->prepare(
+        "SELECT id FROM admin_auths WHERE admin_id = :id AND auth = 'school' ORDER BY id LIMIT 1"
+    );
+    $schoolStmt->execute([':id' => $adminId]);
+    $schoolId = $schoolStmt->fetchColumn();
     $token = wwtcIssueToken('admin', $adminId, ['auth' => $admin['auth'] ?? '']);
     wwtcJson([
         'token' => $token,
@@ -382,7 +390,7 @@ if ($method === 'POST' && $path === '/admin/login') {
             'kind' => ($admin['auth'] ?? '') === 'super' ? 'super' : 'school',
             'name' => trim(($admin['first'] ?? '') . ' ' . ($admin['last'] ?? '')),
             'username' => $admin['username'] ?? $username,
-            'schoolId' => isset($admin['school_id']) ? (int) $admin['school_id'] : null,
+            'schoolId' => $schoolId !== false ? (int) $schoolId : null,
         ],
     ]);
 }

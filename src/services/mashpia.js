@@ -84,9 +84,16 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (response.status === 401 && as && token) endSession(as)
-  const payload = await response.json().catch(() => null)
+  const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
     throw new Error(payload?.error || `Request failed (${response.status}).`)
+  }
+  // A 2xx with an unparseable (e.g. empty) body means the server died after its
+  // headers went out; surface it as a clear error rather than returning null and
+  // letting callers crash on `const { token } = null`. (No endpoint here replies
+  // 2xx-with-no-body; the only 204 is the CORS preflight the browser handles.)
+  if (payload === undefined) {
+    throw new Error(`The server returned an unreadable response (${response.status}).`)
   }
   return payload
 }

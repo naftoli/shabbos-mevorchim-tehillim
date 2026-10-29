@@ -75,6 +75,34 @@ if (!isset($MASHPIA_DB) || !$MASHPIA_DB instanceof PDO) {
 }
 $MASHPIA_DB->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+// Bootstrap has succeeded, so the shutdown guard above now stands down. From
+// here a route handler runs with headers not yet flushed (the includes produced
+// no output). An uncaught exception or fatal would otherwise end the request as
+// a 200 with an empty body (prod display_errors is off) — which the SPA cannot
+// parse as JSON and which surfaces as a cryptic "Cannot destructure ... null".
+// Convert any such failure into a JSON 500, logging the detail server-side
+// rather than leaking it to the client.
+set_exception_handler(static function (\Throwable $e): void {
+    error_log('WWTC API uncaught: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo '{"error":"Something went wrong on our end. Please try again."}';
+});
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if (!$error || !in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        return;
+    }
+    error_log('WWTC API fatal: ' . $error['message'] . ' @ ' . $error['file'] . ':' . $error['line']);
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo '{"error":"Something went wrong on our end. Please try again."}';
+});
+
 function wwtcEnv(string $name, string $default = ''): string
 {
     $value = getenv($name);
