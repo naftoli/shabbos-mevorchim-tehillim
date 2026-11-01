@@ -37,6 +37,29 @@ test('verifyKid returns null on a 401 (bad serial/dob), not a throw', async () =
   assert.equal(await api.verifyKid('000', '2000-01-01'), null)
 })
 
+test('a 401 ends the session even when the token already expired (no Bearer sent)', async () => {
+  reset()
+  // The 12-hour bearer token expires under the 30-day session, so readToken()
+  // returns null and the request goes out with no Authorization header. That
+  // tokenless 401 must STILL end the session, or the soldier is stranded on
+  // "Couldn't load your Tehillim" (session alive => no bounce to /login).
+  api.endSession('kid') // clear any token a prior test left in memory
+  const events = []
+  const prevDispatch = globalThis.window.dispatchEvent
+  globalThis.window.dispatchEvent = (e) => { events.push(e); return true }
+  try {
+    mock({ 'GET /me/progress': { status: 401, body: { error: 'Authentication required.' } } })
+    await assert.rejects(() => api.getKidProgress('1'))
+    assert.ok(!('Authorization' in lastCall().headers), 'no Bearer header once the token is gone')
+    assert.ok(
+      events.some((e) => e.type === 'wwtc-auth-expired' && e.detail?.role === 'kid'),
+      'wwtc-auth-expired(kid) must fire so AuthContext clears the session and redirects to login',
+    )
+  } finally {
+    globalThis.window.dispatchEvent = prevDispatch
+  }
+})
+
 test('getKidProgress derives the medal from missionsTotal', async () => {
   reset()
   mock({ 'GET /me/progress': { body: { id: '1', months: [], missionsTotal: 12, metThisYear: 12, medal: null, current: null } } })

@@ -87,7 +87,13 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (response.status === 401 && as && token) endSession(as)
+  // Any 401 on a request that was meant to be authenticated (`as` is set) ends
+  // the session, even when no token went out: the 30-day session record outlives
+  // the 12-hour bearer token, so after a token expires readToken() returns null
+  // and we'd send a tokenless request. Without this, that 401 left the soldier
+  // stranded on "Couldn't load your Tehillim" — session still live, so no bounce
+  // to login, and Try again just 401s again. Clearing here redirects to /login.
+  if (response.status === 401 && as) endSession(as)
   const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
     throw new Error(payload?.error || `Request failed (${response.status}).`)
