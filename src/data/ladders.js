@@ -19,7 +19,7 @@
 export const MONTHS = ["Tishrei","Cheshvan","Kislev","Teves","Shvat","Adar","Nissan","Iyar","Sivan","Tammuz","Av","Elul"]
 
 export const MONTH_HEB = {
-  Tishrei: "תשרי", Cheshvan: "חשון", Kislev: "כסלו", Teves: "טבת", Shvat: "שבט", Adar: "אדר",
+  Tishrei: "תשרי", "Rosh Hashana": "ראש השנה", "Yom Kippur": "יום כיפור", Cheshvan: "חשון", Kislev: "כסלו", Teves: "טבת", Shvat: "שבט", Adar: "אדר",
   Nissan: "ניסן", Iyar: "אייר", Sivan: "סיון", Tammuz: "תמוז", Av: "אב", Elul: "אלול",
   // Leap-year Adars (the backend labels them "Adar I" / "Adar II"); both say the
   // same Adar quota, but keep distinct Hebrew labels.

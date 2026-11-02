@@ -4,6 +4,8 @@
 export default function GoalBar({ percent, label = 'of goal', marker = true, icon = '📖', iconSrc, fill, className = '' }) {
   const actual = Math.max(0, Math.floor(Number(percent) || 0))
   const p = Math.min(100, actual)
+  // Keep the marker on the bar even when the quota is full. A marker parked at
+  // 100% used to hang off the card and get clipped, so Kapitlach "lost" its icon.
   return (
     <div className={`relative ${className}`}>
       <div
@@ -24,7 +26,7 @@ export default function GoalBar({ percent, label = 'of goal', marker = true, ico
         <span
           aria-hidden="true"
           className="pointer-events-none absolute -bottom-[10px] -translate-x-1/2 select-none text-[34px] leading-none transition-[left] duration-1000 ease-out sm:-bottom-[14px] sm:text-[44px]"
-          style={{ left: `${p}%`, filter: 'drop-shadow(0 6px 8px rgba(15, 35, 80, 0.22))' }}
+          style={{ left: `clamp(22px, ${p}%, calc(100% - 22px))`, filter: 'drop-shadow(0 6px 8px rgba(15, 35, 80, 0.22))' }}
         >
           {iconSrc ? <img src={iconSrc} alt="" draggable="false" className="h-8 w-auto sm:h-11" /> : icon}
         </span>

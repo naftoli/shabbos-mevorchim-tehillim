@@ -31,7 +31,7 @@ function wwtcHandleRealtimeSession(): void
     $ctx = is_array($in['context'] ?? null) ? $in['context'] : [];
     $model = wwtcRealtimeModel();
     $payload = json_encode(
-        wwtcRealtimeSessionPayload($ctx, $model, wwtcRealtimeVoice()),
+        wwtcRealtimeSessionPayload($ctx, $model, wwtcVoiceForContext($ctx)),
         JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
     );
     if (!is_string($payload)) {

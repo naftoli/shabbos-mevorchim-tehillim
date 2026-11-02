@@ -154,6 +154,9 @@ h1, h2, h3, h4 { line-height: 1.15; }
 }
 .hero-navy .text-gold { color: #fff; }
 
+body.wwtc-display header,
+body.wwtc-display footer { display: none; }
+
 .hero-glass {
   color: #fff;
   background: var(--glass-green);

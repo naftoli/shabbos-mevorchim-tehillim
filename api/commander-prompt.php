@@ -121,9 +121,9 @@ function wwtcClampContextValue($value, int $depth = 0)
 function wwtcCommanderContextJson(array $ctx): string
 {
     $allowed = [
-        'name', 'childGrade', 'childGradeLabel', 'ladder', 'finishTrainingByGrade',
-        'focusLadder', 'situation', 'greeting', 'monthEn', 'ladderChoices',
-        'thisMonth', 'missionsTotal', 'medal', 'rank', 'nextShabbosMevorchim',
+        'name', 'gender', 'childGrade', 'childGradeLabel', 'ladder', 'finishTrainingByGrade',
+        'focusLadder', 'situation', 'greeting', 'cue', 'monthEn', 'ladderChoices',
+        'thisMonth', 'missionsTotal', 'medal', 'streak', 'rank', 'nextShabbosMevorchim',
     ];
     $clean = [];
     foreach ($allowed as $key) {
@@ -170,6 +170,14 @@ TOOLS:
 - get_my_progress: read this child's current ladder, quota, missions, medal, and rank. Call it instead of guessing a number. Trust the tool result over the older JSON below.
 
 When you are told to speak an opening line, say that line. Keep every fact the same. Then wait.
+
+HOW YOU SPEAK:
+Short. Warm. Army language: soldier, chayol, commander, platoon, base, mission, medal, rank. Celebrate effort, not only finishing. Never guilt. Never accuse. A missed quota is a question, not a failure. If "cue" is in the child data, say that cue, keeping every fact, then wait.
+The child owns the ladder. You may invite a change. You never change it unless they clearly say yes and you then use change_ladder. A lower ladder number is the more demanding path.
+Any amount above their own quota is confirmed kindly and then accepted. Never reject a high number.
+Streaks are consecutive completed missions. A miss breaks the streak. The next completion starts at 1. The longest streak stays.
+Medals, in completed missions: white 5, red 11, orange 18, yellow 26, green 35, blue 45, purple 56, brown 68, gray 81, black 95, bronze 110, silver 126, gold 143. Missed missions delay a medal. They do not reset it.
+If you do not know a rule, say so and point them to their teacher. Never invent a rule, a date, or a rank.
 
 QUESTION SHEET (use the verbatim answer when the question matches; NEEDS COUNSELOR and OFF TOPIC lines win over a conflicting answer):
 {$knowledge}
@@ -223,6 +231,23 @@ function wwtcRealtimeModel(): string
         return 'gpt-realtime-2.1';
     }
     return $model;
+}
+
+function wwtcVoiceForContext(array $ctx): string
+{
+    $pinned = function_exists('wwtcEnv') ? trim((string) wwtcEnv('OPENAI_REALTIME_VOICE')) : '';
+    if ($pinned === '') {
+        $env = getenv('OPENAI_REALTIME_VOICE');
+        $pinned = is_string($env) ? trim($env) : '';
+    }
+    if ($pinned !== '') {
+        return wwtcRealtimeVoice();
+    }
+    $gender = strtolower(trim((string) ($ctx['gender'] ?? '')));
+    if ($gender === 'boy' || $gender === 'm') {
+        return 'cedar';
+    }
+    return 'marin';
 }
 
 function wwtcRealtimeVoice(): string

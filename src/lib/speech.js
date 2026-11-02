@@ -64,11 +64,18 @@ function voiceScore(voice) {
 // A paid neural voice is not used here. If none of these exist, the browser
 // default is the fallback; a neural service could be added later behind the
 // PHP /chat proxy without changing the on-screen text.
-export function pickVoice(voices) {
+export function pickVoice(voices, gender) {
   let best = null
   let bestScore = 0
   for (const voice of voices || []) {
-    const score = voiceScore(voice)
+    let score = voiceScore(voice)
+    const name = voice?.name || ''
+    const female = /female|woman|aria|jenny|sara|samantha|zira|susan|libby/i.test(name)
+    const male = /\bmale\b|\bguy\b|\bdavis\b|\bdavid\b|\bmark\b|\bdaniel\b|\bandrew\b/i.test(name)
+    if (gender === 'girl' && female) score += 80
+    if (gender === 'boy' && male) score += 80
+    if (gender === 'girl' && male) score -= 30
+    if (gender === 'boy' && female) score -= 30
     if (score > bestScore) {
       best = voice
       bestScore = score
@@ -172,7 +179,7 @@ export function armVoice() {
  * 'blocked' means the browser refused autoplay (or never started). The caller
  * can retry from a user gesture. Never throws.
  */
-export function speak(text, { muted = false } = {}) {
+export function speak(text, { muted = false, gender = null } = {}) {
   const chunks = speechChunks(text)
   const my = ++token
   const synth = canSpeak() ? window.speechSynthesis : null
@@ -263,7 +270,7 @@ export function speak(text, { muted = false } = {}) {
         }
         if (my !== token) { finish('interrupted'); return }
         synth.resume?.()
-        queue(pickVoice(voices))
+        queue(pickVoice(voices, gender))
       } catch {
         finish('blocked')
       }

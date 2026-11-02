@@ -7,15 +7,17 @@
 // higher number (ladder 12 is the gentlest).
 
 import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { cueAheadOne, cueMissed, cueMissedFresh, cueNewMonth, cueWelcome } from './commanderCues.js'
 
 export const BOT_NAME = 'Your Virtual Commander'
 
 // Open the panel once each time a soldier signs in. A later page change keeps
 // the same kid id, so a panel they closed stays closed. Logout clears it.
 // `null` means leave the panel as it is.
-export function autoOpenFor(openedFor, kidId) {
+export function autoOpenFor(openedFor, kidId, preference = 'on') {
   if (!kidId) return openedFor == null ? null : { openedFor: null, open: false }
   if (openedFor === kidId) return null
+  if (preference !== 'on') return { openedFor: kidId, open: false }
   return { openedFor: kidId, open: true }
 }
 
@@ -130,16 +132,16 @@ export function confirmLadderChoice(ctx) {
 }
 
 export function openingGreeting(ctx) {
-  const missions = ctx?.progress?.missionsTotal ?? 0
+  const cur = ctx?.progress?.current || (ctx?.progress?.months || []).find((m) => m.isCurrent)
   switch (ctx?.situation) {
     case 'pick':
-      return pickPitch(ctx)
+      return `${hello(ctx)} ${cueWelcome()}`
     case 'behind':
-      return `${hello(ctx)} Where were you last month?`
+      return `${hello(ctx)} ${cueMissed()} ${cueMissedFresh()}`
     case 'ahead':
-      return `${hello(ctx)} I see you did a great job last month. You did more than your quota. Would you like to go to a higher quota?`
+      return `${hello(ctx)} ${cueAheadOne()}`
     default:
-      return `${hello(ctx)} 👋 So good to see you — you're doing beautifully, ${missions} missions done. Need anything? I can show your mission this month or how you're doing.`
+      return `${hello(ctx)} ${cueNewMonth(cur?.quota, cur?.minutes)}`
   }
 }
 
@@ -161,6 +163,7 @@ function resolveFocus(ctx) {
 export function quickRepliesFor(ctx) {
   switch (ctx?.situation) {
     case 'pick': {
+      if (ctx?.focusLadder == null) return ['Which ladder will I climb?', 'How does it work?']
       const focus = resolveFocus(ctx)
       if (focus == null) return ['Help me pick my ladder', 'How does it work?']
       const replies = ["That's good for me"]
@@ -218,6 +221,11 @@ function steppedOffer(ctx, from, direction) {
 // chat can save it. Returns null for an ordinary question.
 export function scriptedTurn(text, ctx) {
   if (!ctx || ctx.situation !== 'pick') return null
+  const raw = ` ${String(text ?? '').toLowerCase()} `
+  if (/which ladder|help me pick|help me choose|climb to get there/.test(raw)) {
+    const easy = easiestLadder(ctx.grade)
+    return { reply: pickPitch(ctx), focusLadder: easy }
+  }
   const intent = readLadderIntent(text)
   if (!intent.any) return null
 

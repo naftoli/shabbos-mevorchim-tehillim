@@ -23,7 +23,7 @@ function gradeMarks(ladder) {
     .filter(Boolean)
 }
 
-export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel }) {
+export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen }) {
   const r = Math.max(0, Math.min(TOTAL, reached))
   const t = Math.max(0, Math.min(TOTAL, target))
   const pct = (n) => (n / TOTAL) * 100
@@ -58,7 +58,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
   const bottomSpace = `${sides.below.length ? BELOW_BASE + sides.below.length * ROW + 0.4 : 0.6}rem`
 
   return (
-    <div className="rounded-2xl bg-paper/70 p-5 sm:p-6">
+    <button type="button" onClick={onOpen} className="block w-full rounded-2xl bg-paper/70 p-5 text-left sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="sh">Your climb to the whole Tehillim</p>
@@ -136,7 +136,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           className="pointer-events-none absolute -top-[18px] -translate-x-1/2 select-none text-2xl transition-[left] duration-1000 ease-out"
           style={{ left: `${pct(r)}%`, filter: 'drop-shadow(0 4px 6px rgba(15,35,80,.25))' }}
         >
-          {done ? <CrownIcon className="h-8 w-auto" /> : <img src={asset('design/icon-climber.webp')} alt="" draggable="false" className="h-10 w-auto" />}
+          {done ? <CrownIcon className="h-8 w-auto" /> : <img src={asset(gender === 'girl' ? 'design/icon-climber-girl.png' : 'design/icon-climber.webp')} alt="" draggable="false" className="h-12 w-auto" />}
         </span>
       </div>
 
@@ -152,6 +152,6 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           <>You’re right on pace — keep climbing!</>
         )}
       </p>
-    </div>
+    </button>
   )
 }

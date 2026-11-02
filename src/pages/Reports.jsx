@@ -1,145 +1,243 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { Card, Pill, SchoolLogo } from '@/components/ui.jsx'
-import { PageHero } from './_page.jsx'
+import { Card, Button, SchoolLogo, ErrorNote } from '@/components/ui.jsx'
+import { CheckMark, IconImg, Meter, Pending, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { rankSchools } from '@/lib/schoolRace.js'
+import { BREADCRUMB_STYLE, MONTH_CHOOSER } from '@/lib/decisions.js'
 import {
-  ELAPSED_MONTHS,
-  CURRENT_MONTH_INDEX,
+  CAMPAIGN_YEAR,
+  CURRENT_MONTH,
   getArmyReport,
   getBaseReport,
+  getCampaignCalendar,
   getPlatoonReport,
+  isHolidayMonth,
 } from '@/services/api.js'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
 
-function Bar({ pct, color = 'var(--grad-progress)', track = 'var(--color-track)' }) {
-  return (
-    <div className="h-2.5 overflow-hidden rounded-full" style={{ background: track }}>
-      <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(pct, 2))}%`, background: color }} />
-    </div>
-  )
-}
-
-function MonthTabs({ idx, setIdx }) {
-  return (
-    <div className="inline-flex flex-wrap gap-1 rounded-2xl bg-card p-1 shadow-card ring-1 ring-line">
-      {ELAPSED_MONTHS.map((mo, i) => (
-        <button
-          key={mo}
-          onClick={() => setIdx(i)}
-          className={`rounded-xl px-4 py-1.5 font-heb text-lg transition ${i === idx ? 'text-white shadow-sm' : 'text-navy hover:bg-track'}`}
-          style={i === idx ? { background: 'var(--grad-cta-green)' } : undefined}
-        >
-          {MONTH_HEB[mo]}
-        </button>
-      ))}
-    </div>
-  )
+function chipsFor(months) {
+  const out = []
+  const list = months || []
+  for (const month of list) {
+    out.push({ key: month, board: true })
+    if (month === 'Tishrei') {
+      out.push({ key: 'Rosh Hashana', board: false })
+      out.push({ key: 'Yom Kippur', board: false })
+    }
+  }
+  if (!list.includes('Tishrei')) {
+    out.push({ key: 'Rosh Hashana', board: false }, { key: 'Yom Kippur', board: false })
+  }
+  return out
 }
 
 function StatTile({ icon, value, label, sub }) {
   return (
-    <Card className="flex items-center gap-3 p-4">
-      {icon ? <img src={icon} alt="" className="h-11 w-auto" draggable="false" /> : null}
+    <Card className="flex min-w-0 items-center gap-3 p-3 sm:p-4">
+      <span className="grid h-11 w-11 flex-none place-items-center">{icon}</span>
       <div className="min-w-0">
-        <div className="font-display text-2xl font-black leading-none tabular-nums text-navy">{value}</div>
-        <div className="text-[13px] font-semibold uppercase tracking-wide text-green">{label}</div>
-        {sub ? <div className="text-xs text-muted">{sub}</div> : null}
+        <div className="break-words font-display text-[clamp(1.15rem,4.5vw,1.7rem)] font-black leading-none tabular-nums text-navy">{value}</div>
+        <div className="text-[12px] font-semibold uppercase leading-tight tracking-normal text-green sm:text-[13px]">{label}</div>
+        {sub ? <div className="text-xs leading-snug text-muted">{sub}</div> : null}
       </div>
     </Card>
   )
 }
 
-function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
-  const { data: report } = useLiveData(() => getArmyReport(monthIdx), [monthIdx])
-  const [sort, setSort] = useState('accomplished')
-  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
-  const ratio = (r) => r.accomplished / (r.goal || 1) // % of quota, as a tiebreaker
-  const rows = [...report.rows].sort((a, b) =>
-    sort === 'met'
-      ? b.pctMet - a.pctMet || ratio(b) - ratio(a) || b.accomplished - a.accomplished || a.name.localeCompare(b.name)
-      : b.accomplished - a.accomplished || b.pctMet - a.pctMet || a.name.localeCompare(b.name),
+function Rank({ n }) {
+  if (n > 2) return <span className="font-display text-lg font-bold italic text-blue-accent">{n + 1}</span>
+  return <img src={asset(`design/${MEDALS[n]}.png`)} alt={`#${n + 1}`} className="h-8 w-auto" />
+}
+
+export default function Reports() {
+  const [params, setParams] = useSearchParams()
+  const [sort, setSort] = useState('finished')
+  const yearParam = params.get('y')
+  const monthParam = params.get('m')
+  const schoolId = params.get('school')
+  const classId = params.get('class')
+  const display = params.get('display') === '1'
+
+  const { data: calendar } = useLiveData(() => getCampaignCalendar(yearParam || undefined), [yearParam])
+  const year = yearParam || String(calendar?.year || CAMPAIGN_YEAR)
+  const month = monthParam || calendar?.currentMonth || CURRENT_MONTH
+  const months = calendar?.months || []
+  const period = { year, month }
+  const holiday = isHolidayMonth(month)
+
+  function write(next) {
+    const p = new URLSearchParams(params)
+    Object.entries(next).forEach(([key, value]) => {
+      if (value == null || value === '') p.delete(key)
+      else p.set(key, String(value))
+    })
+    setParams(p)
+  }
+
+  const army = useLiveData(
+    () => (holiday || schoolId ? Promise.resolve(null) : getArmyReport(null, period)),
+    [year, month, holiday, schoolId],
+  )
+  const base = useLiveData(
+    () => (schoolId && !holiday ? getBaseReport(schoolId, null, period) : Promise.resolve(null)),
+    [schoolId, year, month, holiday],
+  )
+  const platoon = useLiveData(
+    () => (classId && !holiday ? getPlatoonReport(classId, null, period) : Promise.resolve(null)),
+    [classId, year, month, holiday],
   )
 
-  const totals = report.rows.reduce(
-    (a, r) => ({
-      registered: a.registered + r.registered,
-      goal: a.goal + r.goal,
-      accomplished: a.accomplished + r.accomplished,
-      participated: a.participated + Math.round((r.pctParticipated / 100) * r.registered),
-      met: a.met + Math.round((r.pctMet / 100) * r.registered),
-    }),
-    { registered: 0, goal: 0, accomplished: 0, participated: 0, met: 0 },
-  )
-  const pctGoal = totals.goal ? Math.round((totals.accomplished / totals.goal) * 100) : 0
-  const pctPart = totals.registered ? Math.round((totals.participated / totals.registered) * 100) : 0
-  const pctMet = totals.registered ? Math.round((totals.met / totals.registered) * 100) : 0
-  const maxAcc = Math.max(1, ...report.rows.map((r) => r.accomplished))
+  const rows = useMemo(() => (army.data?.rows || []).map((r) => ({
+    ...r,
+    saidMonth: r.accomplished,
+    pct: r.pct ?? (r.goal ? Math.round((r.accomplished / r.goal) * 100) : 0),
+    pctMet: r.pctMet || 0,
+    pctParticipated: r.pctParticipated || 0,
+    minutesPct: r.minutesPct || 0,
+  })), [army.data])
+  const ordered = rankSchools(rows, sort)
+  const pctGoal = useMemo(() => {
+    const goal = rows.reduce((a, r) => a + (r.goal || 0), 0)
+    const done = rows.reduce((a, r) => a + (r.accomplished || 0), 0)
+    return goal ? Math.round((done / goal) * 100) : 0
+  }, [rows])
 
-  const seg = (active) => `rounded-full px-4 py-1.5 font-cond text-sm uppercase tracking-wide transition ${active ? 'text-white shadow-sm' : 'text-navy hover:bg-white/40'}`
+  const crumb = BREADCRUMB_STYLE === 'site'
+    ? 'font-cond text-[18px] uppercase tracking-[0.04em]'
+    : 'text-sm font-semibold'
+  const className = platoon.data?.className
+    || base.data?.rows?.find((r) => String(r.id) === String(classId))?.name
 
   return (
-    <>
-      {/* month summary band */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile icon={asset('design/icon-book.webp')} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
-        <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Schools" sub={`${fmt(totals.registered)} soldiers`} />
-        <StatTile icon={asset('design/icon-soldier-hat.png')} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
-        <StatTile icon={asset('design/medal-gold.png')} value={`${pctMet}%`} label="Completed Quota" sub={`${fmt(totals.met)} soldiers`} />
+    <div className={display ? 'wwtc-display' : ''}>
+      <section className="hero-navy">
+        <div className="mx-auto max-w-[1200px] px-4 py-8 text-white sm:px-6 lg:px-10">
+          <h1 className="font-display text-4xl font-black md:text-5xl">Monthly Reports</h1>
+        </div>
       </section>
 
-      <Card className="mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
-          <div>
-            <p className="sh">Army Report · <span className="font-heb">{monthHeb}</span></p>
-            <h2 className="font-display text-xl font-black text-navy">Schools, ranked</h2>
+      <div className={`mx-auto max-w-[1200px] space-y-6 px-4 py-6 sm:px-6 lg:px-10 ${display ? 'max-w-none text-[18px]' : ''}`}>
+        <div className="space-y-3">
+          <label className="text-sm font-semibold text-navy">
+            Year
+            <select className="ml-2 rounded-xl border border-line bg-card px-3 py-2" value={year} onChange={(e) => write({ y: e.target.value, m: null, school: null, class: null })}>
+              {(calendar?.years || [year]).map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+          <div className={MONTH_CHOOSER === 'scroll' ? 'flex gap-1 overflow-x-auto pb-1' : 'flex flex-wrap gap-1'}>
+            {chipsFor(months.length ? months : [month]).map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => write({ y: year, m: chip.key })}
+                className={`rounded-xl px-3 py-1.5 font-heb text-lg transition ${chip.key === month ? 'text-white shadow-sm' : 'bg-card text-navy ring-1 ring-line hover:bg-track'}`}
+                style={chip.key === month ? { background: 'var(--grad-cta-green)' } : undefined}
+              >
+                {MONTH_HEB[chip.key] || chip.key}
+              </button>
+            ))}
           </div>
-          <div className="inline-flex rounded-full bg-track p-1 font-cond">
-            <button onClick={() => setSort('accomplished')} className={seg(sort === 'accomplished')} style={sort === 'accomplished' ? { background: 'var(--grad-cta-green)' } : undefined}>Kapitlach</button>
-            <button onClick={() => setSort('met')} className={seg(sort === 'met')} style={sort === 'met' ? { background: 'var(--grad-cta-green)' } : undefined}>% Met</button>
-          </div>
+          <p className="max-w-3xl text-xs text-muted">Rosh Hashana and Yom Kippur are training missions. They were missing because the board only lists Shabbos Mevorchim months. They show here, and they do not have a separate army total.</p>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className={`flex flex-wrap items-center gap-2 text-navy ${crumb}`}>
+            {(schoolId || classId) ? (
+              <button type="button" className="rounded-full bg-navy px-3 py-1 text-sm font-semibold normal-case tracking-normal text-white" onClick={() => write(classId ? { class: null } : { school: null })}>Back</button>
+            ) : null}
+            <button type="button" className="hover:underline" onClick={() => write({ school: null, class: null })}>Army</button>
+            {schoolId ? (<><span className="text-muted">›</span><button type="button" className="hover:underline" onClick={() => write({ class: null })}>{base.data?.school || 'Base'}</button></>) : null}
+            {classId ? (<><span className="text-muted">›</span><span>{className || 'Platoon'}</span></>) : null}
+          </div>
+          <Button variant="outline" className="!px-3 !py-1.5 !text-sm" onClick={() => write({ display: display ? null : '1' })}>
+            {display ? 'Exit display mode' : 'Display mode'}
+          </Button>
+        </div>
+
+        {holiday ? (
+          <Card className="p-6">
+            <h2 className="font-display text-xl font-black text-navy">{month} {year}</h2>
+            <p className="mt-2 text-navy/80">This occasion is part of a chayol’s training. Pick a Shabbos Mevorchim month to see the schools.</p>
+          </Card>
+        ) : classId ? (
+          <PlatoonView data={platoon.data} error={platoon.error} loading={platoon.loading} reload={platoon.reload} />
+        ) : schoolId ? (
+          <BaseView data={base.data} error={base.error} loading={base.loading} reload={base.reload} onPickClass={(id) => write({ class: id })} />
+        ) : (
+          <ArmyView
+            rows={ordered}
+            raw={rows}
+            error={army.error}
+            loading={army.loading}
+            reload={army.reload}
+            sort={sort}
+            setSort={setSort}
+            pctGoal={pctGoal}
+            onPickSchool={(id) => write({ school: id, class: null })}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ArmyView({ rows, raw, error, loading, reload, sort, setSort, pctGoal, onPickSchool }) {
+  if (error) return <ErrorNote error={error} onRetry={reload} what="the army report" />
+  if (!raw.length && loading) return <Pending label="Getting the army report" />
+  const totals = raw.reduce((a, r) => ({
+    registered: a.registered + (r.registered || 0),
+    goal: a.goal + (r.goal || 0),
+    accomplished: a.accomplished + (r.accomplished || 0),
+    participated: a.participated + (r.participated ?? 0),
+    met: a.met + (r.met ?? 0),
+    minutes: a.minutes + (r.minutes || 0),
+    minutesGoal: a.minutesGoal + (r.minutesGoal || 0),
+  }), { registered: 0, goal: 0, accomplished: 0, participated: 0, met: 0, minutes: 0, minutesGoal: 0 })
+  const pctPart = totals.registered ? Math.round((totals.participated / totals.registered) * 100) : 0
+  const pctMet = totals.registered ? Math.round((totals.met / totals.registered) * 100) : 0
+  const pctTime = totals.minutesGoal ? Math.round((totals.minutes / totals.minutesGoal) * 100) : 0
+  return (
+    <>
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile icon={<IconImg name="book" className="h-11 w-auto" />} value={fmt(totals.accomplished)} label="Kapitlach" sub={`of ${fmt(totals.goal)} goal · ${pctGoal}%`} />
+        <StatTile icon={<IconImg name="school" className="h-11 w-auto" />} value={fmt(raw.length)} label="Schools" sub={`${fmt(totals.registered)} soldiers`} />
+        <StatTile icon={<IconImg name="hat" className="h-11 w-auto" />} value={`${pctPart}%`} label="Participated" sub={`${fmt(totals.participated)} soldiers`} />
+        <StatTile icon={<CheckMark className="h-9 w-9" />} value={`${pctMet}%`} label="Completed Kapitlach Quota" sub={`${fmt(totals.met)} soldiers · time ${pctTime}%`} />
+      </section>
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
+          <h2 className="font-display text-xl font-black text-navy">Schools, Ranked <span className="font-semibold text-muted">· {pctGoal}% by kapitlach</span></h2>
+          <RaceToggle value={sort} onChange={setSort} />
+        </div>
         <div className="divide-y divide-line">
           {rows.map((r, i) => {
-            const color = COLORS[i % COLORS.length]
+            const pct = r.goal ? Math.round((r.accomplished / r.goal) * 100) : 0
             return (
-              <button
-                key={r.id}
-                onClick={() => onPickSchool(r.id, r.name)}
-                className="grid w-full grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-3 px-4 py-3 text-left transition hover:bg-black/[0.03] sm:grid-cols-[auto_auto_minmax(0,1.4fr)_minmax(0,1.6fr)_auto] sm:gap-4 sm:px-5"
-              >
-                <span className="grid w-8 place-items-center">
-                  {i < 3 ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} className="h-8 w-auto" /> : <span className="font-display text-lg font-bold italic text-blue-accent">{i + 1}</span>}
-                </span>
-                <SchoolLogo school={{ name: r.name, color, logo: r.logo }} size={44} />
+              <div key={r.id} className="grid items-center gap-3 px-4 py-3 sm:grid-cols-[auto_auto_minmax(0,1.1fr)_minmax(0,1.5fr)_auto] sm:px-5">
+                <Rank n={i} />
+                <SchoolLogo school={{ name: r.name, color: COLORS[i % COLORS.length], logo: r.logo }} size={44} />
+                <span className="min-w-0 whitespace-normal font-display text-[17px] font-bold leading-tight text-navy">{r.name}<span className="mt-0.5 block text-xs font-semibold text-muted">{fmt(r.registered)} soldiers</span></span>
                 <span className="min-w-0">
-                  <span className="block truncate font-display text-[17px] font-bold text-navy">{r.name}</span>
-                  <span className="text-xs text-muted">{fmt(r.registered)} soldiers</span>
-                </span>
-
-                {/* goal progress + accomplished */}
-                <span className="col-span-3 sm:col-span-1">
-                  <div className="mb-1 flex items-baseline justify-between text-sm">
+                  <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
                     <span className="font-display font-black tabular-nums text-green">{fmt(r.accomplished)}</span>
-                    <span className="text-xs text-muted">of {fmt(r.goal)}</span>
+                    <span className="text-xs text-muted">of {fmt(r.goal)} · {pct}%</span>
                   </div>
-                  <Bar pct={(r.accomplished / maxAcc) * 100} color={color} />
-                  <div className="mt-2 flex gap-2">
-                    <Pill className="!bg-track !text-[10.5px]">🚩 {r.pctParticipated}% part.</Pill>
-                    <Pill className="!bg-green/15 !text-green !text-[10.5px]">✓ {r.pctMet}% met</Pill>
+                  <Meter pct={pct} color={COLORS[i % COLORS.length]} />
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-navy">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-track px-2 py-1"><IconImg name="hat" className="h-3.5 w-auto" /> {r.pctParticipated}% participated</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-2 py-1 text-green"><CheckMark className="h-3.5 w-3.5" /> {r.pctMet}% completed</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-track px-2 py-1"><IconImg name="book" className="h-3.5 w-auto" /> {r.pct}% kapitlach</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-track px-2 py-1"><IconImg name="clock" className="h-3.5 w-auto" /> {r.minutesPct || 0}% time</span>
                   </div>
                 </span>
-
-                <span className="hidden text-right sm:block">
-                  <span className="text-xs text-muted">view classes</span>
-                  <span className="block text-blue">→</span>
-                </span>
-              </button>
+                <button type="button" className="btn btn-o !px-3 !py-2 !text-[14px]" onClick={() => onPickSchool(r.id)}>View classes</button>
+              </div>
             )
           })}
         </div>
@@ -148,43 +246,42 @@ function ArmyReport({ monthIdx, monthHeb, onPickSchool }) {
   )
 }
 
-function BaseReport({ schoolId, monthIdx, monthHeb, onPickClass }) {
-  const { data: report } = useLiveData(() => getBaseReport(schoolId, monthIdx), [schoolId, monthIdx])
-  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
-  const rows = [...report.rows].sort((a, b) => b.accomplished - a.accomplished)
-  const t = report.rows.reduce((a, c) => ({ size: a.size + c.size, goal: a.goal + c.goal, accomplished: a.accomplished + c.accomplished, completed: a.completed + c.completed, perfect: a.perfect + (c.perfect ? 1 : 0) }), { size: 0, goal: 0, accomplished: 0, completed: 0, perfect: 0 })
-  const maxAcc = Math.max(1, ...report.rows.map((c) => c.accomplished))
-
+function BaseView({ data, error, loading, reload, onPickClass }) {
+  if (error) return <ErrorNote error={error} onRetry={reload} what="this base" />
+  if (!data) return loading ? <Pending label="Getting this base" /> : <ErrorNote error="This base has no report for that month." onRetry={reload} what="this base" />
+  const rows = [...(data.rows || [])].sort((a, b) => (b.goal ? b.accomplished / b.goal : 0) - (a.goal ? a.accomplished / a.goal : 0) || b.accomplished - a.accomplished)
+  const t = rows.reduce((a, c) => ({ size: a.size + c.size, goal: a.goal + c.goal, accomplished: a.accomplished + c.accomplished, completed: a.completed + c.completed, perfect: a.perfect + (c.perfect ? 1 : 0) }), { size: 0, goal: 0, accomplished: 0, completed: 0, perfect: 0 })
   return (
     <>
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile icon={asset('design/icon-soldier-hat.png')} value={fmt(t.accomplished)} label="Kapitlach" sub={`of ${fmt(t.goal)} · ${t.goal ? Math.round((t.accomplished / t.goal) * 100) : 0}%`} />
-        <StatTile icon={asset('design/icon-school.png')} value={fmt(report.rows.length)} label="Classes" sub={`${fmt(t.size)} soldiers`} />
-        <StatTile icon={asset('design/medal-gold.png')} value={`${t.size ? Math.round((t.completed / t.size) * 100) : 0}%`} label="Completed Quota" sub={`${fmt(t.completed)} soldiers`} />
-        <StatTile icon={asset('design/flag.png')} value={fmt(t.perfect)} label="Perfect Platoons" sub="classes at 100%" />
+        <StatTile icon={<IconImg name="book" className="h-11 w-auto" />} value={fmt(t.accomplished)} label="Kapitlach" sub={`of ${fmt(t.goal)} · ${t.goal ? Math.round((t.accomplished / t.goal) * 100) : 0}%`} />
+        <StatTile icon={<IconImg name="platoon" className="h-11 w-auto" />} value={fmt(rows.length)} label="Classes" sub={`${fmt(t.size)} soldiers`} />
+        <StatTile icon={<CheckMark className="h-9 w-9" />} value={`${t.size ? Math.round((t.completed / t.size) * 100) : 0}%`} label="Completed Kapitlach Quota" sub={`${fmt(t.completed)} soldiers`} />
+        <StatTile icon={<StarMark className="h-8 w-8" />} value={fmt(t.perfect)} label="Perfect Platoons" sub="every soldier finished" />
       </section>
-
-      <Card className="mt-6 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="border-b border-line px-5 py-4">
-          <p className="sh">Base Report · <span className="font-heb">{monthHeb}</span></p>
-          <h2 className="font-display text-xl font-black text-navy">{report.school} · classes</h2>
+          <h2 className="font-display text-xl font-black text-navy">{data.school} · classes</h2>
         </div>
         <div className="divide-y divide-line">
           {rows.map((c, i) => {
-            const color = COLORS[i % COLORS.length]
+            const pct = c.goal ? Math.round((c.accomplished / c.goal) * 100) : 0
             return (
-              <button key={c.id} onClick={() => onPickClass(c.id, c.name)} className="grid w-full grid-cols-[auto_auto_1fr] items-center gap-x-3 gap-y-2 px-4 py-3 text-left transition hover:bg-black/[0.03] sm:px-5">
-                <span className="grid w-8 place-items-center">
-                  {i < 3 ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} className="h-8 w-auto" /> : <span className="font-display text-lg font-bold italic text-blue-accent">{i + 1}</span>}
-                </span>
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl font-cond text-base text-white shadow-sm" style={{ background: color }}>{GRADE_LABEL[c.grade]}</span>
+              <button key={c.id} type="button" onClick={() => onPickClass(c.id)} className="grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] sm:px-5">
+                <Rank n={i} />
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-navy font-cond text-sm text-gold">{GRADE_LABEL[c.grade] || c.grade}</span>
                 <span className="min-w-0">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate font-display text-[17px] font-bold text-navy">{c.name} {c.perfect ? <span title="Perfect Platoon">⭐</span> : null}</span>
+                    <span className="truncate font-display text-[17px] font-bold text-navy">{c.name}</span>
                     <span className="text-sm text-muted"><b className="text-green">{fmt(c.accomplished)}</b> / {fmt(c.goal)}</span>
                   </span>
-                  <span className="mt-1.5 block"><Bar pct={(c.accomplished / maxAcc) * 100} color={c.perfect ? 'var(--color-green-mid)' : color} /></span>
-                  <span className="mt-1.5 block"><Pill className={`!text-[10.5px] ${c.perfect ? '!bg-green/15 !text-green' : '!bg-track'}`}>✓ {c.completed}/{c.size} done</Pill></span>
+                  <span className="mt-1.5 block"><Meter pct={pct} color={c.perfect ? 'var(--color-green-mid)' : COLORS[i % COLORS.length]} /></span>
+                  <span className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ${c.perfect ? 'bg-green/15 text-green' : 'bg-track text-navy'}`}>
+                      {c.completed} of {c.size} chayolim
+                    </span>
+                    {c.perfect ? <span className="inline-flex items-center gap-1 text-[12px] font-bold text-navy"><StarMark className="h-4 w-4" /> Perfect Platoon{c.teacher ? ` · ${c.teacher}` : ''}</span> : null}
+                  </span>
                 </span>
               </button>
             )
@@ -195,62 +292,32 @@ function BaseReport({ schoolId, monthIdx, monthHeb, onPickClass }) {
   )
 }
 
-function PlatoonReport({ classId, monthIdx }) {
-  const { data: report } = useLiveData(() => getPlatoonReport(classId, monthIdx), [classId, monthIdx])
-  if (!report) return <p className="py-10 text-center text-muted">Loading…</p>
+function PlatoonView({ data, error, loading, reload }) {
+  if (error) return <ErrorNote error={error} onRetry={reload} what="this platoon" />
+  if (!data) return loading ? <Pending label="Getting this platoon" /> : <ErrorNote error="This platoon has no soldiers on the report for that month." onRetry={reload} what="this platoon" />
+  const perfect = data.size > 0 && data.completed === data.size
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-line px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div>
-          <p className="sh">Platoon Report</p>
-          <h2 className="font-display text-xl font-black text-navy">{report.className}</h2>
+          <p className="sh">Platoon</p>
+          <h2 className="font-display text-xl font-black text-navy">{data.className}</h2>
         </div>
-        <Pill className={report.completed === report.size ? '!bg-green !text-white' : ''}>{report.completed}/{report.size} completed</Pill>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${perfect ? 'bg-green text-white' : 'bg-track text-navy'}`}>
+          {perfect ? <StarMark className="h-4 w-4" /> : <CheckMark className="h-4 w-4" />}
+          {data.completed} of {data.size} completed kapitlach quota
+        </span>
       </div>
       <ul className="divide-y divide-line">
-        {report.rows.map((r) => (
-          <li key={r.id} className="flex items-center gap-3 px-5 py-2.5">
-            <span className={`grid h-7 w-7 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
-            <span className="min-w-0 flex-1 truncate font-semibold text-navy">{r.name}</span>
-            <span className="text-sm"><span className="font-heb text-navy">{r.goalLabel}</span> <span className="text-muted">· said {fmt(r.said)}</span></span>
-            <Pill className="!text-[10.5px]">L{r.ladder}</Pill>
+        {(data.rows || []).map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+            <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
+            <span className="min-w-0 flex-1 font-semibold text-navy">{r.name}</span>
+            <span className="text-sm text-navy"><span className="font-heb">{r.goalLabel}</span> <span className="text-muted">· said {fmt(r.said)} of {fmt(r.goal)}</span></span>
+            {r.ladder ? <span className="rounded-full bg-track px-2 py-1 text-[11px] font-bold text-navy">L{r.ladder}</span> : null}
           </li>
         ))}
       </ul>
     </Card>
-  )
-}
-
-export default function Reports() {
-  const [monthIdx, setMonthIdx] = useState(CURRENT_MONTH_INDEX)
-  const [school, setSchool] = useState(null)
-  const [cls, setCls] = useState(null)
-  const monthHeb = MONTH_HEB[ELAPSED_MONTHS[monthIdx]]
-
-  return (
-    <>
-      <PageHero eyebrow="Public · Screen-Friendly" title="Monthly Reports">
-        Every month has its own board, and all past months stay viewable.
-      </PageHero>
-
-      <div className="mx-auto max-w-[1200px] space-y-6 px-4 py-8 sm:px-6 lg:px-10">
-        <MonthTabs idx={monthIdx} setIdx={(i) => { setMonthIdx(i); setSchool(null); setCls(null) }} />
-
-        {/* breadcrumb */}
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <button className="font-semibold text-blue hover:underline" onClick={() => { setSchool(null); setCls(null) }}>Army</button>
-          {school ? <><span className="text-muted">›</span><button className="font-semibold text-blue hover:underline" onClick={() => setCls(null)}>{school.name}</button></> : null}
-          {cls ? <><span className="text-muted">›</span><span className="font-semibold text-navy">{cls.name}</span></> : null}
-        </div>
-
-        {!school ? (
-          <ArmyReport monthIdx={monthIdx} monthHeb={monthHeb} onPickSchool={(id, name) => setSchool({ id, name })} />
-        ) : !cls ? (
-          <BaseReport schoolId={school.id} monthIdx={monthIdx} monthHeb={monthHeb} onPickClass={(id, name) => setCls({ id, name })} />
-        ) : (
-          <PlatoonReport classId={cls.id} monthIdx={monthIdx} />
-        )}
-      </div>
-    </>
   )
 }

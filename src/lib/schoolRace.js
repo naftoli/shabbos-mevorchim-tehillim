@@ -3,9 +3,9 @@
 export function cmpSchoolRace(a, b) {
   return (
     b.pctMet - a.pctMet ||
+    (b.saidMonth || 0) - (a.saidMonth || 0) ||
     b.pct - a.pct ||
     b.minutesPct - a.minutesPct ||
-    b.saidMonth - a.saidMonth ||
     a.name.localeCompare(b.name)
   )
 }
@@ -13,15 +13,17 @@ export function cmpSchoolRace(a, b) {
 export function raceMetric(school, sort) {
   if (sort === 'kapitlach') return school.pct
   if (sort === 'time') return school.minutesPct
+  if (sort === 'participated') return school.pctParticipated || 0
   return school.pctMet
 }
 
-/** Sort schools for The Race. `sort` is 'finished' | 'kapitlach' | 'time'. */
+/** Sort schools for The Race. Same percentage: more kapitlach said ranks first. */
 export function rankSchools(schools, sort = 'finished') {
   const metric = (s) => raceMetric(s, sort)
   return [...schools].sort(
     (a, b) =>
       metric(b) - metric(a) ||
-      cmpSchoolRace(a, b),
+      (b.saidMonth || 0) - (a.saidMonth || 0) ||
+      a.name.localeCompare(b.name),
   )
 }

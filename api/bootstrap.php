@@ -243,11 +243,12 @@ function wwtcCached(string $key, callable $producer)
  * setArmyResults()+setASR() pass, which is the ~60s cost. Deterministic per SM
  * date, so cached. Returns plain arrays (JSON-safe) read straight off the report.
  */
-function wwtcArmyAggregates(?int $date = null): array
+function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
 {
+    $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
-    return wwtcCached("army_aggregates.$date", static function () use ($date) {
-        $sm = wwtcReport($date);
+    return wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
+        $sm = wwtcReport($date, $year);
         $sm->setArmyResults();
         $sm->setASR($date);
         return [
@@ -560,17 +561,134 @@ function wwtcDateForMonthIdx($idx): int
  * Always uses live date_tasks_marks (setUseLiveData) — the SPA needs current
  * numbers even after a tehillim_backups freeze; HQ report pages keep the default.
  */
-function wwtcReport(?int $jd = null): ShabbosMevorchim
+function wwtcReport(?int $jd = null, ?int $year = null): ShabbosMevorchim
 {
     static $byDate = [];
+    $year = $year ?: wwtcYear();
     $jd = $jd ?? wwtcCurrentDate();
-    if (!isset($byDate[$jd])) {
-        $obj = new ShabbosMevorchim(wwtcYear());
+    $key = $year . ':' . $jd;
+    if (!isset($byDate[$key])) {
+        $obj = new ShabbosMevorchim($year);
         $obj->setUseLiveData(true);
         $obj->setReportDates($jd);
-        $byDate[$jd] = $obj;
+        $byDate[$key] = $obj;
     }
-    return $byDate[$jd];
+    return $byDate[$key];
+}
+
+/** English month => jd for one campaign year. Current year reuses wwtcMonthDates(). */
+function wwtcMonthDatesForYear(int $year): array
+{
+    static $cache = [];
+    if (isset($cache[$year])) {
+        return $cache[$year];
+    }
+    if ($year === wwtcYear()) {
+        return $cache[$year] = wwtcMonthDates();
+    }
+    $names = [
+        0 => 'Tishrei', 1 => 'Cheshvan', 2 => 'Kislev', 3 => 'Teves',
+        4 => 'Shvat', 5 => 'Adar', 6 => 'Adar II', 7 => 'Nissan',
+        8 => 'Iyar', 9 => 'Sivan', 10 => 'Tammuz', 11 => 'Av', 12 => 'Elul',
+    ];
+    $sm = calculateSM($year);
+    $dates = [];
+    foreach ($sm as $index => $jd) {
+        if ($sm[6] != $sm[7] && $index == 5) {
+            $dates['Adar I'] = $jd;
+            continue;
+        } elseif ($sm[6] == $sm[7] && $index == 6) {
+            continue;
+        }
+        $dates[$names[$index]] = $jd;
+    }
+    return $cache[$year] = $dates;
+}
+
+function wwtcIsHolidayMonth(string $month): bool
+{
+    return $month === 'Rosh Hashana' || $month === 'Yom Kippur' || $month === 'Rosh Hashona' || $month === 'Rosh Hashanah';
+}
+
+/** year+month query, or the current Shabbos Mevorchim when the query is empty. */
+function wwtcQueryPeriod(): array
+{
+    $year = isset($_GET['year']) && $_GET['year'] !== '' ? (int) $_GET['year'] : wwtcYear();
+    $month = isset($_GET['month']) ? trim((string) $_GET['month']) : '';
+    $aliases = [
+        'Adar 1' => 'Adar I', 'Adar 2' => 'Adar II', 'Shevat' => 'Shvat',
+        'Rosh Hashona' => 'Rosh Hashana', 'Rosh Hashanah' => 'Rosh Hashana',
+    ];
+    if (isset($aliases[$month])) {
+        $month = $aliases[$month];
+    }
+    if (wwtcIsHolidayMonth($month)) {
+        return ['year' => $year, 'month' => $month === 'Rosh Hashona' ? 'Rosh Hashana' : $month, 'jd' => null, 'holiday' => true];
+    }
+    if ($month === '') {
+        if ($year === wwtcYear()) {
+            $jd = wwtcCurrentDate();
+            return ['year' => $year, 'month' => wwtcMonthForDate($jd), 'jd' => $jd, 'holiday' => false];
+        }
+        $dates = wwtcMonthDatesForYear($year);
+        $last = (string) array_key_last($dates);
+        return ['year' => $year, 'month' => $last, 'jd' => (int) $dates[$last], 'holiday' => false];
+    }
+    $dates = wwtcMonthDatesForYear($year);
+    if (!isset($dates[$month])) {
+        wwtcError('That month is not on the campaign calendar.', 404);
+    }
+    return ['year' => $year, 'month' => $month, 'jd' => (int) $dates[$month], 'holiday' => false];
+}
+
+function wwtcHasPeriodQuery(): bool
+{
+    return (isset($_GET['year']) && $_GET['year'] !== '') || (isset($_GET['month']) && $_GET['month'] !== '');
+}
+
+function wwtcColumnExists(string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    global $MASHPIA_DB;
+    try {
+        $stmt = $MASHPIA_DB->prepare(
+            'SELECT COUNT(*) FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c'
+        );
+        $stmt->execute([':t' => $table, ':c' => $column]);
+        return $cache[$key] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (\Throwable $e) {
+        return $cache[$key] = false;
+    }
+}
+
+function wwtcParticipatedBySchool(int $date): array
+{
+    global $MASHPIA_DB;
+    static $cache = [];
+    if (isset($cache[$date])) {
+        return $cache[$date];
+    }
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT u.school_id, COUNT(DISTINCT dtm.user_id) n
+           FROM date_tasks_marks dtm
+           JOIN date_tasks dt USING (date_task_id)
+           JOIN date_tasks_missions dtmm USING (date_tasks_mission_id)
+           JOIN users u ON u.user_id = dtm.user_id
+          WHERE dt.grid_id = ' . WWTC_GRID_KAPITELACH . ' AND dtmm.subject_id = ' . WWTC_SUBJECT_ID . '
+            AND dtmm.start_date = :d AND dtm.done_qty > 0
+          GROUP BY u.school_id'
+    );
+    $stmt->execute([':d' => $date]);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $out[(int) $row['school_id']] = (int) $row['n'];
+    }
+    return $cache[$date] = $out;
 }
 
 // ---- soldier lookup --------------------------------------------------------
@@ -604,25 +722,69 @@ function wwtcSafeKid(array $u): array
         'schoolId' => isset($u['school_id']) ? (int) $u['school_id'] : null,
         'schoolName' => $u['school_name'] ?? null,
         'className' => trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? '')),
+        'gender' => wwtcGender($u['gender'] ?? null),
+        'photoUrl' => wwtcPhotoUrl($u['wwtc_photo'] ?? null),
     ];
 }
 
-const WWTC_KID_SELECT =
-    'SELECT u.user_id, u.user_serial, u.first, u.last, u.school_id, u.class_id,
+function wwtcGender($value): ?string
+{
+    $g = strtolower(trim((string) $value));
+    if (in_array($g, ['f', 'female', 'girl', 'g'], true)) {
+        return 'girl';
+    }
+    if (in_array($g, ['m', 'male', 'boy', 'b'], true)) {
+        return 'boy';
+    }
+    return null;
+}
+
+function wwtcPhotoUrl($value): ?string
+{
+    if ($value === null || $value === false || $value === '') {
+        return null;
+    }
+    if (is_numeric($value) && (int) $value > 0) {
+        return '/file_view.php?id=' . (int) $value;
+    }
+    $text = trim((string) $value);
+    if ($text === '' || $text === '0') {
+        return null;
+    }
+    if (preg_match('#^https?://#i', $text) || str_starts_with($text, '/')) {
+        return $text;
+    }
+    return null;
+}
+
+function wwtcKidSelectSql(): string
+{
+    $extra = '';
+    if (wwtcColumnExists('users', 'gender')) {
+        $extra .= ', u.gender';
+    }
+    foreach (['user_photo', 'photo', 'mobile_pic'] as $col) {
+        if (wwtcColumnExists('users', $col)) {
+            $extra .= ', u.' . $col . ' AS wwtc_photo';
+            break;
+        }
+    }
+    return 'SELECT u.user_id, u.user_serial, u.first, u.last, u.school_id, u.class_id,
             u.school_type_id, u.lang_id,
             s.school_name, c.class_grade, c.class_sub,
-            ut.track_id, ut.level
+            ut.track_id, ut.level' . $extra . '
      FROM users u
      JOIN schools s USING (school_id)
      JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
      LEFT JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
      WHERE u.user_registered > 0 AND ';
+}
 
 /** Find a registered Tehillim soldier by serial, with school/class/ladder. null if none. */
 function wwtcKidBySerial(string $serial): ?array
 {
     global $MASHPIA_DB;
-    $stmt = $MASHPIA_DB->prepare(WWTC_KID_SELECT . 'u.user_serial = :serial LIMIT 1');
+    $stmt = $MASHPIA_DB->prepare(wwtcKidSelectSql() . 'u.user_serial = :serial LIMIT 1');
     $stmt->execute([':serial' => $serial]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -631,7 +793,7 @@ function wwtcKidBySerial(string $serial): ?array
 function wwtcKidByUserId(int $userId): ?array
 {
     global $MASHPIA_DB;
-    $stmt = $MASHPIA_DB->prepare(WWTC_KID_SELECT . 'u.user_id = :id LIMIT 1');
+    $stmt = $MASHPIA_DB->prepare(wwtcKidSelectSql() . 'u.user_id = :id LIMIT 1');
     $stmt->execute([':id' => $userId]);
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }

@@ -13,8 +13,42 @@ import {
   notCompleted,
   setSchoolDedication,
   removeSchoolDedication,
+  getHqVerify,
+  getArmyDedication,
+  setArmyDedication,
   CURRENT_MONTH,
 } from '@/services/api.js'
+
+function HqTools() {
+  const { data, error, reload } = useLiveData(() => getHqVerify(), [])
+  const { data: dedication, reload: reloadDedication } = useLiveData(() => getArmyDedication(), [])
+  const [text, setText] = useState(dedication?.text || '')
+  const [savedNote, setSavedNote] = useState('')
+  return (
+    <Card className="p-5 sm:p-6">
+      <p className="sh">Check the numbers</p>
+      <p className="mt-1 text-sm text-muted">The same figures the home page shows, with the schools that still need a shield uploaded on mashpia.</p>
+      {error ? <p className="mt-3 text-sm text-navy">Couldn’t read the check. <button type="button" className="underline" onClick={reload}>Try again</button></p> : null}
+      {data?.home ? (
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <p><b className="block font-display text-2xl">{data.home.soldiers}</b> Soldiers</p>
+          <p><b className="block font-display text-2xl">{data.home.participatedSoldiers}</b> Participated</p>
+          <p><b className="block font-display text-2xl">{data.home.metSoldiers}</b> Completed quota</p>
+          <p><b className="block font-display text-2xl">{data.home.pct}%</b> Kapitlach</p>
+        </div>
+      ) : <p className="mt-3 text-sm text-muted">Getting the check…</p>}
+      {data?.missingLogos?.length ? (
+        <p className="mt-3 text-sm text-navy">No shield yet: {data.missingLogos.join(', ')}</p>
+      ) : null}
+      <div className="mt-5">
+        <p className="sh">Army dedication</p>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="This month’s Tehillim is dedicated…" className="mt-2 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-navy" />
+        <Button variant="navy" className="mt-2" onClick={async () => { await setArmyDedication(text); setSavedNote('Saved for this month.'); reloadDedication() }}>Save dedication</Button>
+        {savedNote ? <p className="mt-2 text-sm text-green">{savedNote}</p> : null}
+      </div>
+    </Card>
+  )
+}
 
 // School admins add / edit / remove their school's monthly dedication.
 function DedicationEditor({ school, onSaved }) {
@@ -86,6 +120,8 @@ export default function AdminDashboard() {
           <Button variant="ghost" className="!px-3 !text-[15px]" onClick={logoutAdmin}>Sign out</Button>
         </div>
 
+        {isSuper ? <HqTools /> : null}
+
         {/* HQ: school switcher + worldwide snapshot */}
         {isSuper ? (
           <Card className="p-5 sm:p-6">
@@ -118,7 +154,7 @@ export default function AdminDashboard() {
           </Card>
         ) : !school ? (
           // A school is selected (or this is a school admin) but its data is still loading.
-          <Card className="p-6 text-center text-muted">Loading {isSuper ? 'the school' : 'your school'}…</Card>
+          <Card className="p-6 text-center text-muted">Getting {isSuper ? 'the school' : 'your school'}…</Card>
         ) : (
           <>
             {/* School snapshot */}

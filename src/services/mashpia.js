@@ -147,24 +147,60 @@ export async function verifyAdmin(username, password) {
 
 // ---- read endpoints --------------------------------------------------------
 
+function periodQuery(period) {
+  if (!period) return ''
+  const params = new URLSearchParams()
+  if (period.year) params.set('year', String(period.year))
+  if (period.month) params.set('month', period.month)
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
 export const getSchool = (id) => req(`/schools/${id}`)
-export const getGlobalStats = () => req('/stats')
-export const getSchools = () => req('/schools').then((r) => r.schools || [])
-export const getPerfectPlatoons = () => req('/perfect-platoons').then((r) => r.platoons || [])
+export const getGlobalStats = (period) => req(`/stats${periodQuery(period)}`)
+export const getSchools = (period) => req(`/schools${periodQuery(period)}`).then((r) => r.schools || [])
+export const getPerfectPlatoons = (period) => req(`/perfect-platoons${periodQuery(period)}`).then((r) => r.platoons || [])
+export const getCampaign = (year) => req(`/campaign${year ? `?year=${year}` : ''}`)
+export const getDedication = async (period) => {
+  const params = new URLSearchParams()
+  params.set('scope', period?.scope || 'army')
+  if (period?.year) params.set('year', String(period.year))
+  if (period?.month) params.set('month', period.month)
+  if (period?.schoolId) params.set('schoolId', String(period.schoolId))
+  const data = await req(`/dedication?${params}`)
+  return data?.dedication ?? null
+}
+export const getHqVerify = (period) => req(`/hq/verify${periodQuery(period)}`, { as: 'admin' })
 export const getClassLeaderboard = (id) => req(`/schools/${id}/class-leaderboard`).then((r) => r.classes || [])
 export const getNotCompleted = (id) => req(`/schools/${id}/not-completed`, { as: 'admin' }).then((r) => r.classes || [])
 export const getSoldierLeaderboard = (id, n = 10) =>
   req(`/schools/${id}/leaderboard?n=${n}`).then((r) => r.soldiers || [])
 export const getRunningTotals = () => req('/running-totals')
 const monthQuery = (idx) => (idx === undefined || idx === null ? '' : `?monthIdx=${idx}`)
-export const getArmyReport = (monthIdx) => req(`/reports/army${monthQuery(monthIdx)}`)
-export const getBaseReport = (schoolId, monthIdx) => req(`/reports/base/${schoolId}${monthQuery(monthIdx)}`)
-export const getPlatoonReport = (classId, monthIdx) => req(`/reports/platoon/${classId}${monthQuery(monthIdx)}`)
+function reportQuery(monthIdx, period) {
+  if (period?.year || period?.month) return periodQuery(period)
+  return monthQuery(monthIdx)
+}
+export const getArmyReport = (monthIdx, period) => req(`/reports/army${reportQuery(monthIdx, period)}`)
+export const getBaseReport = (schoolId, monthIdx, period) => req(`/reports/base/${schoolId}${reportQuery(monthIdx, period)}`)
+export const getPlatoonReport = (classId, monthIdx, period) => req(`/reports/platoon/${classId}${reportQuery(monthIdx, period)}`)
 
 // The signed-in soldier (token-scoped, so no id is sent).
 export const getKidProgress = () => req('/me/progress', { as: 'kid' })
 export const getKidSocial = () => req('/me/social', { as: 'kid' })
-export const recordMonth = (kapitlach, minutes) =>
-  write('/me/report', { method: 'POST', body: { kapitlach, minutes }, as: 'kid' })
+export const recordMonth = (kapitlach, minutes, extra = {}) =>
+  write('/me/report', {
+    method: 'POST',
+    body: {
+      kapitlach,
+      minutes,
+      ...(extra?.exceptionalConfirmed ? { exceptionalConfirmed: true } : {}),
+    },
+    as: 'kid',
+  })
+export const setDedication = async ({ scope, schoolId, text, year, month }) => {
+  const data = await write('/dedication', { method: 'PUT', body: { scope, schoolId, text, year, month }, as: 'admin' })
+  return data?.dedication ?? null
+}
 export const setKidLadder = (ladder) =>
   write('/me/ladder', { method: 'PUT', body: { ladder }, as: 'kid' })

@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Card, Pill, SchoolLogo, Button } from '@/components/ui.jsx'
+import { useParams } from 'react-router-dom'
+import { Card, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
+import { Pending, QuotaReached, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
@@ -54,8 +55,8 @@ export default function SchoolCampaign() {
   if (!school) {
     return (
       <>
-        <PageHero eyebrow="Base Campaign" title={loading ? 'Loading…' : 'School not found'}>
-          {loading ? 'Loading this school’s campaign…' : 'We couldn’t find that school.'}
+        <PageHero eyebrow="Base Campaign" title={loading ? 'This base' : 'School not found'}>
+          {loading ? <Pending label="Getting this base" /> : 'We couldn’t find that school.'}
         </PageHero>
         {loading ? null : (
           <div className="mx-auto max-w-5xl px-4 py-10"><Button to="/">Back to Home</Button></div>
@@ -65,7 +66,6 @@ export default function SchoolCampaign() {
   }
 
   const perfect = classes.filter((c) => c.perfect)
-  const PERFECT_SHOWN = 24 // compact sample; the rest open on the school's own page
 
   return (
     <>
@@ -85,12 +85,12 @@ export default function SchoolCampaign() {
         <Card className="p-6 sm:p-8">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <p className="sh">This month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
-            {school.pct >= 100 ? <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill> : null}
+            {school.pct >= 100 ? <QuotaReached /> : null}
           </div>
           <QuotaBars
             kapitlach={{ quota: school.quotaMonth, said: school.saidMonth, pct: school.pct }}
             minutes={{ quota: school.minutesQuotaMonth, said: school.minutesSaidMonth, pct: school.minutesPct }}
-            soldiers={{ total: school.kids, finished: school.metMonth, pct: school.pctMet }}
+            soldiers={{ total: school.kids, finished: school.metMonth, participated: school.participatedMonth, pct: school.pctMet }}
           />
         </Card>
 
@@ -106,32 +106,24 @@ export default function SchoolCampaign() {
         <Card className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h2 className="font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
-            <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(perfect.length)} this month</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(perfect.length)} this month</span>
           </div>
           <p className="mb-4 mt-1 text-[13px] font-semibold text-muted">
-            A platoon (class) is <span className="text-navy">perfect</span> when every single soldier completed their full quota.
+            A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.
           </p>
           {perfect.length ? (
             <div className="flex flex-wrap gap-2">
-              {perfect.slice(0, PERFECT_SHOWN).map((c) => (
+              {perfect.map((c) => (
                 <span
                   key={c.id}
                   className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
                   title={`${c.name}${c.teacher ? ' · ' + c.teacher : ''} · ${c.size} soldiers`}
                 >
-                  <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
+                  <StarMark className="h-4 w-4 flex-none" />
                   <span className="font-display font-bold text-navy">{c.name}</span>
-                  {c.teacher ? <span className="text-navy/55">· {c.teacher}</span> : null}
+                  {c.teacher ? <span className="text-green">· {c.teacher}</span> : null}
                 </span>
               ))}
-              {perfect.length > PERFECT_SHOWN ? (
-                <Link
-                  to={`/perfect-platoons?school=${schoolId}`}
-                  className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
-                >
-                  +{fmt(perfect.length - PERFECT_SHOWN)} more — see all →
-                </Link>
-              ) : null}
             </div>
           ) : (
             <p className="text-sm font-semibold text-navy">No perfect platoons yet this month — a class turns perfect when every soldier in it completes their quota. Keep going! 💪</p>
@@ -148,21 +140,16 @@ export default function SchoolCampaign() {
                   <span className="w-7 text-center font-display text-lg font-bold italic text-blue-accent">{RANK_MEDAL[i] || i + 1}</span>
                   <span className="min-w-0 flex-1 truncate font-semibold text-navy">{s.name}</span>
                   <span className="text-xs text-muted">{GRADE_LABEL[s.grade]}</span>
-                  <span className="font-display font-bold tabular-nums text-green">{fmt(s.saidYear)}</span>
+                  <span className="font-display font-bold tabular-nums text-green">{fmt(s.saidMonth ?? 0)}</span>
                 </li>
               ))}
             </ol>
-            <p className="mt-2 text-xs text-muted">Kapitlach said this year.</p>
+            <p className="mt-2 text-xs text-muted">Kapitlach said this month. Ranked by this month only.</p>
           </Card>
 
           {/* Class leaderboard — toggle the metric like the home page race */}
           {(() => {
-            const SEGMENTS = [
-              { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
-              { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
-              { key: 'time', label: '% Time', sub: 'goal completed', icon: asset('design/icon-clock.png') },
-            ]
-            const metricOf = (c) => (classSort === 'finished' ? c.pctMet : classSort === 'kapitlach' ? c.pct : c.minutesPct)
+            const metricOf = (c) => (classSort === 'participated' ? (c.pctParticipated || 0) : classSort === 'finished' ? c.pctMet : classSort === 'kapitlach' ? c.pct : c.minutesPct)
             const ranked = [...classes].sort(
               (a, b) => metricOf(b) - metricOf(a) || b.pctMet - a.pctMet || b.pct - a.pct || a.name.localeCompare(b.name),
             )
@@ -170,29 +157,7 @@ export default function SchoolCampaign() {
               <Card className="p-5 sm:p-6">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <h2 className="font-display text-xl font-black text-navy">Platoons (Classes)</h2>
-                  <div className="inline-flex rounded-[22px] bg-[#6d93d8] p-1 font-cond uppercase tracking-[0.04em]">
-                    {SEGMENTS.map((sg) => {
-                      const active = classSort === sg.key
-                      return (
-                        <button
-                          key={sg.key}
-                          type="button"
-                          onClick={() => setClassSort(sg.key)}
-                          aria-pressed={active}
-                          className={`flex w-[84px] flex-col items-center gap-0.5 rounded-[18px] px-2 py-1.5 text-green transition sm:w-[92px] ${active ? 'shadow-sm' : 'hover:bg-white/15'}`}
-                          style={active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined}
-                        >
-                          {sg.icon ? (
-                            <img src={sg.icon} alt="" aria-hidden="true" draggable="false" className="h-5 w-auto sm:h-6" />
-                          ) : (
-                            <span className="text-[18px] leading-none sm:text-[20px]">{sg.emoji}</span>
-                          )}
-                          <span className="text-[11px] leading-none sm:text-[12px]">{sg.label}</span>
-                          <span className="text-[8px] font-semibold normal-case leading-tight tracking-normal text-navy/70">{sg.sub}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <RaceToggle value={classSort} onChange={setClassSort} compact />
                 </div>
                 <ul className="space-y-2 sm:space-y-3">
                   {ranked.map((c, i) => {
@@ -211,7 +176,7 @@ export default function SchoolCampaign() {
                         </span>
                         <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-navy font-cond text-sm font-bold text-gold sm:h-11 sm:w-11">{classMono(c)}</span>
                         <span className="min-w-0 truncate font-display text-[16px] font-semibold text-navy sm:w-40 sm:flex-none sm:text-[18px]">
-                          {c.name} {c.perfect ? <span title="Perfect Platoon">★</span> : null}
+                          {c.name} {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
                         </span>
                         <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
                           <span

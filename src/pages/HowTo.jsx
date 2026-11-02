@@ -1,82 +1,91 @@
 import { Card, Button } from '@/components/ui.jsx'
-import { PageHero } from './_page.jsx'
-import { asset } from '@/lib/asset.js'
-import { MEDAL_THRESHOLDS } from '@/lib/medals.js'
 
-const STEPS = [
-  {
-    n: 1,
-    title: 'Pick your ladder',
-    body: 'Your ladder is your training plan — the grade by which you’ll finish training to say the whole Tehillim (Ladder 5 finishes training by 5th grade, up to Ladder 12 by 12th). A steeper ladder trains faster. Saying the whole Tehillim every Shabbos Mevorchim is the goal; the ladder gets you there.',
-  },
-  {
-    n: 2,
-    title: 'Say your Tehillim',
-    body: 'Every Shabbos Mevorchim your ladder tells you exactly which kapitlach to say — always from the beginning up to a set point — and a few more each month.',
-  },
-  {
-    n: 3,
-    title: 'Report it',
-    body: 'Mark the month done on your dashboard. Finishing a month’s quota is a mission — and when every child in a class finishes, the class becomes a Perfect Platoon.',
-  },
-  {
-    n: 4,
-    title: 'Earn medals',
-    body: `Missions add up to medals, awarded at ${MEDAL_THRESHOLDS.join(', ')} cumulative missions — eleven medals, each its own color, all the way to Platinum.`,
-  },
+const MEDALS = [
+  ['5', 'White'],
+  ['11', 'Red'],
+  ['18', 'Orange'],
+  ['26', 'Yellow'],
+  ['35', 'Green'],
+  ['45', 'Blue'],
+  ['56', 'Purple'],
+  ['68', 'Brown'],
+  ['81', 'Gray'],
+  ['95', 'Black'],
+  ['110', 'Bronze'],
+  ['126', 'Silver'],
+  ['143', 'Gold'],
 ]
+
+function Block({ title, children }) {
+  return (
+    <Card className="p-6 sm:p-8">
+      <h2 className="font-display text-2xl font-black text-navy">{title}</h2>
+      <div className="mt-3 space-y-3 text-[16px] leading-relaxed text-navy/85">{children}</div>
+    </Card>
+  )
+}
 
 export default function HowTo() {
   return (
     <>
-      <PageHero eyebrow="Start Here" title="How It Works">
-        Pick a ladder, say your kapitlach each Shabbos Mevorchim, report it, and earn medals — all
-        the way to finishing the entire Sefer Tehillim.
-      </PageHero>
-
-      <div className="mx-auto max-w-[1000px] space-y-10 px-4 py-10 sm:px-6 lg:px-10">
-        {/* The goal */}
-        <img
-          src={asset('brand/goal.jpg')}
-          alt="Goal: to say the entire Tehillim on Shabbos Mevorchim"
-          className="w-full rounded-[22px] shadow-sm sm:rounded-[28px]"
-        />
-
-        <div className="grid gap-5 sm:grid-cols-2">
-          {STEPS.map((s) => (
-            <Card key={s.n} className="p-6">
-              <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-full font-cond text-xl text-white" style={{ background: 'var(--grad-blue-lilac)' }}>{s.n}</span>
-                <h3 className="font-display text-xl font-black text-navy">{s.title}</h3>
-              </div>
-              <p className="mt-3 text-navy/80">{s.body}</p>
-            </Card>
-          ))}
+      <section className="hero-navy">
+        <div className="mx-auto max-w-[1000px] px-4 py-12 text-white sm:px-6">
+          <h1 className="font-display text-4xl font-black md:text-5xl">How It Works</h1>
         </div>
+      </section>
 
-        {/* The source — Hayom Yom, Chof Hei Shvat */}
-        <div>
-          <p className="sh mb-3">Why Shabbos Mevorchim Tehillim</p>
-          <img
-            src={asset('brand/hayom-yom.jpg')}
-            alt="One should be careful to say the whole Tehillim on Shabbos Mevorchim — Hayom Yom, Chof Hei Shvat"
-            className="w-full rounded-[22px] shadow-sm sm:rounded-[28px]"
-          />
-        </div>
+      <div className="mx-auto max-w-[1000px] space-y-6 px-4 py-10 sm:px-6">
+        <Block title="The Goal">
+          <p>Say the entire Tehillim each Shabbos Mevorchim.</p>
+          <p className="font-heb text-xl text-navy">מפי עוללים ….</p>
+          <p>The Tehillim of children has a special power: it protects and foils the plans of our enemies. Every word - matters.</p>
+        </Block>
 
-        <Card className="p-6 sm:p-8">
-          <p className="sh">The Big Picture</p>
-          <h2 className="font-display text-2xl font-black text-navy">One army, one Sefer Tehillim</h2>
-          <p className="mt-3 text-navy/85">
-            Every child is climbing toward the same summit — saying all 150 kapitlach. Your quota
-            rolls up into your class, your class into your school, and every school into the
-            worldwide army. The Home page shows the whole army’s Tehillim climbing together.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Button to="/login" variant="navy">I’m a Soldier</Button>
-            <Button to="/" variant="gold">See the Worldwide Totals</Button>
+        <Block title="Training">
+          <p>Saying the entire Tehillim right now may feel like an impossible challenge. But you have your years in school to train, one step at a time.</p>
+          <p>Training can begin in Pre1A with a quota of just one kapitel. Each Shabbos Mevorchim, that quota grows a little more. Month by month, year by year, you work toward saying the entire Tehillim - building a Shabbos Mevorchim habit you can carry with you for the rest of your life.</p>
+        </Block>
+
+        <Block title="Ladders">
+          <p>Your ladder is your training path toward saying the entire Tehillim. Which ladder will you choose to climb?</p>
+          <p>Ladder 12 builds toward completing your training by 12th grade. Ladder 5 builds toward completing it by 5th grade.</p>
+          <p>Every ladder leads to the same goal. Choose the pace that's right for you, to determine your quota of tehillim to say each month.</p>
+        </Block>
+
+        <Block title="Medals">
+          <p>Celebrate your progress, one medal at a time.</p>
+          <p>Complete your quota for 5 missions to earn your white Tehillim medal. Complete 6 more missions - 11 in total - to earn your red medal. Each new medal takes one more mission than the last step.</p>
+          <p>Your medal milestones, in total completed missions:</p>
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+            {MEDALS.map(([n, name]) => (
+              <li key={name} className="font-semibold text-navy">{n} - {name}</li>
+            ))}
+          </ul>
+          <p>Every completed mission brings you closer to your next medal. If you miss a mission, the progress you've earned stays with you.</p>
+          <p>What color medal will you earn? Be all you can be in Hashem's army.</p>
+        </Block>
+
+        <Block title="Streaks">
+          <p>A streak is the number of missions you complete in a row without missing one.</p>
+          <p>Longest Streak: The most missions you've ever completed in a row without missing one.</p>
+        </Block>
+
+        <Block title="Perfect Platoons">
+          <p>Your class is your platoon. When every soldier in your class completes their own quota, your class is listed as a Perfect Platoon for that mission.</p>
+        </Block>
+
+        <Block title="Base">
+          <p>Your school is your base. Its quota is all the individual soldiers' quotas added together.</p>
+        </Block>
+
+        <Block title="Army">
+          <p>Together, all the soldiers' quotas around the world make up the army's quota.</p>
+          <p>When you choose your ladder, choose one with a quota you're confident you can complete. Your platoon, your base, and the entire army are counting on you.</p>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Button to="/login" variant="navy">I'm a Soldier</Button>
+            <Button to="/" variant="gold">See the Army Report</Button>
           </div>
-        </Card>
+        </Block>
       </div>
     </>
   )
