@@ -13,6 +13,8 @@ import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
 import { decideLadderChange, transcriptOffersLadder } from '@/lib/ladderTool.js'
 import { connectRealtimeCall } from '@/lib/realtimeCall.js'
 import { asset } from '@/lib/asset.js'
+import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
+import { resetCues } from '@/lib/commanderBus.js'
 
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
 // the real choices out loud and saves the one the child accepts. Otherwise he
@@ -33,6 +35,7 @@ function aiContext(ctx) {
   const sm = ctx.sMevorchim
   return {
     name: ctx.firstName,
+    gender: ctx.gender || null,
     childGrade: ctx.grade ?? null,
     childGradeLabel: ctx.childGradeLabel ?? null,
     ladder: ctx.ladder ?? null,
@@ -277,7 +280,11 @@ export default function ChatBuddy() {
   const [pinnedGreeting, setPinnedGreeting] = useState(null)
   // Which soldier already got the auto-opened panel this login.
   const [openedFor, setOpenedFor] = useState(null)
+  const [commanderPref, setCommanderPref] = useState(() => {
+    try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
+  })
   const kidId = kid?.id ?? null
+  const greetedId = useRef(null)
   const [trackedKid, setTrackedKid] = useState(kidId)
   // Drop a previous soldier's live mic/voice when the signed-in kid changes.
   if (trackedKid !== kidId) {
@@ -289,6 +296,9 @@ export default function ChatBuddy() {
     setFocusLadder(null)
     setPinnedGreeting(null)
     setEngine('scripted')
+    setMessages([])
+    resetCues()
+    greetedId.current = null
   }
   const scrollRef = useRef(null)
   const convoRef = useRef([])
@@ -302,7 +312,6 @@ export default function ChatBuddy() {
   const listenHandle = useRef(null)
   const turnRef = useRef(0)
   const sayGen = useRef(0)
-  const greetedId = useRef(null)
   const pendingSpeech = useRef(null)
   const focusLadderRef = useRef(null)
   const pendingLadderRef = useRef(null)
@@ -331,6 +340,7 @@ export default function ChatBuddy() {
     const monthEn = reportMonth || nextShabbosMevorchim()?.monthEn || null
     const base = {
       firstName: (kid.name || 'friend').split(' ')[0],
+      gender: kid.gender || progress?.gender || null,
       ladder: kid.ladder,
       grade: kid.grade,
       childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
@@ -356,7 +366,7 @@ export default function ChatBuddy() {
   if (ctx && ctx.situation !== 'pick' && focusLadder != null) {
     setFocusLadder(null)
   }
-  const autoOpen = autoOpenFor(openedFor, kidId)
+  const autoOpen = autoOpenFor(openedFor, kidId, commanderPref === 'on' ? 'on' : 'off')
   if (autoOpen) {
     setOpenedFor(autoOpen.openedFor)
     setOpen(autoOpen.open)
@@ -402,7 +412,7 @@ export default function ChatBuddy() {
     speakingTextRef.current = willTalk ? text : speakingTextRef.current
     speakingRef.current = willTalk
     if (willTalk) setSpeaking(true)
-    const done = speak(text, { muted: mutedRef.current })
+    const done = speak(text, { muted: mutedRef.current, gender: ctxRef.current?.gender })
     done.finally(() => {
       if (gen !== sayGen.current) return
       setSpeaking(false)
@@ -933,12 +943,24 @@ export default function ChatBuddy() {
     liveCallRef.current?.close()
   }, [])
 
+  useEffect(() => {
+    const onCue = (event) => {
+      const text = event.detail?.text
+      if (!text) return
+      setMessages((m) => [...m, { id: `c${(msgSeq.current += 1)}`, from: 'bot', text }])
+      if (openRef.current || commanderPref === 'on') say(text)
+    }
+    window.addEventListener('wwtc-cue', onCue)
+    return () => window.removeEventListener('wwtc-cue', onCue)
+  }, [say, commanderPref])
+
   if (!kid) return null
   const peek = ctx ? peekText(ctx) : ''
   const shownGreeting = pinnedGreeting?.id === kid.id && pinnedGreeting.situation === 'pick'
     ? pinnedGreeting.text
     : greeting
-  const showPeek = !open && !peekClosed && pathname === '/me' && !!peek
+  const asking = commanderPref === 'ask'
+  const showPeek = !open && !peekClosed && pathname === '/me' && (asking || !!peek)
   const micOk = canListen()
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
@@ -963,8 +985,16 @@ export default function ChatBuddy() {
                 <Avatar size="h-7 w-7" text="text-base" />
                 <span className="font-display text-[14px] font-black text-navy">{BOT_NAME}</span>
               </span>
-              {peek}
-              <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>
+              {asking ? (
+                <span className="block">
+                  Want your virtual commander to pop up when you sign in?
+                  <span className="mt-2 flex gap-2">
+                    <button type="button" className="rounded-full bg-navy px-3 py-1 text-sm text-white" onClick={(e) => { e.stopPropagation(); try { localStorage.setItem('wwtc.commander.auto', 'on') } catch { /* ignore */ } setCommanderPref('on'); openPanel() }}>Yes</button>
+                    <button type="button" className="rounded-full bg-track px-3 py-1 text-sm text-navy" onClick={(e) => { e.stopPropagation(); try { localStorage.setItem('wwtc.commander.auto', 'off') } catch { /* ignore */ } setCommanderPref('off'); setPeekClosed(true) }}>Not now</button>
+                  </span>
+                </span>
+              ) : peek}
+              {asking ? null : <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>}
             </button>
           </div>
         </div>

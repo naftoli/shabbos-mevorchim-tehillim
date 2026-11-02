@@ -53,8 +53,8 @@ export default function Medals() {
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) {
     return (
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Loading…">
-        One moment…
+      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+        One moment while your medals come up.
       </PageHero>
     )
   }

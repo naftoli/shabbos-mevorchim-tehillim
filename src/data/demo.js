@@ -79,6 +79,14 @@ const FIRST = [
   'Mendel', 'Levi', 'Shneur', 'Dovid', 'Zalman', 'Yosef', 'Berel', 'Sholom', 'Chaim', 'Ari',
   'Moshe', 'Yisroel', 'Avrohom', 'Yaakov', 'Shmuel', 'Nochum', 'Zevi', 'Meir', 'Shalom', 'Leib',
 ]
+const GIRL_FIRST = [
+  'Chaya', 'Mushka', 'Rivkah', 'Leah', 'Chana', 'Devorah', 'Rochel', 'Sara', 'Esther', 'Miriam',
+  'Chana', 'Basya', 'Golda', 'Pessa', 'Fruma', 'Yocheved', 'Nechama', 'Shterna', 'Hinda', 'Bracha',
+]
+const GIRL_TEACHERS = [
+  'Mrs Cohen', 'Mrs Levin', 'Mrs Gordon', 'Mrs Katz', 'Mrs Shapiro', 'Mrs Weiss',
+  'Mrs Rubin', 'Mrs Lerner', 'Mrs Posner', 'Mrs Feller', 'Mrs Hecht', 'Mrs Gansburg',
+]
 const LAST = ['K.', 'B.', 'S.', 'L.', 'R.', 'G.', 'F.', 'T.', 'C.', 'M.', 'W.', 'D.']
 const GRADES_IN_PLAY = ['1', '2', '3', '4', '5', '6', '7', '8']
 const TEACHERS = [
@@ -88,6 +96,31 @@ const TEACHERS = [
 ]
 
 const pad2 = (n) => String(n).padStart(2, '0')
+
+// Prior-year demo marks. A separate seed so this year's roster numbers stay put.
+function priorYearFor(seq, grade, ladder) {
+  const rand = rng(800000 + seq)
+  const reports = {}
+  const minutes = {}
+  for (const mo of MONTHS) {
+    const q = quotaFor(grade, mo, ladder)
+    if (!q) continue
+    const r = rand()
+    if (r < 0.72) {
+      reports[mo] = q.v
+      minutes[mo] = q.m
+    } else if (r < 0.88) {
+      reports[mo] = Math.max(1, Math.round(q.v * 0.5))
+      minutes[mo] = Math.round((q.m || 0) * 0.5)
+    } else {
+      reports[mo] = 0
+      minutes[mo] = 0
+    }
+  }
+  return { reports, minutes }
+}
+
+export const PRIOR_CAMPAIGN_YEAR = String(Number(CAMPAIGN_YEAR) - 1)
 
 function buildRoster() {
   const rand = rng(20260408)
@@ -100,7 +133,8 @@ function buildRoster() {
       // Pair classes up so most grades have a couple of sections (A/B).
       const grade = GRADES_IN_PLAY[(si + Math.floor(ci / 2)) % GRADES_IN_PLAY.length]
       const size = 10 + Math.floor(rand() * 11) // 10–20 kids
-      const teacher = pick(TEACHERS)
+      const girlSchool = s.id === 'bais-chaya-mushka-sample'
+      const teacher = pick(girlSchool ? GIRL_TEACHERS : TEACHERS)
       const classDiligence = 0.55 + rand() * 0.42
       const ladders = availableLadders(grade)
       const gradeNum = grade === 'pre1a' ? 0 : Number(grade)
@@ -134,13 +168,17 @@ function buildRoster() {
         // Prior-year missions so medal boards are interesting; older kids have more.
         const priorMissions = Math.floor(rand() * (gradeNum * 11))
         kidSeq += 1
+        const prior = priorYearFor(kidSeq, grade, ladder)
         return {
           id: `s${1000 + kidSeq}`,
           serial: String(100000 + kidSeq),
           dob: `${birthYear}-${pad2(1 + Math.floor(rand() * 12))}-${pad2(1 + Math.floor(rand() * 28))}`,
-          name: `${pick(FIRST)} ${pick(LAST)}`,
+          name: `${pick(girlSchool ? GIRL_FIRST : FIRST)} ${pick(LAST)}`,
+          gender: girlSchool ? 'girl' : 'boy',
           grade,
           ladder,
+          priorYearReports: prior.reports,
+          priorYearMinutes: prior.minutes,
           reports,
           minutesByMonth,
           minutes,

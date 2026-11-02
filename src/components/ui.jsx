@@ -23,13 +23,13 @@ export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = fal
     <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
       <img src={asset('brand/wwtc-shield.png')} alt="Worldwide Tehillim Club" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
       <span className="flex flex-col leading-none">
-        <span className="font-cond text-[1.35rem] uppercase leading-none tracking-[0.02em] sm:text-[2.1rem] 2xl:text-[2.25rem]"
+        <span className="font-cond text-[0.95rem] uppercase leading-[1.05] tracking-[0.02em] sm:text-[1.35rem] 2xl:text-[1.55rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
-          Tehillim Club
-        </span>
-        <span className="mt-1 font-display text-[10px] font-semibold uppercase leading-none tracking-[0.04em] sm:text-[13px] 2xl:text-[15px]"
-          style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
           Tzivos Hashem
+        </span>
+        <span className="mt-1 max-w-[9.5rem] font-display text-[8px] font-semibold uppercase leading-tight tracking-[0.03em] sm:max-w-none sm:text-[11px] 2xl:text-[13px]"
+          style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
+          Worldwide Tehillim Campaign
         </span>
       </span>
     </span>
@@ -148,7 +148,7 @@ export function Pill({ children, className = '' }) {
 // Badge is an alias of Pill, kept for components that import it by that name.
 export const Badge = Pill
 
-export function Spinner({ label = 'Loading…' }) {
+export function Spinner({ label = 'One moment' }) {
   return (
     <div className="flex items-center justify-center gap-3 py-16 text-muted">
       <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-green" />

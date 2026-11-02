@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { quotaFor } from '../../src/data/ladders.js'
-import { BOT_NAME, autoOpenFor, openingGreeting, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
+import { BOT_NAME, autoOpenFor, openingGreeting, pickPitch, quickRepliesFor, quotaWords, readSituation, scriptedTurn } from '../../src/lib/general613.js'
 import { armVoice, canListen, canSpeak, pickVoice, speak, speechChunks, spokenText, startRecognition, stripForSpeech } from '../../src/lib/speech.js'
 
 const hello = (name) => `Hi ${name}, I'm your virtual commander.`
@@ -19,13 +19,17 @@ test('no ladder yet walks the real easiest and hardest ladders', () => {
   assert.equal(q.v, 5)
   assert.equal(q.m, 25)
   const greeting = openingGreeting({ ...ctx, situation: 'pick' })
-  assert.match(greeting, new RegExp(`^${hello('Mushky').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Welcome to Shabbos Mevorchim Tehillim Campaign\\. Let's start by choosing the ladder that works best for you\\.`))
-  assert.match(greeting, /You can take ladder 12\. That's the easiest ladder, but your training will take until 12th grade\./)
-  assert.match(greeting, /Or you can choose ladder 5\. That's the hardest ladder, but you'll finish your training and be able to say the entire Tehillim on Shabbos Mevorchim by the time you finish 5th grade\./)
-  assert.match(greeting, /So, there's so many other ladders in between\./)
-  assert.match(greeting, /Let's take a look at ladder 12 and see if that's what works for you\. So, now we're holding Shabbos Mevorchim Kislev, and you are in 3rd grade\. So, if you take ladder 12, that would mean that your quota is 5 kapitlach and 25 minutes\./)
-  assert.match(greeting, /or would you like to check out a more challenging ladder\?/)
-  assert.deepEqual(quickRepliesFor({ ...ctx, situation: 'pick' }), ['That\'s good for me', 'A more challenging ladder'])
+  assert.match(greeting, /Welcome, soldier!/)
+  assert.match(greeting, /which ladder will you climb/)
+  const walk = pickPitch({ ...ctx, situation: 'pick' })
+  assert.match(walk, new RegExp(`^${hello('Mushky').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Welcome to Shabbos Mevorchim Tehillim Campaign\\. Let's start by choosing the ladder that works best for you\\.`))
+  assert.match(walk, /You can take ladder 12\. That's the easiest ladder, but your training will take until 12th grade\./)
+  assert.match(walk, /Or you can choose ladder 5\. That's the hardest ladder, but you'll finish your training and be able to say the entire Tehillim on Shabbos Mevorchim by the time you finish 5th grade\./)
+  assert.match(walk, /So, there's so many other ladders in between\./)
+  assert.match(walk, /Let's take a look at ladder 12 and see if that's what works for you\. So, now we're holding Shabbos Mevorchim Kislev, and you are in 3rd grade\. So, if you take ladder 12, that would mean that your quota is 5 kapitlach and 25 minutes\./)
+  assert.match(walk, /or would you like to check out a more challenging ladder\?/)
+  assert.deepEqual(quickRepliesFor({ ...ctx, situation: 'pick' }), ['Which ladder will I climb?', 'How does it work?'])
+  assert.deepEqual(quickRepliesFor({ ...ctx, situation: 'pick', focusLadder: 12 }), ['That\'s good for me', 'A more challenging ladder'])
 })
 
 test('missing last month asks where they were', () => {
@@ -40,9 +44,9 @@ test('missing last month asks where they were', () => {
     },
   }
   assert.equal(readSituation(ctx), 'behind')
-  assert.equal(
+  assert.match(
     openingGreeting({ ...ctx, firstName: 'Dovi', situation: 'behind' }),
-    `${hello('Dovi')} Where were you last month?`,
+    /Did you say your Tehillim and just not report it yet/,
   )
   assert.ok(quickRepliesFor({ ...ctx, situation: 'behind' }).length >= 2)
 })
@@ -59,9 +63,9 @@ test('ahead is last month over quota, not a three-month streak', () => {
     },
   }
   assert.equal(readSituation(ctx), 'ahead')
-  assert.equal(
+  assert.match(
     openingGreeting({ ...ctx, firstName: 'Dovi', situation: 'ahead' }),
-    `${hello('Dovi')} I see you did a great job last month. You did more than your quota. Would you like to go to a higher quota?`,
+    /Above and beyond/,
   )
   assert.deepEqual(quickRepliesFor({ ...ctx, situation: 'ahead' }), ['Tell me about Ladder 7', 'How am I doing?'])
 })
@@ -94,10 +98,8 @@ test('meeting last month exactly is on track, and the old greeting follows the n
   }
   assert.equal(readSituation(ctx), 'ontrack')
   const greeting = openingGreeting({ ...ctx, firstName: 'Dovi', situation: 'ontrack' })
-  assert.equal(
-    greeting,
-    `${hello('Dovi')} 👋 So good to see you — you're doing beautifully, 4 missions done. Need anything? I can show your mission this month or how you're doing.`,
-  )
+  assert.match(greeting, /New month, new mission!/)
+  assert.match(greeting, /14 kapitlach/)
   assert.deepEqual(quickRepliesFor({ situation: 'ontrack', ladder: 9 }), ['My mission this month', 'How am I doing?', 'My medals'])
 })
 
@@ -131,14 +133,14 @@ test('speech helpers no-op when the browser has no speech API', async () => {
 
 test('a harder grade uses its own hardest ladder, not ladder 5', () => {
   const ctx = { ladder: null, firstName: 'Rochel', grade: '8', monthEn: 'Kislev', situation: 'pick' }
-  const greeting = openingGreeting(ctx)
+  const greeting = pickPitch(ctx)
   assert.match(greeting, /Or you can choose ladder 8\. That's the hardest ladder, but you'll finish your training and be able to say the entire Tehillim on Shabbos Mevorchim by the time you finish 8th grade\./)
   assert.doesNotMatch(greeting, /ladder 5/)
 })
 
 test('a 12th grader only hears ladder 12', () => {
   const ctx = { ladder: null, firstName: 'Levi', grade: '12', monthEn: 'Nissan', situation: 'pick' }
-  const greeting = openingGreeting(ctx)
+  const greeting = pickPitch(ctx)
   assert.match(greeting, /You can take ladder 12\. That's the ladder for your grade, and your training will take until 12th grade\./)
   assert.doesNotMatch(greeting, /ladder 5/)
   assert.doesNotMatch(greeting, /lots of different choices/)

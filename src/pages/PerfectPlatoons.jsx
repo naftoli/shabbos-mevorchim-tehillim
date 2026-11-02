@@ -37,7 +37,7 @@ export default function PerfectPlatoons() {
     <>
       <PageHero eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'} title="Perfect Platoons">
         A platoon is a class — and it’s <span className="font-semibold text-white">perfect</span> when
-        every single soldier in it completed their full quota this month
+        every single soldier in it finished their full quota of kapitlach this month
         {perSchool && schoolName ? <> at {schoolName}</> : null}.
       </PageHero>
 
@@ -45,7 +45,7 @@ export default function PerfectPlatoons() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 rounded-full bg-green/15 px-4 py-1.5 font-cond text-base font-bold uppercase tracking-wide text-green">
             {stillLoading ? (
-              <>Loading… · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+              <><span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
             ) : (
               <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
             )}
@@ -58,7 +58,7 @@ export default function PerfectPlatoons() {
         </div>
 
         {stillLoading ? (
-          <p className="font-display text-[16px] italic text-muted">Loading perfect platoons…</p>
+          <p className="font-display text-[16px] italic text-muted">Getting perfect platoons…</p>
         ) : all.length ? (
           <>
             <div className="mb-6 max-w-md">

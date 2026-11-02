@@ -8,12 +8,14 @@ import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import * as mashpia from './mashpia.js'
+import { MONTHS } from '@/data/ladders.js'
 import {
   ROSTER,
   CURRENT_MONTH,
   CURRENT_MONTH_INDEX,
   ELAPSED_MONTHS,
   CAMPAIGN_YEAR,
+  PRIOR_CAMPAIGN_YEAR,
   PRIOR_YEARS_KAPITLACH,
   YEAR_KAPITLACH,
   DEMO_ADMINS,
@@ -25,6 +27,24 @@ import {
   clearKidProgress,
 } from '@/data/demo.js'
 
+const HOLIDAYS = new Set(['Rosh Hashana', 'Yom Kippur'])
+export function isHolidayMonth(month) {
+  return HOLIDAYS.has(month)
+}
+
+function saidOf(kid, month, year) {
+  if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] ?? 0
+  return kid.reports?.[month] ?? 0
+}
+function minutesOf(kid, month, year) {
+  if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearMinutes?.[month] ?? 0
+  return kid.minutesByMonth?.[month] ?? 0
+}
+function reportedOf(kid, month, year) {
+  if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] != null
+  return Object.prototype.hasOwnProperty.call(kid.reports || {}, month)
+}
+
 export { CURRENT_MONTH, CURRENT_MONTH_INDEX, ELAPSED_MONTHS, CAMPAIGN_YEAR }
 
 const kidMonthQuota = (kid, month) => quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
@@ -34,11 +54,15 @@ const metQuota = (kid, month) => {
   const q = kidMonthQuota(kid, month)
   return q > 0 && kidMonthSaid(kid, month) >= q
 }
+const metAt = (kid, month, year) => {
+  const q = kidMonthQuota(kid, month)
+  return q > 0 && saidOf(kid, month, year) >= q
+}
 const kidSaidYear = (kid) => ELAPSED_MONTHS.reduce((a, mo) => a + kidMonthSaid(kid, mo), 0)
 
 // ---- school aggregates -----------------------------------------------------
 
-function schoolAgg(school) {
+function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
   let kids = 0
   let saidMonth = 0
   let quotaMonth = 0
@@ -46,25 +70,30 @@ function schoolAgg(school) {
   let minutesSaidMonth = 0
   let minutesQuotaMonth = 0
   let metMonth = 0
+  let participatedMonth = 0
   for (const cls of school.classes) {
     for (const kid of cls.kids) {
       kids += 1
-      saidMonth += kidMonthSaid(kid, CURRENT_MONTH)
-      quotaMonth += kidMonthQuota(kid, CURRENT_MONTH)
-      minutesSaidMonth += kidMonthMinutes(kid, CURRENT_MONTH)
-      minutesQuotaMonth += quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)?.m ?? 0
-      if (metQuota(kid, CURRENT_MONTH)) metMonth += 1
+      const said = saidOf(kid, month, year)
+      saidMonth += said
+      quotaMonth += kidMonthQuota(kid, month)
+      minutesSaidMonth += minutesOf(kid, month, year)
+      minutesQuotaMonth += quotaFor(kid.grade, month, kid.ladder)?.m ?? 0
+      if (metAt(kid, month, year)) metMonth += 1
+      if (reportedOf(kid, month, year) && said > 0) participatedMonth += 1
       saidYear += kidSaidYear(kid)
     }
   }
   const pct = quotaMonth > 0 ? Math.round((saidMonth / quotaMonth) * 100) : 0
   const pctMet = kids > 0 ? Math.round((metMonth / kids) * 100) : 0
   const minutesPct = minutesQuotaMonth > 0 ? Math.round((minutesSaidMonth / minutesQuotaMonth) * 100) : 0
+  const pctParticipated = kids > 0 ? Math.round((participatedMonth / kids) * 100) : 0
   return {
     id: school.id,
     name: school.name,
     city: school.city,
     color: school.color,
+    logo: school.logo || null,
     kids,
     saidMonth,
     quotaMonth,
@@ -72,8 +101,10 @@ function schoolAgg(school) {
     minutesSaidMonth,
     minutesQuotaMonth,
     metMonth,
+    participatedMonth,
     pct,
     pctMet,
+    pctParticipated,
     minutesPct,
   }
 }
@@ -94,7 +125,11 @@ export function endSession(role) {
 }
 
 let _schools = null
-const schools = () => (_schools ??= ROSTER.map(schoolAgg))
+const schools = () => (_schools ??= ROSTER.map((s) => schoolAgg(s)))
+function schoolsFor(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
+  if (String(year) === String(CAMPAIGN_YEAR) && month === CURRENT_MONTH) return schools()
+  return ROSTER.map((s) => schoolAgg(s, month, year))
+}
 const invalidate = () => {
   _schools = null
   listeners.forEach((cb) => cb())
@@ -102,19 +137,25 @@ const invalidate = () => {
 
 // ---- global ----------------------------------------------------------------
 
-export async function getGlobalStats() {
-  if (!IS_DEMO) return mashpia.getGlobalStats()
-  const s = schools()
+export async function getGlobalStats(period) {
+  if (!IS_DEMO) return mashpia.getGlobalStats(period)
+  const month = period?.month || CURRENT_MONTH
+  const year = period?.year || CAMPAIGN_YEAR
+  if (isHolidayMonth(month)) {
+    return { holiday: true, board: false, monthLabel: month, year }
+  }
+  const s = schoolsFor(month, year)
   const acc = s.reduce((a, x) => a + x.saidMonth, 0)
   const quota = s.reduce((a, x) => a + x.quotaMonth, 0)
   const soldiers = s.reduce((a, x) => a + x.kids, 0)
   const minutes = s.reduce((a, x) => a + x.minutesSaidMonth, 0)
   const minutesQuota = s.reduce((a, x) => a + x.minutesQuotaMonth, 0)
   const metSoldiers = s.reduce((a, x) => a + x.metMonth, 0)
+  const participated = s.reduce((a, x) => a + x.participatedMonth, 0)
   const classes = ROSTER.reduce((a, x) => a + x.classes.length, 0)
   return {
-    monthLabel: CURRENT_MONTH,
-    year: CAMPAIGN_YEAR,
+    monthLabel: month,
+    year,
     accomplished: acc,
     quota,
     pct: quota > 0 ? Math.round((acc / quota) * 100) : 0,
@@ -122,11 +163,13 @@ export async function getGlobalStats() {
     minutesQuota,
     minutesPct: minutesQuota > 0 ? Math.round((minutes / minutesQuota) * 100) : 0,
     metSoldiers,
+    participatedSoldiers: participated,
+    pctSoldiersParticipated: soldiers > 0 ? Math.round((participated / soldiers) * 100) : 0,
     pctSoldiersMet: soldiers > 0 ? Math.round((metSoldiers / soldiers) * 100) : 0,
     soldiers,
     schools: s.length,
     classes,
-    perfectPlatoons: demoPerfectPlatoons().length,
+    perfectPlatoons: demoPerfectPlatoons(month, year).length,
   }
 }
 
@@ -139,9 +182,11 @@ export async function getRunningTotals() {
   return { thisMonth, thisYear, allTime: thisYear + PRIOR_YEARS_KAPITLACH }
 }
 
-export async function getSchools() {
-  if (!IS_DEMO) return mashpia.getSchools()
-  return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth)
+export async function getSchools(period) {
+  if (!IS_DEMO) return mashpia.getSchools(period)
+  const month = period?.month || CURRENT_MONTH
+  const year = period?.year || CAMPAIGN_YEAR
+  return schoolsFor(month, year).slice().sort((a, b) => b.saidMonth - a.saidMonth)
 }
 export function topSchoolsByKapitlach(n = 5) {
   return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth).slice(0, n)
@@ -152,21 +197,46 @@ export function topSchoolsByQuota(n = 5) {
     .sort((a, b) => b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name))
     .slice(0, n)
 }
-export async function getPerfectPlatoons() {
-  if (!IS_DEMO) return mashpia.getPerfectPlatoons()
-  return demoPerfectPlatoons()
+export async function getPerfectPlatoons(period) {
+  if (!IS_DEMO) return mashpia.getPerfectPlatoons(period)
+  return demoPerfectPlatoons(period?.month || CURRENT_MONTH, period?.year || CAMPAIGN_YEAR)
 }
 
-function demoPerfectPlatoons() {
+function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
   const out = []
   for (const school of ROSTER) {
+    let said = 0
     for (const cls of school.classes) {
-      if (cls.kids.length > 0 && cls.kids.every((k) => metQuota(k, CURRENT_MONTH))) {
-        out.push({ schoolId: school.id, school: school.name, className: cls.name, teacher: cls.teacher, grade: cls.grade, size: cls.kids.length })
+      for (const kid of cls.kids) said += saidOf(kid, month, year)
+    }
+    for (const cls of school.classes) {
+      if (cls.kids.length > 0 && cls.kids.every((k) => metAt(k, month, year))) {
+        out.push({
+          schoolId: school.id,
+          school: school.name,
+          className: cls.name,
+          teacher: cls.teacher,
+          grade: cls.grade,
+          size: cls.kids.length,
+          schoolClasses: school.classes.length,
+          schoolSaid: said,
+        })
       }
     }
   }
   return out
+}
+
+export async function getCampaignCalendar(year) {
+  if (!IS_DEMO) return mashpia.getCampaign(year)
+  const y = year ? Number(year) : Number(CAMPAIGN_YEAR)
+  return {
+    year: y,
+    years: [Number(CAMPAIGN_YEAR), Number(PRIOR_CAMPAIGN_YEAR)],
+    months: y === Number(CAMPAIGN_YEAR) ? ELAPSED_MONTHS : MONTHS,
+    currentMonth: CURRENT_MONTH,
+    holidayMonths: ['Rosh Hashana', 'Yom Kippur'],
+  }
 }
 
 // ---- auth ------------------------------------------------------------------
@@ -189,6 +259,8 @@ function safeKid(kid, school, cls) {
     name: kid.name,
     grade: kid.grade,
     ladder: kid.ladder,
+    gender: kid.gender || null,
+    photoUrl: kid.photoUrl || null,
     schoolId: school.id,
     schoolName: school.name,
     className: cls.name,
@@ -265,9 +337,27 @@ function demoKidProgress(id) {
       isCurrent: mo === CURRENT_MONTH,
     }
   })
+  const historyMonths = MONTHS.map((mo) => {
+    const q = quotaFor(kid.grade, mo, kid.ladder)
+    const said = kid.priorYearReports?.[mo]
+    const reported = said != null
+    return {
+      month: mo,
+      year: PRIOR_CAMPAIGN_YEAR,
+      quota: q?.v ?? 0,
+      quotaLabel: q?.k ?? null,
+      minutes: q?.m ?? 0,
+      said: reported ? said : 0,
+      saidMinutes: kid.priorYearMinutes?.[mo] ?? 0,
+      met: reported && !!q && said >= q.v,
+      reported,
+      isCurrent: false,
+    }
+  })
   return {
     ...safeKid(kid, found.school, found.cls),
-    months,
+    months: months.map((m) => ({ ...m, reported: Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
+    historyMonths,
     priorMissions: kid.priorMissions,
     metThisYear: kid.metThisYear,
     missionsTotal: kid.missionsTotal,
@@ -279,9 +369,9 @@ function demoKidProgress(id) {
 // Record a month's completion. Live: POST /me/report (current Shabbos Mevorchim,
 // token-scoped — id/month are ignored, the server uses the signed-in soldier and
 // the current month). Demo: mutate in memory. Returns fresh progress.
-export async function recordMonth(id, month, kapitlach, minutes) {
+export async function recordMonth(id, month, kapitlach, minutes, extra = {}) {
   if (!IS_DEMO) {
-    const p = await mashpia.recordMonth(Number(kapitlach) || 0, Number(minutes) || 0)
+    const p = await mashpia.recordMonth(Number(kapitlach) || 0, Number(minutes) || 0, extra)
     return p ? { ...p, medal: medalState(p.missionsTotal) } : null
   }
   const found = locate(id)
@@ -298,7 +388,9 @@ export async function recordMonth(id, month, kapitlach, minutes) {
   kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
   saveKidProgress(kid)
   invalidate()
-  return demoKidProgress(id)
+  const progress = demoKidProgress(id)
+  if (extra?.exceptionalConfirmed) progress.exceptional = { emailed: false, reason: 'demo' }
+  return progress
 }
 
 // Switch a soldier's ladder. Live: PUT /me/ladder (writes user_tracks.track_id,
@@ -336,11 +428,14 @@ export async function getKidSocial(id) {
   if (!found) return null
   const { kid, school, cls } = found
 
-  // This soldier's own rank within their class (missions, then kapitlach/year).
+  // This soldier's rank in the class, by kapitlach said THIS month.
   const classKids = cls.kids
     .slice()
-    .sort((a, b) => b.missionsTotal - a.missionsTotal || kidSaidYear(b) - kidSaidYear(a))
+    .sort((a, b) => kidMonthSaid(b, CURRENT_MONTH) - kidMonthSaid(a, CURRENT_MONTH) || a.name.localeCompare(b.name))
   const myRankInClass = classKids.findIndex((k) => k.id === kid.id) + 1
+  const schoolKids = school.classes.flatMap((c) => c.kids)
+  schoolKids.sort((a, b) => kidMonthSaid(b, CURRENT_MONTH) - kidMonthSaid(a, CURRENT_MONTH) || a.name.localeCompare(b.name))
+  const myRankInSchool = schoolKids.findIndex((k) => k.id === kid.id) + 1
 
   // Class standings within this school, by % of soldiers who completed.
   const standings = school.classes
@@ -375,6 +470,9 @@ export async function getKidSocial(id) {
     needToPass,
     myRankInClass,
     classSize: cls.kids.length,
+    myRankInSchool,
+    schoolSize: schoolKids.length,
+    classPerfect: mine?.size > 0 && mine.met === mine.size,
     schoolName: school.name,
     schoolRank: schoolRank + 1,
     totalSchools: schoolRanked.length,
@@ -440,13 +538,14 @@ export async function schoolSoldierLeaderboard(id, n = 10) {
         name: kid.name,
         className: cls.name,
         grade: kid.grade,
+        saidMonth: kidMonthSaid(kid, CURRENT_MONTH),
         saidYear: kidSaidYear(kid),
         missions: kid.missionsTotal,
         ladder: kid.ladder,
       })
     }
   }
-  return kids.sort((a, b) => b.saidYear - a.saidYear || b.missions - a.missions).slice(0, n)
+  return kids.sort((a, b) => b.saidMonth - a.saidMonth || b.missions - a.missions).slice(0, n)
 }
 
 export async function schoolClassLeaderboard(id) {
@@ -461,33 +560,48 @@ export async function schoolClassLeaderboard(id) {
 const monthName = (idx) => ELAPSED_MONTHS[idx] ?? CURRENT_MONTH
 
 // Army report: one row per school for a month.
-export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX) {
-  if (!IS_DEMO) return mashpia.getArmyReport(monthIdx)
-  const month = monthName(monthIdx)
+export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = null) {
+  if (!IS_DEMO) return mashpia.getArmyReport(monthIdx, period)
+  const month = period?.month || monthName(monthIdx)
+  const year = period?.year || CAMPAIGN_YEAR
+  if (isHolidayMonth(month)) return { month, year, holiday: true, rows: [] }
   return {
     month,
+    year,
     rows: ROSTER.map((school) => {
       let registered = 0
       let goal = 0
       let accomplished = 0
       let participated = 0
       let met = 0
+      let minutes = 0
+      let minutesGoal = 0
       for (const cls of school.classes) {
         for (const kid of cls.kids) {
           registered += 1
-          goal += quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
-          const said = kid.reports[month] ?? 0
+          const q = quotaFor(kid.grade, month, kid.ladder)
+          goal += q?.v ?? 0
+          minutesGoal += q?.m ?? 0
+          const said = saidOf(kid, month, year)
           accomplished += said
-          if (said > 0) participated += 1
-          if (metQuota(kid, month)) met += 1
+          minutes += minutesOf(kid, month, year)
+          if (reportedOf(kid, month, year) && said > 0) participated += 1
+          if (metAt(kid, month, year)) met += 1
         }
       }
       return {
         id: school.id,
         name: school.name,
+        logo: school.logo || null,
         registered,
         goal,
         accomplished,
+        pct: goal ? Math.round((accomplished / goal) * 100) : 0,
+        minutes,
+        minutesGoal,
+        minutesPct: minutesGoal ? Math.round((minutes / minutesGoal) * 100) : 0,
+        participated,
+        met,
         pctParticipated: registered ? Math.round((participated / registered) * 100) : 0,
         pctMet: registered ? Math.round((met / registered) * 100) : 0,
       }
@@ -496,11 +610,12 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX) {
 }
 
 // Base report: one row per class in a school.
-export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
-  if (!IS_DEMO) return mashpia.getBaseReport(schoolId, monthIdx)
+export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, period = null) {
+  if (!IS_DEMO) return mashpia.getBaseReport(schoolId, monthIdx, period)
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return null
-  const month = monthName(monthIdx)
+  const month = period?.month || monthName(monthIdx)
+  const year = period?.year || CAMPAIGN_YEAR
   return {
     month,
     school: school.name,
@@ -511,8 +626,8 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
       let completed = 0
       for (const kid of cls.kids) {
         goal += quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
-        accomplished += kid.reports[month] ?? 0
-        if (metQuota(kid, month)) completed += 1
+        accomplished += saidOf(kid, month, year)
+        if (metAt(kid, month, year)) completed += 1
       }
       return { id: cls.id, name: cls.name, grade: cls.grade, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
     }),
@@ -520,17 +635,18 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
 }
 
 // Platoon report: one row per child in a class.
-export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX) {
-  if (!IS_DEMO) return mashpia.getPlatoonReport(classId, monthIdx)
-  const month = monthName(monthIdx)
+export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, period = null) {
+  if (!IS_DEMO) return mashpia.getPlatoonReport(classId, monthIdx, period)
+  const month = period?.month || monthName(monthIdx)
+  const year = period?.year || CAMPAIGN_YEAR
   for (const school of ROSTER) {
     const cls = school.classes.find((c) => c.id === classId)
     if (!cls) continue
     let completed = 0
     const rows = cls.kids.map((kid) => {
       const q = quotaFor(kid.grade, month, kid.ladder)
-      const said = kid.reports[month] ?? 0
-      const met = metQuota(kid, month)
+      const said = saidOf(kid, month, year)
+      const met = metAt(kid, month, year)
       if (met) completed += 1
       return { id: kid.id, name: kid.name, ladder: kid.ladder, goal: q?.v ?? 0, goalLabel: q?.k ?? '—', said, met }
     })
@@ -539,10 +655,53 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX) 
   return null
 }
 
-export function getArmyDedication() { return ARMY_DEDICATION }
+const ARMY_DEDICATION_KEY = 'wwtc.demo.armyDedication'
+function loadArmyDedications() {
+  try { return JSON.parse(localStorage.getItem(ARMY_DEDICATION_KEY) || '{}') } catch { return {} }
+}
+export async function getArmyDedication(period) {
+  if (!IS_DEMO) return mashpia.getDedication({ scope: 'army', ...(period || {}) })
+  const year = period?.year || CAMPAIGN_YEAR
+  const month = period?.month || CURRENT_MONTH
+  const all = loadArmyDedications()
+  const key = `${year}|${month}`
+  if (Object.prototype.hasOwnProperty.call(all, key)) return all[key]
+  if (String(year) === String(CAMPAIGN_YEAR) && month === CURRENT_MONTH) return ARMY_DEDICATION
+  return null
+}
+export async function setArmyDedication(text, period) {
+  if (!IS_DEMO) return mashpia.setDedication({ scope: 'army', text, ...(period || {}) })
+  const year = period?.year || CAMPAIGN_YEAR
+  const month = period?.month || CURRENT_MONTH
+  const all = loadArmyDedications()
+  const value = String(text || '').trim() ? { month, year, text: String(text).trim() } : null
+  all[`${year}|${month}`] = value
+  try { localStorage.setItem(ARMY_DEDICATION_KEY, JSON.stringify(all)) } catch { /* ignore */ }
+  invalidate()
+  return value
+}
+export async function getHqVerify(period) {
+  if (!IS_DEMO) return mashpia.getHqVerify(period)
+  const home = await getGlobalStats(period)
+  const rows = await getSchools(period)
+  return {
+    month: home.monthLabel,
+    year: home.year,
+    home,
+    schools: rows,
+    missingLogos: rows.filter((s) => !s.logo).map((s) => s.name),
+    notes: [
+      'Soldiers are enrolled chayolim.',
+      'Participated means any kapitlach greater than zero were reported.',
+      'Completed kapitlach quota means the soldier met their own quota.',
+      'The same percentage ranks the school with more kapitlach said first.',
+    ],
+  }
+}
 
 // School admins: add / edit / remove this school's monthly dedication.
-export function setSchoolDedication(schoolId, text) {
+export async function setSchoolDedication(schoolId, text) {
+  if (!IS_DEMO) return mashpia.setDedication({ scope: 'school', schoolId, text })
   const t = String(text || '').trim()
   setSchoolDedicationStore(schoolId, t ? { month: CURRENT_MONTH, text: t } : null)
   invalidate()

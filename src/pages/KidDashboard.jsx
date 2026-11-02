@@ -9,7 +9,7 @@ import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
 import TehillimTraining from '@/components/TehillimTraining.jsx'
-import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR } from '@/services/api.js'
+import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
@@ -17,6 +17,15 @@ import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
+import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
+import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueJourney, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueRankings, cueReport } from '@/lib/commanderCues.js'
+import { emitCue } from '@/lib/commanderBus.js'
+import { earliestMedalWhen } from '@/lib/medalWhen.js'
+import { streakFromMissions, } from '@/lib/streaks.js'
+import { streakMissions } from '@/lib/trainingBoard.js'
+import { ladderAdvice } from '@/lib/ladderAdvice.js'
+import { IconImg, CheckMark, Pending } from '@/components/campaignBits.jsx'
+import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 
 // Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
 // component identity across renders.
@@ -32,7 +41,7 @@ function LadderGlyph(props) {
 }
 
 export default function KidDashboard() {
-  const { kid, logoutKid } = useAuth()
+  const { kid, logoutKid, changeLadder } = useAuth()
   const navigate = useNavigate()
   const { data: progress, loading: progressLoading, error: progressError, reload: reloadProgress } = useLiveData(
     () => {
@@ -69,6 +78,14 @@ export default function KidDashboard() {
     : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
+  const [confirming, setConfirming] = useState(null)
+  const [notice, setNotice] = useState('')
+  const [declined, setDeclined] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`wwtc.ladderInvite.${kid?.id}`) || 'null') } catch { return null }
+  })
+  const [commanderAuto, setCommanderAuto] = useState(() => {
+    try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
+  })
   // General 613 walks a new soldier through the ladder out loud. Don't also
   // pop the ladder modal over him; the button below still opens it.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
@@ -89,8 +106,8 @@ export default function KidDashboard() {
     // Logged in but progress is still loading (or failed) — don't bounce to login.
     return (
       <>
-        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={progressError ? 'Couldn’t load your Tehillim' : 'Loading…'}>
-          {progressError ? 'Something went wrong. Please try again.' : 'One moment…'}
+        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={progressError ? 'Couldn’t load your Tehillim' : kid.name}>
+          {progressError ? 'Something went wrong. Please try again.' : <Pending label="Getting your Tehillim" />}
         </PageHero>
         <div className="mx-auto max-w-2xl px-4 py-10 text-center sm:px-6">
           {progressError ? <Button variant="navy" onClick={reloadProgress}>Try again</Button> : null}
@@ -129,12 +146,65 @@ export default function KidDashboard() {
     )
   }
 
-  async function saveReport() {
+  const streaks = streakFromMissions(streakMissions(progress))
+  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR))
+  let earnedOn = null
+  {
+    const medal = progress.medal?.current
+    if (medal) {
+      let count = Number(progress.priorMissions) || 0
+      if (count >= medal.threshold) earnedOn = 'before this year’s month-by-month record'
+      else {
+        for (const month of progress.months || []) {
+          if (month.met) count += 1
+          if (count >= medal.threshold) { earnedOn = `${month.month} ${CAMPAIGN_YEAR}`; break }
+        }
+      }
+    }
+  }
+  const advice = ladderAdvice({
+    grade: kid.grade,
+    ladder: kid.ladder,
+    months: progress.months,
+    missionsTotal: progress.missionsTotal,
+    declined,
+  })
+  const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
+  if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
+
+  async function saveReport(extra = {}) {
     const wasMet = cur.met
-    const prog = await recordMonth(kid.id, cur.month, Number(said) || 0, Number(mins) || 0)
+    const beforeMedal = progress.medal?.current?.name || null
+    const kap = Number(said) || 0
+    const minutes = Number(mins) || 0
+    const over = isAboveQuota({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    if (over && !extra.confirmed) {
+      setConfirming({ kap, minutes })
+      emitCue(`above-${cur.month}-${kap}`, cueAboveQuota(kap))
+      return
+    }
+    const exceptional = extra.confirmed && isExceptional({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    const prog = await recordMonth(kid.id, cur.month, kap, minutes, exceptional ? { exceptionalConfirmed: true } : {})
+    setConfirming(null)
     reloadProgress()
     reloadSocial()
-    if (prog?.current?.met && !wasMet) celebrate()
+    if (extra.confirmed) {
+      setNotice(cueAboveConfirmed())
+      emitCue(`above-yes-${cur.month}`, cueAboveConfirmed())
+    }
+    if (prog?.current?.met && !wasMet) {
+      celebrate()
+      emitCue(`done-${cur.month}`, cueMissionComplete())
+    }
+    const nextMedal = prog?.medal?.current?.name
+    if (nextMedal && nextMedal !== beforeMedal) {
+      emitCue(`medal-${nextMedal}`, cueMedalEarned(nextMedal, prog.medal.current.threshold, prog.medal.next?.name, prog.medal.next?.threshold, earnBy))
+    }
+    if (prog?.exceptional) {
+      setNotice(prog.exceptional.emailed
+        ? 'Saved. Your mashpia will get a note so they can celebrate this with you.'
+        : 'Saved. Your mashpia should confirm a report this large. The email is waiting on WWTC_MASHPIA_EMAIL.')
+    }
   }
 
   return (
@@ -148,10 +218,11 @@ export default function KidDashboard() {
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
             {/* Photo once the backend provides one (Avatar falls back to initials). */}
-            <Avatar name={kid.name} src={kid.photoUrl} size={72} className="ring-2 ring-white/50" />
+            <Avatar name={kid.name} src={kid.photoUrl || progress.photoUrl} size={72} className="ring-2 ring-white/50" />
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
               <p className="mt-1.5 text-white/80">{kid.className} · {kid.schoolName}</p>
+              <p className="mt-1 text-sm font-semibold text-gold">Rank · {rankForMedals(progress.medal?.earnedCount)}</p>
             </div>
             <div className="flex items-center gap-2.5">
               <LadderGlyph width="22" height="34" className="flex-none" />
@@ -187,25 +258,20 @@ export default function KidDashboard() {
               <g fill="#fff"><circle cx="30" cy="24" r="2" /><circle cx="360" cy="30" r="2.5" /><circle cx="330" cy="86" r="1.8" /></g>
               <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#c3b1d6" opacity=".9" />
             </svg>
-            <p className="relative font-cond text-sm uppercase tracking-[0.08em] text-gold">Shabbos Mevorchim · <span className="font-heb text-base">{MONTH_HEB[cur.month]}</span></p>
-            <div className="relative mt-3 flex items-end justify-between gap-4">
-              {/* Kapitlach quota — book */}
-              <div className="flex items-end gap-3">
+            <p className="relative text-center font-cond text-sm uppercase tracking-[0.14em] text-gold">You are reporting for</p>
+            <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">{CAMPAIGN_YEAR}</span></p>
+            <div className="relative mt-5 grid grid-cols-2 gap-4 text-center">
+              <div className="flex flex-col items-center gap-2">
                 <img src={asset('design/icon-book.webp')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
-                <div>
-                  <div className="text-xs text-white/80">Your kapitlach</div>
-                  <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
-                  <div className="mt-1 text-xs text-white/70">{cur.quota} kapitlach</div>
-                </div>
+                <div className="text-xs uppercase tracking-wide text-white/80">Kapitlach</div>
+                <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
+                <div className="text-sm text-white/80">{cur.quota} kapitlach</div>
               </div>
-              {/* Minute quota — clock */}
-              <div className="flex items-end gap-3">
-                <img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-10 w-auto" />
-                <div className="text-right">
-                  <div className="text-xs text-white/80">Minute quota</div>
-                  <div className="font-cond text-4xl leading-none text-white">{cur.minutes}</div>
-                  <div className="mt-1 text-xs text-white/70">minutes</div>
-                </div>
+              <div className="flex flex-col items-center gap-2">
+                <img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
+                <div className="text-xs uppercase tracking-wide text-white/80">Minutes</div>
+                <div className="font-cond text-4xl leading-none text-white">{cur.minutes}</div>
+                <div className="text-sm text-white/80">minutes</div>
               </div>
             </div>
           </div>
@@ -221,10 +287,38 @@ export default function KidDashboard() {
             ) : (
               <p className="mb-4 text-center text-sm text-muted">Tell us what you said — it’s counted for your class, school and army.</p>
             )}
+            {switched ? <p className="mb-3 text-center text-sm font-semibold text-navy">Signed out of the last soldier. You’re signed in as {kid.name.split(' ')[0]}.</p> : null}
+            {notice ? <p className="mb-3 text-center text-sm font-semibold text-green">{notice}</p> : null}
+            {confirming ? (
+              <div className="mb-4 rounded-2xl bg-gold/15 p-4 text-center">
+                <p className="font-display text-lg font-black text-navy">{cueAboveQuota(confirming.kap)}</p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  <Button variant="navy" onClick={() => saveReport({ confirmed: true })}>Yes, that’s correct</Button>
+                  <Button variant="outline" onClick={() => { setConfirming(null); setNotice(cueAboveFixed()); emitCue(`fix-${cur.month}`, cueAboveFixed()) }}>I’ll correct it</Button>
+                </div>
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-end justify-center gap-3">
-              <Field label="Kapitlach I said"><Input className="w-32" inputMode="numeric" value={said} onChange={(e) => setSaid(e.target.value)} /></Field>
+              <Field label="Kapitlach I said"><Input className="w-32" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
               <Field label="Minutes I said"><Input className="w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-              <button className="btn btn-gold !px-7" onClick={saveReport}>Save</button>
+              <button className="btn btn-gold !px-7" onClick={() => saveReport()}>Save</button>
+            </div>
+            <div className="mt-5 overflow-x-auto">
+              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
+              <div className="flex min-w-[720px] gap-1">
+                {LADDERS.map((L) => {
+                  const cell = quotaFor(kid.grade, cur.month, L)
+                  const allowed = cell != null
+                  const mine = Number(kid.ladder) === L
+                  return (
+                    <div key={L} className={`flex-1 rounded-xl px-1 py-2 text-center text-[11px] ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
+                      <div className="font-bold">Ladder {L}</div>
+                      <div className="font-heb text-sm">{cell?.k || '—'}</div>
+                      <div>{cell ? `${cell.m} Min` : 'not for your grade'}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {/* Progress — kapitlach + minutes, laid out like the worldwide card */}
@@ -263,65 +357,78 @@ export default function KidDashboard() {
 
         {/* Your standing — class rank in the school + the school's rank worldwide */}
         {social ? (
-          <Card className="overflow-hidden">
-            <div className="grid bg-line sm:grid-cols-[1.6fr_1fr] sm:gap-px">
-              {/* Class standing in the school */}
-              <div className="bg-card p-5 sm:p-6">
-                <p className="sh">Your class standing</p>
-                <div className="mt-3 flex items-center gap-4">
-                  {social.classRank <= 3 ? (
-                    <img
-                      src={asset(`design/${['medal-gold', 'medal-silver', 'medal-bronze'][social.classRank - 1]}.png`)}
-                      alt={`#${social.classRank}`}
-                      draggable="false"
-                      className="h-16 w-auto flex-none drop-shadow"
-                    />
-                  ) : (
-                    <span className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-navy font-cond text-2xl font-bold text-gold">#{social.classRank}</span>
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="font-display text-xl font-black leading-tight text-navy">{social.className}</h3>
-                    <p className="text-sm font-semibold text-green">#{social.classRank} of {social.totalClasses} in {social.schoolName}</p>
-                    {social.myRankInClass ? (
-                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-gold/20 px-2.5 py-0.5 font-cond text-sm font-bold uppercase tracking-wide text-navy" title="Your rank in your class">
-                        🏅 You’re #{social.myRankInClass} of {social.classSize} in class
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-muted">
-                  {social.classRank === 1 ? (
-                    <>Your class is in <span className="font-semibold text-green">first place</span> — keep it on top! 🏆</>
-                  ) : social.needToPass > 0 ? (
-                    <>
-                      {social.needToPass} more {social.needToPass === 1 ? 'soldier' : 'soldiers'} finishing puts you ahead of{' '}
-                      <span className="font-semibold text-navy">{social.classAheadName}</span>. Your Tehillim counts!
-                    </>
-                  ) : (
-                    <>Every soldier counts — say your Tehillim and lift your class up.</>
-                  )}
-                </p>
+          <Card className="p-5 sm:p-6">
+            <p className="sh">Where you stand this month</p>
+            <p className="mt-1 text-xs text-muted">Ranked by kapitlach said in {MONTH_HEB[cur.month]}. Same numbers as the school board.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <button type="button" className="rounded-2xl bg-navy p-4 text-left text-white" onClick={() => emitCue('ranks', cueRankings({ myRank: social.myRankInClass, classRank: social.classRank, schoolRank: social.schoolRank }))}>
+                <IconImg name="school" className="h-8 w-auto" />
+                <p className="mt-2 text-xs uppercase tracking-wide text-gold">Base in the world</p>
+                <p className="font-display text-3xl font-black">#{social.schoolRank}</p>
+                <p className="text-sm text-white/80">of {social.totalSchools}</p>
+              </button>
+              <div className="rounded-2xl bg-track p-4">
+                <IconImg name="platoon" className="h-8 w-auto" />
+                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">Your platoon</p>
+                <p className="font-display text-3xl font-black text-navy">#{social.classRank}</p>
+                <p className="text-sm text-muted">of {social.totalClasses} in the base</p>
               </div>
-
-              {/* The school's standing worldwide */}
-              <div className="hero-navy relative flex flex-col justify-center px-5 py-6 text-white sm:px-6">
-                <img src={asset('design/flag.png')} alt="" aria-hidden="true" draggable="false" className="absolute right-4 top-4 h-7 w-auto opacity-80" />
-                <p className="font-cond text-xs uppercase tracking-[0.12em] text-gold">School worldwide</p>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="font-cond text-5xl font-bold leading-none text-white">#{social.schoolRank}</span>
-                  <span className="text-sm text-white/70">of {social.totalSchools}</span>
-                </div>
-                <p className="mt-1.5 text-sm text-white/80">{social.schoolName}</p>
+              <div className="rounded-2xl bg-track p-4">
+                <IconImg name="hat" className="h-8 w-auto" />
+                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">You in your school</p>
+                <p className="font-display text-3xl font-black text-navy">#{social.myRankInSchool || social.myRankInClass}</p>
+                <p className="text-sm text-muted">of {social.schoolSize || social.classSize} chayolim</p>
               </div>
             </div>
+            {social.classPerfect ? <p className="mt-3 flex items-center gap-2 font-semibold text-green"><CheckMark className="h-5 w-5" /> {cuePerfectPlatoon()}</p> : null}
           </Card>
         ) : null}
 
-        {/* Lifetime Tehillim Training — every mission, grade by grade */}
-        <TehillimTraining missionsTotal={progress.missionsTotal} />
+        <Card className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+          <div>
+            <p className="sh">Current streak</p>
+            <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.current} <span className="text-lg">missions</span></p>
+          </div>
+          <div>
+            <p className="sh">Longest streak</p>
+            <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.best} <span className="text-lg">missions</span></p>
+          </div>
+          <p className="sm:col-span-2 text-sm text-muted">A streak is missions you complete in a row. A recorded miss starts the next one at 1. Your longest streak stays. A month with no record is not counted as a miss.</p>
+        </Card>
 
-        {/* Medal board — cumulative missions earn medals */}
-        <MedalBoard progress={progress} />
+        {advice ? (
+          <Card className="p-5 sm:p-6">
+            <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler()}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="navy" onClick={() => changeLadder(advice.ladder)}>Yes, Ladder {advice.ladder}</Button>
+              <Button variant="outline" onClick={() => {
+                const next = { kind: advice.kind, atMissions: progress.missionsTotal }
+                setDeclined(next)
+                try { localStorage.setItem(`wwtc.ladderInvite.${kid.id}`, JSON.stringify(next)) } catch { /* ignore */ }
+              }}>I’ll stay on Ladder {kid.ladder}</Button>
+            </div>
+            <p className="mt-2 text-xs text-muted">Staying put is perfectly fine. We’ll ask again after {LADDER_REENGAGE_MISSIONS} more completed missions, not before.</p>
+          </Card>
+        ) : null}
+
+        <Card className="p-5 sm:p-6">
+          <p className="sh">Where you stand in your grade</p>
+          <p className="mt-2 text-navy/85">
+            You are in {GRADE_LABEL[String(kid.grade)] || kid.grade}. Ladder {kid.ladder} finishes training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade.
+            This month your quota is <span className="font-heb">{cur.quotaLabel}</span> ({cur.quota} kapitlach, {cur.minutes} minutes).
+            The gentlest ladder for your grade this month is <span className="font-heb">{quotaFor(kid.grade, cur.month, LADDERS.find((L) => quotaFor(kid.grade, cur.month, L)))?.k || '—'}</span>.
+            The steepest is <span className="font-heb">{quotaFor(kid.grade, cur.month, [...LADDERS].reverse().find((L) => quotaFor(kid.grade, cur.month, L)))?.k || '—'}</span>.
+          </p>
+        </Card>
+
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} />
+
+        <MedalBoard
+          progress={progress}
+          earnBy={earnBy}
+          earnedOn={earnedOn}
+          onMedal={(medal) => emitCue(`medal-info-${medal.name}`, cueMedalInfo(medal.name, medal.threshold))}
+        />
 
         {/* Ladder — summary + the full month-by-month breakdown of this ladder */}
         <Card className="p-5 sm:p-6">
@@ -333,7 +440,17 @@ export default function KidDashboard() {
                 <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
               </h3>
             </div>
-            <Button variant="navy" onClick={() => navigate('/ladders')}>Switch my ladder</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
+              <label className="flex items-center gap-2 text-sm font-semibold text-navy">
+                <input type="checkbox" checked={commanderAuto === 'on'} onChange={(e) => {
+                  const next = e.target.checked ? 'on' : 'off'
+                  setCommanderAuto(next)
+                  try { localStorage.setItem('wwtc.commander.auto', next) } catch { /* ignore */ }
+                }} />
+                Pop up my commander when I sign in
+              </label>
+            </div>
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
@@ -352,6 +469,8 @@ export default function KidDashboard() {
             target={climbTarget}
             ladder={kid.ladder}
             finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
+            gender={kid.gender || progress.gender}
+            onOpen={() => emitCue('journey', cueJourney())}
           />
         </Card>
       </div>

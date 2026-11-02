@@ -1,6 +1,6 @@
 // Medals are awarded at cumulative missions (a mission = finishing a month's
 // quota). Ten tiers, each its own color; Black is the top.
-export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95]
+export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95, 110, 126, 143]
 
 // Names and colours taken straight from the Mashpia medal board source
 // (לבן/אדום/כתום/צהוב/ירוק/כחול/סגול/חום/אפור/שחור). `ink` is the number colour
@@ -18,6 +18,9 @@ export const MEDALS = [
   { name: 'Brown', color: '#6d4c38', ink: '#ffffff', coin: 'brown' },
   { name: 'Gray', color: '#71707b', ink: '#ffffff', coin: 'gray' },
   { name: 'Black', color: '#0a0515', ink: '#ffffff', coin: 'black' },
+  { name: 'Bronze', color: '#8c6239', ink: '#ffffff' },
+  { name: 'Silver', color: '#c5ced6', ink: '#1b2a4e' },
+  { name: 'Gold', color: '#e0b000', ink: '#1b2a4e' },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
 // A medal's own colour can be too light to read as text on a light card
