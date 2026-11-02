@@ -18,6 +18,8 @@ declare(strict_types=1);
  * dedications stay a 405 — the SPA keeps those client-side for now.
  */
 
+require_once __DIR__ . '/compat.php';
+
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
 const WWTC_SUBJECT_ID = 1;

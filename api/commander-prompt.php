@@ -9,6 +9,8 @@ declare(strict_types=1);
  * stay on the same sheet.
  */
 
+require_once __DIR__ . '/compat.php';
+
 const WWTC_OFF_TOPIC_REPLY = 'I can only help with the Tehillim Club. What would you like to know about your Tehillim?';
 const WWTC_COUNSELOR_REPLY = "I'm not sure about that one. Please ask your counselor or a grown-up.";
 
