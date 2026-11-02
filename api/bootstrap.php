@@ -26,13 +26,12 @@ const WWTC_SUBJECT_ID = 1;
 // date_tasks.grid_id for the two tracked tasks.
 const WWTC_GRID_KAPITELACH = 8001;
 const WWTC_GRID_MINUTES = 8002;
-// First campaign (Hebrew) year for which Rosh Hashana / Yom Kippur get their own
-// boards, reports and personal-page missions. Earlier years are suppressed even
-// if marks exist from when those days were untracked "training" — e.g. 5787's
-// Rosh Hashana has old marks we do NOT surface. From this year on, each holiday
-// shows automatically once HQ creates its missions (see wwtcHolidayDates). Bump
-// is not needed yearly: >= means all later years stay enabled.
-const WWTC_HOLIDAY_BOARDS_FROM_YEAR = 5788;
+// Master switch for Rosh Hashana / Yom Kippur boards, reports and personal-page
+// missions. OFF until further notice, for every year — even where marks exist
+// from when those days were untracked "training" (e.g. 5787's Rosh Hashana).
+// Flip to true to turn them on; each holiday then still shows only once HQ has
+// created its missions for the year (see wwtcHolidayDates).
+const WWTC_HOLIDAY_BOARDS_ENABLED = false;
 // Shared roster predicate for the ancillary PDO counts (soldiers, classes,
 // headcounts), so they all count the same population. Needs `schools s`,
 // `classes c` and `users u` in scope. Campaign done/goal figures instead follow
@@ -696,8 +695,9 @@ function wwtcHolidayDates(int $year): array
     if (isset($cache[$year])) {
         return $cache[$year];
     }
-    // Holiday boards are off before the enable year, regardless of stray marks.
-    if ($year < WWTC_HOLIDAY_BOARDS_FROM_YEAR) {
+    // Holiday boards are off until the master switch is turned on, regardless of
+    // year or stray marks.
+    if (!WWTC_HOLIDAY_BOARDS_ENABLED) {
         return $cache[$year] = [];
     }
     $rh1 = (int) jewishtojd(1, 1, $year); // 1 Tishrei opens the year named $year
