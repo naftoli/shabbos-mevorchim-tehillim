@@ -245,6 +245,143 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
     });
 }
 
+// ---- holiday board shapers --------------------------------------------------
+// wwtcHolidayBoard() (bootstrap) builds the per-soldier holiday data once; these
+// turn it into the exact response shapes the engine-backed endpoints return, so
+// Rosh Hashana / Yom Kippur render through the same UI with no special-casing.
+
+/** Nationwide school rows for a holiday, Race-sorted — matches wwtcNationwideSchools. */
+function wwtcHolidaySchools(array $board): array
+{
+    $rows = [];
+    foreach ($board['schools'] as $id => $name) {
+        $id = (int) $id;
+        $rows[] = wwtcSchoolRow(
+            $id, (string) $name,
+            $board['kapGoal'], $board['kapDone'], $board['minGoal'], $board['minDone'],
+            $board['counts'], (int) ($board['participated'][$id] ?? 0)
+        );
+    }
+    usort($rows, 'wwtcCmpSchoolRace');
+    return $rows;
+}
+
+/** Army accomplishment rows for a holiday — matches the /reports/army shape. */
+function wwtcHolidayArmyRows(array $board): array
+{
+    $logos = wwtcSchoolLogos();
+    $counts = $board['counts'];
+    $rows = [];
+    foreach ($board['schools'] as $id => $name) {
+        $id = (int) $id;
+        $g = (int) ($board['kapGoal'][$id] ?? 0);
+        $d = (int) ($board['kapDone'][$id] ?? 0);
+        $registered = (int) ($counts['sizeBySchool'][$id] ?? 0);
+        $met = (int) ($counts['metBySchool'][$id] ?? 0);
+        $part = (int) ($board['participated'][$id] ?? 0);
+        $mg = (int) ($board['minGoal'][$id] ?? 0);
+        $md = (int) ($board['minDone'][$id] ?? 0);
+        $rows[] = [
+            'id' => $id,
+            'name' => (string) $name,
+            'logo' => $logos[$id] ?? null,
+            'registered' => $registered,
+            'goal' => $g,
+            'accomplished' => $d,
+            'pct' => wwtcPct($d, $g),
+            'minutes' => $md,
+            'minutesGoal' => $mg,
+            'minutesPct' => wwtcPct($md, $mg),
+            'participated' => $part,
+            'met' => $met,
+            'pctParticipated' => $registered > 0 ? (int) round($part / $registered * 100) : 0,
+            'pctMet' => $registered > 0 ? (int) round($met / $registered * 100) : 0,
+            'moreThanGoal' => max(0, $d - $g),
+            'lessThanGoal' => max(0, $g - $d),
+        ];
+    }
+    usort($rows, static function ($a, $b) {
+        return $b['pct'] <=> $a['pct'] ?: $b['accomplished'] <=> $a['accomplished'];
+    });
+    return $rows;
+}
+
+/** Perfect-platoon rows for a holiday — matches the /perfect-platoons shape. */
+function wwtcHolidayPlatoons(array $board): array
+{
+    $counts = $board['counts'];
+    $out = [];
+    foreach ($counts['sizeByClass'] as $sid => $byClass) {
+        foreach ($byClass as $cid => $size) {
+            if ($size <= 0 || ($counts['metByClass'][$sid][$cid] ?? 0) < $size) {
+                continue;
+            }
+            $meta = $board['classMeta'][$cid] ?? ['grade' => '', 'teacher' => '', 'sub' => ''];
+            $grade = (string) $meta['grade'];
+            $sub = (string) ($meta['sub'] ?? '');
+            $out[] = [
+                'schoolId' => (int) $sid,
+                'school' => (string) ($board['schools'][$sid] ?? ''),
+                'className' => $grade . ($sub !== '' ? '-' . $sub : ''),
+                'teacher' => (string) ($meta['teacher'] ?? ''),
+                'grade' => $grade,
+                'size' => (int) $size,
+                'schoolClasses' => count($counts['sizeByClass'][$sid]),
+            ];
+        }
+    }
+    return $out;
+}
+
+/** One school's class + student breakdown for a holiday — matches wwtcSchoolData. */
+function wwtcHolidaySchoolData(array $board, int $schoolId): array
+{
+    $students = $board['studentsBySchool'][$schoolId] ?? [];
+    $byClass = [];
+    foreach ($students as $s) {
+        $cid = $s['classId'];
+        $g = $byClass[$cid] ?? ['size' => 0, 'met' => 0, 'said' => 0, 'quota' => 0, 'minD' => 0, 'minQ' => 0];
+        $g['size']++;
+        $g['met'] += $s['met'] ? 1 : 0;
+        $g['said'] += $s['said'];
+        $g['quota'] += $s['quota'];
+        $g['minD'] += $s['minutesSaid'];
+        $g['minQ'] += $s['minutesQuota'];
+        $byClass[$cid] = $g;
+    }
+    $classes = [];
+    $minDone = 0;
+    $minQuota = 0;
+    foreach ($byClass as $cid => $g) {
+        $meta = $board['classMeta'][$cid] ?? ['grade' => '', 'teacher' => ''];
+        $classes[] = [
+            'id' => (int) $cid,
+            'name' => (string) $meta['grade'],
+            'teacher' => (string) $meta['teacher'],
+            'grade' => (string) $meta['grade'],
+            'size' => $g['size'],
+            'said' => $g['said'],
+            'quota' => $g['quota'],
+            'pct' => wwtcPct($g['said'], $g['quota']),
+            'met' => $g['met'],
+            'pctMet' => $g['size'] > 0 ? (int) round($g['met'] / $g['size'] * 100) : 0,
+            'minutesSaid' => $g['minD'],
+            'minutesQuota' => $g['minQ'],
+            'minutesPct' => wwtcPct($g['minD'], $g['minQ']),
+            'perfect' => $g['size'] > 0 && $g['met'] === $g['size'],
+        ];
+        $minDone += $g['minD'];
+        $minQuota += $g['minQ'];
+    }
+    $srows = array_map(static function ($s) {
+        return [
+            'id' => $s['id'], 'name' => $s['name'], 'classId' => $s['classId'],
+            'className' => $s['className'], 'quota' => $s['quota'], 'said' => $s['said'], 'met' => $s['met'],
+        ];
+    }, $students);
+    return ['classes' => $classes, 'students' => $srows, 'minutes' => $minDone, 'minutesQuota' => $minQuota];
+}
+
 /**
  * A soldier's elapsed-month progress (quota/said/minutes per month, met), by
  * direct per-month queries mirroring ShabbosMevorchim::setStudentResults(): the
@@ -290,13 +427,15 @@ function wwtcKidMonths(array $kid): array
     };
 
     $current = wwtcCurrentDate();
-    $months = [];
+    // Keyed by jd so the holiday rows (below) interleave chronologically — streaks
+    // read this list in order, so Rosh Hashana / Yom Kippur must sit after Tishrei.
+    $byDate = [];
     foreach (wwtcElapsedMonths() as $m) {
         $d = (int) $m['jd'];
         $q = $qFor($kapitel, $d);
         [$said, $reported] = $dFor($kapitel, $d);
         [$saidMinutes] = $dFor($minutes, $d);
-        $months[] = [
+        $byDate[$d] = [
             'month' => $m['month'],
             'quota' => $q,
             'said' => $said,
@@ -307,7 +446,32 @@ function wwtcKidMonths(array $kid): array
             'isCurrent' => $d === $current,
         ];
     }
-    return $months;
+
+    // Holiday training missions: quota = this soldier's SM-Tishrei quota, said =
+    // MAX(done_qty) across the holiday's day(s) so Rosh Hashana's two days count
+    // once. Only holidays that have mission data appear (wwtcHolidayDates filters).
+    $quotaJd = (int) (wwtcMonthDatesForYear(wwtcYear())['Tishrei'] ?? 0);
+    if ($quotaJd > 0) {
+        foreach (wwtcHolidayDates(wwtcYear()) as $name => $jds) {
+            [$said, $reported] = wwtcKidHolidayDone($kid, $jds, $kapitel);
+            [$saidMinutes] = wwtcKidHolidayDone($kid, $jds, $minutes);
+            $q = $qFor($kapitel, $quotaJd);
+            $byDate[(int) $jds[0]] = [
+                'month' => $name,
+                'quota' => $q,
+                'said' => $said,
+                'minutes' => $qFor($minutes, $quotaJd),
+                'saidMinutes' => $saidMinutes,
+                'met' => $reported && $q > 0 && $said >= $q,
+                'reported' => $reported,
+                'isCurrent' => false,
+                'holiday' => true,
+            ];
+        }
+    }
+
+    ksort($byDate);
+    return array_values($byDate);
 }
 
 /**
@@ -438,7 +602,7 @@ if ($method === 'GET' && $path === '/campaign') {
             'months' => array_keys($dates),
             'monthDates' => $dates,
             'years' => $years,
-            'holidayMonths' => ['Rosh Hashana', 'Yom Kippur'],
+            'holidayMonths' => array_keys(wwtcHolidayDates($asked)),
         ]);
     }
     $current = wwtcCurrentDate();
@@ -450,7 +614,7 @@ if ($method === 'GET' && $path === '/campaign') {
         'months' => array_column($elapsed, 'month'),
         'monthDates' => wwtcMonthDates(),
         'years' => $years,
-        'holidayMonths' => ['Rosh Hashana', 'Yom Kippur'],
+        'holidayMonths' => array_keys(wwtcHolidayDates(wwtcYear())),
     ]);
 }
 
@@ -462,12 +626,26 @@ if ($method === 'GET' && $path === '/stats') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $a = $board['army'];
             wwtcJson([
-                'holiday' => true,
-                'board' => false,
                 'monthLabel' => $period['month'],
-                'year' => $period['year'],
-                'note' => 'Rosh Hashana and Yom Kippur are training missions. They do not have a separate army board.',
+                'year' => (int) $period['year'],
+                'holiday' => true,
+                'accomplished' => $a['accomplished'],
+                'quota' => $a['quota'],
+                'pct' => wwtcPct($a['accomplished'], $a['quota']),
+                'minutes' => $a['minutes'],
+                'minutesQuota' => $a['minutesQuota'],
+                'minutesPct' => wwtcPct($a['minutes'], $a['minutesQuota']),
+                'soldiers' => $a['soldiers'],
+                'metSoldiers' => $a['metSoldiers'],
+                'participatedSoldiers' => $a['participatedSoldiers'],
+                'pctSoldiersParticipated' => $a['soldiers'] > 0 ? (int) round($a['participatedSoldiers'] / $a['soldiers'] * 100) : 0,
+                'pctSoldiersMet' => $a['soldiers'] > 0 ? (int) round($a['metSoldiers'] / $a['soldiers'] * 100) : 0,
+                'schools' => $a['schools'],
+                'classes' => $a['classes'],
+                'perfectPlatoons' => $a['perfectPlatoons'],
             ]);
         }
         $current = (int) $period['jd'];
@@ -585,7 +763,8 @@ if ($method === 'GET' && $path === '/schools') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'schools' => []]);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'schools' => wwtcHolidaySchools($board)]);
         }
         $rows = wwtcNationwideSchools((int) $period['jd'], (int) $period['year']);
         wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'schools' => $rows]);
@@ -682,7 +861,8 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'platoons' => []]);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'platoons' => wwtcHolidayPlatoons($board)]);
         }
         $current = (int) $period['jd'];
     } else {
@@ -737,7 +917,8 @@ if ($method === 'GET' && $path === '/reports/army') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'rows' => []]);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'rows' => wwtcHolidayArmyRows($board)]);
         }
         $date = (int) $period['jd'];
         $reportYear = (int) $period['year'];
@@ -799,12 +980,19 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
     $reportYear = wwtcYear();
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
-        $date = (int) $period['jd'];
-        $reportYear = (int) $period['year'];
+        if ($period['holiday']) {
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $classes = wwtcHolidaySchoolData($board, $id)['classes'];
+            $monthLabel = $period['month'];
+        } else {
+            $classes = wwtcSchoolData($id, (int) $period['jd'], (int) $period['year'])['classes'];
+            $monthLabel = wwtcMonthForDate((int) $period['jd']);
+        }
     } else {
         $date = wwtcDateForMonthIdx($_GET['monthIdx'] ?? null);
+        $classes = wwtcSchoolData($id, $date, $reportYear)['classes'];
+        $monthLabel = wwtcMonthForDate($date);
     }
-    $classes = wwtcSchoolData($id, $date, $reportYear)['classes'];
     $rows = [];
     foreach ($classes as $c) {
         $rows[] = [
@@ -819,7 +1007,7 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
             'perfect' => $c['perfect'],
         ];
     }
-    wwtcJson(['month' => wwtcMonthForDate($date), 'school' => $names[$id], 'schoolId' => $id, 'rows' => $rows]);
+    wwtcJson(['month' => $monthLabel, 'school' => $names[$id], 'schoolId' => $id, 'rows' => $rows]);
 }
 
 if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
@@ -833,12 +1021,19 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
     $reportYear = wwtcYear();
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
-        $date = (int) $period['jd'];
-        $reportYear = (int) $period['year'];
+        if ($period['holiday']) {
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $data = wwtcHolidaySchoolData($board, $schoolId);
+            $monthLabel = $period['month'];
+        } else {
+            $data = wwtcSchoolData($schoolId, (int) $period['jd'], (int) $period['year']);
+            $monthLabel = wwtcMonthForDate((int) $period['jd']);
+        }
     } else {
         $date = wwtcDateForMonthIdx($_GET['monthIdx'] ?? null);
+        $data = wwtcSchoolData($schoolId, $date, $reportYear);
+        $monthLabel = wwtcMonthForDate($date);
     }
-    $data = wwtcSchoolData($schoolId, $date, $reportYear);
     $className = ''; $completed = 0; $rows = [];
     foreach ($data['students'] as $s) {
         if ($s['classId'] !== $classId) {
@@ -858,7 +1053,7 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
         ];
     }
     wwtcJson([
-        'month' => wwtcMonthForDate($date),
+        'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
         'className' => $className,
         'completed' => $completed,

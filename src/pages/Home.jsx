@@ -7,7 +7,6 @@ import {
   getPerfectPlatoons,
   getCampaignCalendar,
   getArmyDedication,
-  isHolidayMonth,
   CAMPAIGN_YEAR,
   CURRENT_MONTH,
 } from '@/services/api.js'
@@ -144,18 +143,21 @@ function SchoolCard({ s, color }) {
   )
 }
 
-function chipsFor(months) {
+// Months, with each data-backed holiday (from the campaign's holidayMonths)
+// slotted in right after Tishrei — the occasion it follows on the calendar.
+function chipsFor(months, holidays = []) {
   const out = []
+  let placed = false
   for (const month of months || []) {
     out.push(month)
-    if (month === 'Tishrei') out.push('Rosh Hashana', 'Yom Kippur')
+    if (month === 'Tishrei') { out.push(...holidays); placed = true }
   }
-  if (!(months || []).includes('Tishrei')) out.push('Rosh Hashana', 'Yom Kippur')
+  if (!placed) out.push(...holidays)
   return out
 }
 
 export default function Home() {
-  const [pickedYear, setPickedYear] = useState(null)
+  const [pickedYear] = useState(null) // year picker removed for now; always current year
   const [pickedMonth, setPickedMonth] = useState(null)
   const { data: calendar } = useLiveData(() => getCampaignCalendar(pickedYear || undefined), [pickedYear])
   const year = pickedYear || calendar?.year || CAMPAIGN_YEAR
@@ -164,7 +166,7 @@ export default function Home() {
   const { data: stats, loading: statsLoading } = useLiveData(() => getGlobalStats(period), [period?.year, period?.month])
   const { data: totals, loading: totalsLoading } = useLiveData(() => getRunningTotals(), [])
   const { data: schoolsData, loading: schoolsLoading } = useLiveData(() => getSchools(period), [period?.year, period?.month])
-  const { data: platoonsData, loading: platoonsLoading } = useLiveData(() => (isHolidayMonth(monthLabel) ? Promise.resolve([]) : getPerfectPlatoons(period)), [period?.year, period?.month, monthLabel])
+  const { data: platoonsData, loading: platoonsLoading } = useLiveData(() => getPerfectPlatoons(period), [period?.year, period?.month, monthLabel])
   const { data: dedication } = useLiveData(() => getArmyDedication(period), [period?.year, period?.month])
   const [query, setQuery] = useState('')
 
@@ -257,14 +259,9 @@ export default function Home() {
         <Card className="rounded-[32px] p-6 pt-8 sm:rounded-[40px] sm:p-10 lg:px-14 lg:pb-12">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <label className="mb-2 block text-sm font-semibold text-navy">
-                Year
-                <select className="ml-2 rounded-xl border border-line bg-white px-3 py-1.5" value={year} onChange={(e) => { setPickedYear(e.target.value); setPickedMonth(null) }}>
-                  {(calendar?.years || [year]).map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </label>
+              {/* Year picker removed for now — restore the <select> here once multi-year selection works. */}
               <div className={MONTH_CHOOSER === 'scroll' ? 'flex gap-1 overflow-x-auto' : 'flex flex-wrap gap-1'}>
-                {chipsFor(calendar?.months || []).map((m) => (
+                {chipsFor(calendar?.months || [], calendar?.holidayMonths || []).map((m) => (
                   <button key={m} type="button" onClick={() => setPickedMonth(m)} className={`rounded-xl px-2.5 py-1 font-heb text-lg ${m === monthLabel ? 'text-white' : 'bg-track text-navy'}`} style={m === monthLabel ? { background: 'var(--grad-cta-green)' } : undefined}>
                     {MONTH_HEB[m] || m}
                   </button>
@@ -274,12 +271,10 @@ export default function Home() {
                 Army Report: <span className="font-heb">{MONTH_HEB[monthLabel] || monthLabel}</span> {year}
               </Eyebrow>
             </div>
-            {stats?.pct >= 100 && !stats?.holiday ? <QuotaReached /> : null}
+            {stats?.pct >= 100 ? <QuotaReached /> : null}
           </div>
 
-          {stats?.holiday ? (
-            <p className="mt-6 text-navy/80">{monthLabel} is a training mission. It does not have a separate army board. Choose a Shabbos Mevorchim month to see the totals.</p>
-          ) : stats ? (
+          {stats ? (
             <QuotaBars
               className="mt-6 sm:mt-7"
               kapitlach={{ quota: stats.quota, said: stats.accomplished, pct: stats.pct }}

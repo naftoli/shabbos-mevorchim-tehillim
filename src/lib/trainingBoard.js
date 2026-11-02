@@ -39,10 +39,17 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0 }) {
   for (const month of months || []) {
     if (month?.month) byMonth[month.month] = month
   }
+  // A holiday occasion (Rosh Hashana / Yom Kippur) shows only when the server
+  // sent it in this soldier's months — i.e. it is a boarded occasion this year.
+  // Before the enable year (or a year with no holiday missions) it is dropped.
+  const activeHolidays = new Set((months || []).filter((m) => m?.holiday && m?.month).map((m) => m.month))
+  const occasions = OCCASIONS.filter((occ) => !occ.holiday || activeHolidays.has(occ.key))
   const boards = grades.map((g) => {
     const isCurrent = String(g) === String(grade)
-    const missions = OCCASIONS.map((occ) => {
-      const quota = !occ.holiday && ladder ? quotaFor(g, occ.key, ladder) : null
+    const missions = occasions.map((occ) => {
+      // Holidays (Rosh Hashana / Yom Kippur) board off the Shabbos-Mevorchim
+      // Tishrei quota of the year — same rule the server uses.
+      const quota = ladder ? quotaFor(g, occ.holiday ? 'Tishrei' : occ.key, ladder) : null
       if (!isCurrent) {
         return { ...occ, record: false, met: false, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
       }

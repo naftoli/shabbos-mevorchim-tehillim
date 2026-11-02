@@ -15,24 +15,26 @@ import {
   getBaseReport,
   getCampaignCalendar,
   getPlatoonReport,
-  isHolidayMonth,
 } from '@/services/api.js'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
 
-function chipsFor(months) {
+// Months plus each data-backed holiday (from holidayMonths), slotted in right
+// after Tishrei. Holidays now have full boards, so board:true like any month.
+function chipsFor(months, holidays = []) {
   const out = []
+  let placed = false
   const list = months || []
   for (const month of list) {
     out.push({ key: month, board: true })
     if (month === 'Tishrei') {
-      out.push({ key: 'Rosh Hashana', board: false })
-      out.push({ key: 'Yom Kippur', board: false })
+      for (const h of holidays) out.push({ key: h, board: true })
+      placed = true
     }
   }
-  if (!list.includes('Tishrei')) {
-    out.push({ key: 'Rosh Hashana', board: false }, { key: 'Yom Kippur', board: false })
+  if (!placed) {
+    for (const h of holidays) out.push({ key: h, board: true })
   }
   return out
 }
@@ -69,7 +71,6 @@ export default function Reports() {
   const month = monthParam || calendar?.currentMonth || CURRENT_MONTH
   const months = calendar?.months || []
   const period = { year, month }
-  const holiday = isHolidayMonth(month)
 
   function write(next) {
     const p = new URLSearchParams(params)
@@ -81,16 +82,16 @@ export default function Reports() {
   }
 
   const army = useLiveData(
-    () => (holiday || schoolId ? Promise.resolve(null) : getArmyReport(null, period)),
-    [year, month, holiday, schoolId],
+    () => (schoolId ? Promise.resolve(null) : getArmyReport(null, period)),
+    [year, month, schoolId],
   )
   const base = useLiveData(
-    () => (schoolId && !holiday ? getBaseReport(schoolId, null, period) : Promise.resolve(null)),
-    [schoolId, year, month, holiday],
+    () => (schoolId ? getBaseReport(schoolId, null, period) : Promise.resolve(null)),
+    [schoolId, year, month],
   )
   const platoon = useLiveData(
-    () => (classId && !holiday ? getPlatoonReport(classId, null, period) : Promise.resolve(null)),
-    [classId, year, month, holiday],
+    () => (classId ? getPlatoonReport(classId, null, period) : Promise.resolve(null)),
+    [classId, year, month],
   )
 
   const rows = useMemo(() => (army.data?.rows || []).map((r) => ({
@@ -131,7 +132,7 @@ export default function Reports() {
             </select>
           </label>
           <div className={MONTH_CHOOSER === 'scroll' ? 'flex gap-1 overflow-x-auto pb-1' : 'flex flex-wrap gap-1'}>
-            {chipsFor(months.length ? months : [month]).map((chip) => (
+            {chipsFor(months.length ? months : [month], calendar?.holidayMonths || []).map((chip) => (
               <button
                 key={chip.key}
                 type="button"
@@ -143,7 +144,6 @@ export default function Reports() {
               </button>
             ))}
           </div>
-          <p className="max-w-3xl text-xs text-muted">Rosh Hashana and Yom Kippur are training missions. They were missing because the board only lists Shabbos Mevorchim months. They show here, and they do not have a separate army total.</p>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -160,12 +160,7 @@ export default function Reports() {
           </Button>
         </div>
 
-        {holiday ? (
-          <Card className="p-6">
-            <h2 className="font-display text-xl font-black text-navy">{month} {year}</h2>
-            <p className="mt-2 text-navy/80">This occasion is part of a chayol’s training. Pick a Shabbos Mevorchim month to see the schools.</p>
-          </Card>
-        ) : classId ? (
+        {classId ? (
           <PlatoonView data={platoon.data} error={platoon.error} loading={platoon.loading} reload={platoon.reload} />
         ) : schoolId ? (
           <BaseView data={base.data} error={base.error} loading={base.loading} reload={base.reload} onPickClass={(id) => write({ class: id })} />

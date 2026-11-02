@@ -26,6 +26,13 @@ const WWTC_SUBJECT_ID = 1;
 // date_tasks.grid_id for the two tracked tasks.
 const WWTC_GRID_KAPITELACH = 8001;
 const WWTC_GRID_MINUTES = 8002;
+// First campaign (Hebrew) year for which Rosh Hashana / Yom Kippur get their own
+// boards, reports and personal-page missions. Earlier years are suppressed even
+// if marks exist from when those days were untracked "training" — e.g. 5787's
+// Rosh Hashana has old marks we do NOT surface. From this year on, each holiday
+// shows automatically once HQ creates its missions (see wwtcHolidayDates). Bump
+// is not needed yearly: >= means all later years stay enabled.
+const WWTC_HOLIDAY_BOARDS_FROM_YEAR = 5788;
 // Shared roster predicate for the ancillary PDO counts (soldiers, classes,
 // headcounts), so they all count the same population. Needs `schools s`,
 // `classes c` and `users u` in scope. Campaign done/goal figures instead follow
@@ -625,7 +632,15 @@ function wwtcQueryPeriod(): array
         $month = $aliases[$month];
     }
     if (wwtcIsHolidayMonth($month)) {
-        return ['year' => $year, 'month' => $month === 'Rosh Hashona' ? 'Rosh Hashana' : $month, 'jd' => null, 'holiday' => true];
+        $name = ($month === 'Rosh Hashona' || $month === 'Rosh Hashanah') ? 'Rosh Hashana' : $month;
+        // A holiday boards off its own day(s) for "said", but the quota is the
+        // Shabbos-Mevorchim Tishrei quota of the same year (see wwtcHolidayBoard).
+        $jds = wwtcHolidayDates($year)[$name] ?? [];
+        $quotaJd = (int) (wwtcMonthDatesForYear($year)['Tishrei'] ?? 0);
+        return [
+            'year' => $year, 'month' => $name, 'holiday' => true,
+            'jd' => $jds[0] ?? null, 'jds' => $jds, 'quotaJd' => $quotaJd,
+        ];
     }
     if ($month === '') {
         if ($year === wwtcYear()) {
@@ -641,6 +656,243 @@ function wwtcQueryPeriod(): array
         wwtcError('That month is not on the campaign calendar.', 404);
     }
     return ['year' => $year, 'month' => $month, 'jd' => (int) $dates[$month], 'holiday' => false];
+}
+
+// ---- holiday (Rosh Hashana / Yom Kippur) board support ---------------------
+// These occasions are not Shabbos-Mevorchim months, so they are not in the
+// ShabbosMevorchim engine's date set and never reach its single-date, flat-SUM
+// aggregation. Rosh Hashana also spans two calendar days with two mission sets,
+// and most soldiers mark BOTH with the same number — a plain sum would double
+// count. So the whole holiday board is built here from per-soldier rows instead:
+// "said" is each soldier's MAX(done_qty) across the holiday's day(s), and the
+// quota is their Shabbos-Mevorchim Tishrei quota.
+
+/** True if WWTC Tehillim missions exist on a Julian date (cached per request). */
+function wwtcHasHolidayMissions(int $jd): bool
+{
+    global $MASHPIA_DB;
+    static $cache = [];
+    if (isset($cache[$jd])) {
+        return $cache[$jd];
+    }
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT 1 FROM date_tasks_missions
+          WHERE subject_id = ' . WWTC_SUBJECT_ID . ' AND start_date = :d AND end_date = :d LIMIT 1'
+    );
+    $stmt->execute([':d' => $jd]);
+    return $cache[$jd] = (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Holiday => its Julian date(s) for a campaign year, from the Hebrew calendar
+ * (Tishrei = month 1): Rosh Hashana = 1 & 2 Tishrei, Yom Kippur = 10 Tishrei.
+ * Only holidays that actually have missions that year are returned, so a holiday
+ * with no board data (e.g. a year Yom Kippur was never loaded) is hidden rather
+ * than shown as an all-zero board. Shape: ['Rosh Hashana' => [jd, jd], ...].
+ */
+function wwtcHolidayDates(int $year): array
+{
+    static $cache = [];
+    if (isset($cache[$year])) {
+        return $cache[$year];
+    }
+    // Holiday boards are off before the enable year, regardless of stray marks.
+    if ($year < WWTC_HOLIDAY_BOARDS_FROM_YEAR) {
+        return $cache[$year] = [];
+    }
+    $rh1 = (int) jewishtojd(1, 1, $year); // 1 Tishrei opens the year named $year
+    $candidates = [
+        'Rosh Hashana' => [$rh1, $rh1 + 1],
+        'Yom Kippur'   => [(int) jewishtojd(1, 10, $year)],
+    ];
+    $out = [];
+    foreach ($candidates as $name => $jds) {
+        $have = array_values(array_filter($jds, 'wwtcHasHolidayMissions'));
+        if ($have) {
+            $out[$name] = $have;
+        }
+    }
+    return $cache[$year] = $out;
+}
+
+/**
+ * The full board for one holiday occasion, built from per-soldier rows so every
+ * endpoint (army / schools / class / platoon / soldier) agrees — the same
+ * discipline the engine-backed helpers keep. "said" = MAX(done_qty) across
+ * $doneJds (Rosh Hashana's two days collapse to one per soldier); quota = the
+ * soldier's SM-Tishrei quota at $quotaJd. met is per-soldier quota (said >= quota),
+ * which also drives perfect platoons — self-consistent across the holiday board.
+ * Returns engine-shaped arrays so wwtcSchoolRow() etc. can be reused unchanged.
+ */
+function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): array
+{
+    global $MASHPIA_DB;
+    $year = $year ?: wwtcYear();
+    sort($doneJds);
+    $key = 'holiday_board.' . $year . '.' . $quotaJd . '.' . implode('-', $doneJds);
+    return wwtcCached($key, static function () use ($doneJds, $quotaJd, $MASHPIA_DB) {
+        $kap = WWTC_GRID_KAPITELACH;
+        $min = WWTC_GRID_MINUTES;
+
+        // Per-soldier SM-Tishrei quota (kapitlach + minutes) with school/class.
+        $quotaStmt = $MASHPIA_DB->prepare(
+            'SELECT u.user_id, u.school_id, u.class_id, u.first, u.last,
+                    c.class_grade, c.class_sub, c.class_teacher,
+                    MAX(CASE WHEN dt.grid_id = ' . $kap . ' THEN dt.quantity END) qk,
+                    MAX(CASE WHEN dt.grid_id = ' . $min . ' THEN dt.quantity END) qm
+               FROM users u
+               JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
+               JOIN schools s ON s.school_id = u.school_id
+               JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
+               JOIN date_tasks_missions m ON m.subject_id = ' . WWTC_SUBJECT_ID . '
+                    AND m.start_date = :q AND m.end_date = :q
+                    AND m.school_type_id = u.school_type_id AND m.track_id = ut.track_id
+                    AND m.level = ut.level AND m.lang_id = u.lang_id
+               JOIN date_tasks dt ON dt.date_tasks_mission_id = m.date_tasks_mission_id
+                    AND dt.grid_id IN (' . $kap . ', ' . $min . ')
+              WHERE u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE . '
+              GROUP BY u.user_id, u.school_id, u.class_id, u.first, u.last,
+                       c.class_grade, c.class_sub, c.class_teacher'
+        );
+        $quotaStmt->execute([':q' => $quotaJd]);
+
+        // Per-soldier done = MAX across the holiday day(s), so the two Rosh Hashana
+        // days count once. Keyed by user_id, pivoted to kapitlach + minutes.
+        $doneMap = [];
+        $in = implode(',', array_map('intval', $doneJds));
+        if ($in !== '') {
+            $doneRows = $MASHPIA_DB->query(
+                'SELECT dtm.user_id,
+                        MAX(CASE WHEN dt.grid_id = ' . $kap . ' THEN dtm.done_qty END) dk,
+                        MAX(CASE WHEN dt.grid_id = ' . $min . ' THEN dtm.done_qty END) dm
+                   FROM date_tasks_marks dtm
+                   JOIN date_tasks dt USING (date_task_id)
+                   JOIN date_tasks_missions m USING (date_tasks_mission_id)
+                  WHERE m.subject_id = ' . WWTC_SUBJECT_ID . ' AND m.start_date IN (' . $in . ')
+                    AND dt.grid_id IN (' . $kap . ', ' . $min . ')
+                  GROUP BY dtm.user_id'
+            )->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($doneRows as $r) {
+                $doneMap[(int) $r['user_id']] = [
+                    'k' => $r['dk'] === null ? null : (int) $r['dk'],
+                    'm' => $r['dm'] === null ? null : (int) $r['dm'],
+                ];
+            }
+        }
+
+        $names = wwtcEligibleSchools();
+        $kapGoal = []; $kapDone = []; $minGoal = []; $minDone = [];
+        $metBySchool = []; $sizeBySchool = []; $metByClass = []; $sizeByClass = []; $participated = [];
+        $studentsBySchool = []; $classMeta = []; $schools = [];
+        $armySaid = 0; $armyQuota = 0; $armyMin = 0; $armyMinQuota = 0; $soldiers = 0; $met = 0; $part = 0;
+
+        foreach ($quotaStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $sid = (int) $row['school_id'];
+            if (!isset($names[$sid])) {
+                continue; // public boards only list eligible WWTC schools
+            }
+            $cid = (int) $row['class_id'];
+            $qk = (int) $row['qk'];
+            $qm = (int) $row['qm'];
+            $d = $doneMap[(int) $row['user_id']] ?? null;
+            $reported = $d !== null;
+            $dk = ($reported && $d['k'] !== null) ? $d['k'] : 0;
+            $dm = ($reported && $d['m'] !== null) ? $d['m'] : 0;
+            $isMet = $qk > 0 && $dk >= $qk;
+            $didPart = $dk > 0;
+
+            $schools[$sid] = $names[$sid];
+            $kapGoal[$sid] = ($kapGoal[$sid] ?? 0) + $qk;
+            $kapDone[$sid] = ($kapDone[$sid] ?? 0) + $dk;
+            $minGoal[$sid] = ($minGoal[$sid] ?? 0) + $qm;
+            $minDone[$sid] = ($minDone[$sid] ?? 0) + $dm;
+            $sizeBySchool[$sid] = ($sizeBySchool[$sid] ?? 0) + 1;
+            $metBySchool[$sid] = ($metBySchool[$sid] ?? 0) + ($isMet ? 1 : 0);
+            $sizeByClass[$sid][$cid] = ($sizeByClass[$sid][$cid] ?? 0) + 1;
+            $metByClass[$sid][$cid] = ($metByClass[$sid][$cid] ?? 0) + ($isMet ? 1 : 0);
+            if ($didPart) {
+                $participated[$sid] = ($participated[$sid] ?? 0) + 1;
+            }
+
+            $grade = (string) $row['class_grade'];
+            if (!isset($classMeta[$cid])) {
+                $classMeta[$cid] = [
+                    'schoolId' => $sid,
+                    'grade' => $grade,
+                    'sub' => (string) ($row['class_sub'] ?? ''),
+                    'teacher' => (string) ($row['class_teacher'] ?? ''),
+                ];
+            }
+            $studentsBySchool[$sid][] = [
+                'id' => (int) $row['user_id'],
+                'name' => trim(($row['first'] ?? '') . ' ' . ($row['last'] ?? '')),
+                'classId' => $cid,
+                'className' => $grade,
+                'quota' => $qk,
+                'said' => $dk,
+                'met' => $isMet,
+                'minutesQuota' => $qm,
+                'minutesSaid' => $dm,
+            ];
+
+            $armyQuota += $qk; $armySaid += $dk; $armyMinQuota += $qm; $armyMin += $dm;
+            $soldiers++;
+            if ($isMet) { $met++; }
+            if ($didPart) { $part++; }
+        }
+
+        $perfectPlatoons = 0;
+        $classesCount = 0;
+        foreach ($sizeByClass as $sid => $byClass) {
+            $classesCount += count($byClass);
+            foreach ($byClass as $cid => $size) {
+                if ($size > 0 && ($metByClass[$sid][$cid] ?? 0) >= $size) {
+                    $perfectPlatoons++;
+                }
+            }
+        }
+
+        return [
+            'schools' => $schools,
+            'kapGoal' => $kapGoal, 'kapDone' => $kapDone,
+            'minGoal' => $minGoal, 'minDone' => $minDone,
+            'counts' => [
+                'metBySchool' => $metBySchool, 'sizeBySchool' => $sizeBySchool,
+                'metByClass' => $metByClass, 'sizeByClass' => $sizeByClass,
+            ],
+            'participated' => $participated,
+            'studentsBySchool' => $studentsBySchool,
+            'classMeta' => $classMeta,
+            'army' => [
+                'accomplished' => $armySaid, 'quota' => $armyQuota,
+                'minutes' => $armyMin, 'minutesQuota' => $armyMinQuota,
+                'soldiers' => $soldiers, 'metSoldiers' => $met, 'participatedSoldiers' => $part,
+                'schools' => count($schools), 'classes' => $classesCount,
+                'perfectPlatoons' => $perfectPlatoons,
+            ],
+        ];
+    });
+}
+
+/** One soldier's MAX(done_qty) across a holiday's day(s) for a grid. [said, reported]. */
+function wwtcKidHolidayDone(array $kid, array $jds, int $grid): array
+{
+    global $MASHPIA_DB;
+    if (!$jds) {
+        return [0, false];
+    }
+    $in = implode(',', array_map('intval', $jds));
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT MAX(dtm.done_qty) FROM date_tasks_marks dtm
+           JOIN date_tasks dt USING (date_task_id)
+           JOIN date_tasks_missions m USING (date_tasks_mission_id)
+          WHERE dtm.user_id = :uid AND m.subject_id = ' . WWTC_SUBJECT_ID . '
+            AND m.start_date IN (' . $in . ') AND dt.grid_id = :grid'
+    );
+    $stmt->execute([':uid' => (int) $kid['user_id'], ':grid' => $grid]);
+    $raw = $stmt->fetchColumn();
+    $reported = $raw !== null && $raw !== false;
+    return [$reported ? (int) $raw : 0, $reported];
 }
 
 function wwtcHasPeriodQuery(): bool

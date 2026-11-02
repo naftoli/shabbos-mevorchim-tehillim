@@ -32,6 +32,11 @@ export function isHolidayMonth(month) {
   return HOLIDAYS.has(month)
 }
 
+// The demo roster has no Rosh Hashana / Yom Kippur reports, so a holiday boards
+// off the Shabbos-Mevorchim Tishrei figures (quota AND said) while keeping its own
+// label — mirroring live, where the holiday quota is the Tishrei quota.
+const demoDataMonth = (month) => (isHolidayMonth(month) ? 'Tishrei' : month)
+
 function saidOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] ?? 0
   return kid.reports?.[month] ?? 0
@@ -141,10 +146,8 @@ export async function getGlobalStats(period) {
   if (!IS_DEMO) return mashpia.getGlobalStats(period)
   const month = period?.month || CURRENT_MONTH
   const year = period?.year || CAMPAIGN_YEAR
-  if (isHolidayMonth(month)) {
-    return { holiday: true, board: false, monthLabel: month, year }
-  }
-  const s = schoolsFor(month, year)
+  const dataMonth = demoDataMonth(month)
+  const s = schoolsFor(dataMonth, year)
   const acc = s.reduce((a, x) => a + x.saidMonth, 0)
   const quota = s.reduce((a, x) => a + x.quotaMonth, 0)
   const soldiers = s.reduce((a, x) => a + x.kids, 0)
@@ -156,6 +159,7 @@ export async function getGlobalStats(period) {
   return {
     monthLabel: month,
     year,
+    holiday: isHolidayMonth(month),
     accomplished: acc,
     quota,
     pct: quota > 0 ? Math.round((acc / quota) * 100) : 0,
@@ -169,7 +173,7 @@ export async function getGlobalStats(period) {
     soldiers,
     schools: s.length,
     classes,
-    perfectPlatoons: demoPerfectPlatoons(month, year).length,
+    perfectPlatoons: demoPerfectPlatoons(dataMonth, year).length,
   }
 }
 
@@ -186,7 +190,7 @@ export async function getSchools(period) {
   if (!IS_DEMO) return mashpia.getSchools(period)
   const month = period?.month || CURRENT_MONTH
   const year = period?.year || CAMPAIGN_YEAR
-  return schoolsFor(month, year).slice().sort((a, b) => b.saidMonth - a.saidMonth)
+  return schoolsFor(demoDataMonth(month), year).slice().sort((a, b) => b.saidMonth - a.saidMonth)
 }
 export function topSchoolsByKapitlach(n = 5) {
   return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth).slice(0, n)
@@ -199,7 +203,7 @@ export function topSchoolsByQuota(n = 5) {
 }
 export async function getPerfectPlatoons(period) {
   if (!IS_DEMO) return mashpia.getPerfectPlatoons(period)
-  return demoPerfectPlatoons(period?.month || CURRENT_MONTH, period?.year || CAMPAIGN_YEAR)
+  return demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
 }
 
 function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
@@ -564,10 +568,11 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
   if (!IS_DEMO) return mashpia.getArmyReport(monthIdx, period)
   const month = period?.month || monthName(monthIdx)
   const year = period?.year || CAMPAIGN_YEAR
-  if (isHolidayMonth(month)) return { month, year, holiday: true, rows: [] }
+  const dataMonth = demoDataMonth(month)
   return {
     month,
     year,
+    holiday: isHolidayMonth(month),
     rows: ROSTER.map((school) => {
       let registered = 0
       let goal = 0
@@ -579,14 +584,14 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
       for (const cls of school.classes) {
         for (const kid of cls.kids) {
           registered += 1
-          const q = quotaFor(kid.grade, month, kid.ladder)
+          const q = quotaFor(kid.grade, dataMonth, kid.ladder)
           goal += q?.v ?? 0
           minutesGoal += q?.m ?? 0
-          const said = saidOf(kid, month, year)
+          const said = saidOf(kid, dataMonth, year)
           accomplished += said
-          minutes += minutesOf(kid, month, year)
-          if (reportedOf(kid, month, year) && said > 0) participated += 1
-          if (metAt(kid, month, year)) met += 1
+          minutes += minutesOf(kid, dataMonth, year)
+          if (reportedOf(kid, dataMonth, year) && said > 0) participated += 1
+          if (metAt(kid, dataMonth, year)) met += 1
         }
       }
       return {
@@ -616,6 +621,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
   if (!school) return null
   const month = period?.month || monthName(monthIdx)
   const year = period?.year || CAMPAIGN_YEAR
+  const dataMonth = demoDataMonth(month)
   return {
     month,
     school: school.name,
@@ -625,9 +631,9 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
       let accomplished = 0
       let completed = 0
       for (const kid of cls.kids) {
-        goal += quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
-        accomplished += saidOf(kid, month, year)
-        if (metAt(kid, month, year)) completed += 1
+        goal += quotaFor(kid.grade, dataMonth, kid.ladder)?.v ?? 0
+        accomplished += saidOf(kid, dataMonth, year)
+        if (metAt(kid, dataMonth, year)) completed += 1
       }
       return { id: cls.id, name: cls.name, grade: cls.grade, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
     }),
@@ -639,14 +645,15 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
   if (!IS_DEMO) return mashpia.getPlatoonReport(classId, monthIdx, period)
   const month = period?.month || monthName(monthIdx)
   const year = period?.year || CAMPAIGN_YEAR
+  const dataMonth = demoDataMonth(month)
   for (const school of ROSTER) {
     const cls = school.classes.find((c) => c.id === classId)
     if (!cls) continue
     let completed = 0
     const rows = cls.kids.map((kid) => {
-      const q = quotaFor(kid.grade, month, kid.ladder)
-      const said = saidOf(kid, month, year)
-      const met = metAt(kid, month, year)
+      const q = quotaFor(kid.grade, dataMonth, kid.ladder)
+      const said = saidOf(kid, dataMonth, year)
+      const met = metAt(kid, dataMonth, year)
       if (met) completed += 1
       return { id: kid.id, name: kid.name, ladder: kid.ladder, goal: q?.v ?? 0, goalLabel: q?.k ?? '—', said, met }
     })
