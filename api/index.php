@@ -1451,12 +1451,9 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
 
     $input = wwtcInput();
     $ladder = (int) ($input['ladder'] ?? 0);
-    // A ladder is the grade a soldier finishes training by, so it can't be below
-    // their current grade (max(5, grade)..12 — the SPA's availableLadders).
-    $gradeNum = is_numeric($kid['class_grade']) ? (int) $kid['class_grade'] : 0;
-    $minLadder = max(5, $gradeNum);
-    if ($ladder < $minLadder || $ladder > 12) {
-        wwtcError("Choose a ladder between $minLadder and 12.", 422);
+    // Any ladder 5..12 is selectable regardless of grade (tracks 3..10 all exist).
+    if ($ladder < 5 || $ladder > 12) {
+        wwtcError("Choose a ladder between 5 and 12.", 422);
     }
     $track = wwtcTrackFromLadder($ladder);
 

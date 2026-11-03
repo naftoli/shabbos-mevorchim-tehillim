@@ -131,19 +131,21 @@ test('speech helpers no-op when the browser has no speech API', async () => {
   assert.equal(code, 'unsupported')
 })
 
-test('a harder grade uses its own hardest ladder, not ladder 5', () => {
+test('every grade is offered the full ladder range (12 easiest … 5 hardest)', () => {
   const ctx = { ladder: null, firstName: 'Rochel', grade: '8', monthEn: 'Kislev', situation: 'pick' }
   const greeting = pickPitch(ctx)
-  assert.match(greeting, /Or you can choose ladder 8\. That's the hardest ladder, but you'll finish your training and be able to say the entire Tehillim on Shabbos Mevorchim by the time you finish 8th grade\./)
-  assert.doesNotMatch(greeting, /ladder 5/)
+  assert.match(greeting, /You can take ladder 12\. That's the easiest ladder, but your training will take until 12th grade\./)
+  assert.match(greeting, /Or you can choose ladder 5\. That's the hardest ladder, but you'll finish your training and be able to say the entire Tehillim on Shabbos Mevorchim by the time you finish 5th grade\./)
+  const q = quotaFor('8', 'Kislev', 12)
+  assert.match(greeting, new RegExp(`your quota is ${q.v} kapitlach and ${q.m} minutes`))
 })
 
-test('a 12th grader only hears ladder 12', () => {
+test('a 12th grader is also offered every ladder (5..12)', () => {
   const ctx = { ladder: null, firstName: 'Levi', grade: '12', monthEn: 'Nissan', situation: 'pick' }
   const greeting = pickPitch(ctx)
-  assert.match(greeting, /You can take ladder 12\. That's the ladder for your grade, and your training will take until 12th grade\./)
-  assert.doesNotMatch(greeting, /ladder 5/)
-  assert.doesNotMatch(greeting, /lots of different choices/)
+  assert.match(greeting, /You can take ladder 12\. That's the easiest ladder, but your training will take until 12th grade\./)
+  assert.match(greeting, /Or you can choose ladder 5\. That's the hardest ladder/)
+  assert.match(greeting, /lots of different choices/)
   const q = quotaFor('12', 'Nissan', 12)
   assert.ok(q.m != null)
   assert.match(greeting, new RegExp(`your quota is ${q.v} kapitlach and ${q.m} minutes`))
