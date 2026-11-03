@@ -363,21 +363,21 @@ export default function KidDashboard() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <button type="button" className="rounded-2xl bg-navy p-4 text-left text-white" onClick={() => emitCue('ranks', cueRankings({ myRank: social.myRankInClass, classRank: social.classRank, schoolRank: social.schoolRank }))}>
                 <IconImg name="school" className="h-8 w-auto" />
-                <p className="mt-2 text-xs uppercase tracking-wide text-gold">Base in the world</p>
-                <p className="font-display text-3xl font-black">#{social.schoolRank}</p>
+                <p className="mt-2 font-display text-3xl font-black">#{social.schoolRank}</p>
                 <p className="text-sm text-white/80">of {social.totalSchools}</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-gold">Base in the world</p>
               </button>
               <div className="rounded-2xl bg-track p-4">
                 <IconImg name="platoon" className="h-8 w-auto" />
-                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">Your platoon</p>
-                <p className="font-display text-3xl font-black text-navy">#{social.classRank}</p>
+                <p className="mt-2 font-display text-3xl font-black text-navy">#{social.classRank}</p>
                 <p className="text-sm text-muted">of {social.totalClasses} in the base</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">Your platoon</p>
               </div>
               <div className="rounded-2xl bg-track p-4">
                 <IconImg name="hat" className="h-8 w-auto" />
-                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">You in your school</p>
-                <p className="font-display text-3xl font-black text-navy">#{social.myRankInSchool || social.myRankInClass}</p>
+                <p className="mt-2 font-display text-3xl font-black text-navy">#{social.myRankInSchool || social.myRankInClass}</p>
                 <p className="text-sm text-muted">of {social.schoolSize || social.classSize} chayolim</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">You in your school</p>
               </div>
             </div>
             {social.classPerfect ? <p className="mt-3 flex items-center gap-2 font-semibold text-green"><CheckMark className="h-5 w-5" /> {cuePerfectPlatoon()}</p> : null}
