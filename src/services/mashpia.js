@@ -173,8 +173,10 @@ export const getDedication = async (period) => {
 export const getHqVerify = (period) => req(`/hq/verify${periodQuery(period)}`, { as: 'admin' })
 export const getClassLeaderboard = (id) => req(`/schools/${id}/class-leaderboard`).then((r) => r.classes || [])
 export const getNotCompleted = (id) => req(`/schools/${id}/not-completed`, { as: 'admin' }).then((r) => r.classes || [])
-export const getSoldierLeaderboard = (id, n = 10) =>
-  req(`/schools/${id}/leaderboard?n=${n}`).then((r) => r.soldiers || [])
+export const getSoldierLeaderboard = (id, n = null) => {
+  const q = n == null ? '' : `?n=${encodeURIComponent(n)}`
+  return req(`/schools/${id}/leaderboard${q}`).then((r) => r.soldiers || [])
+}
 export const getRunningTotals = () => req('/running-totals')
 const monthQuery = (idx) => (idx === undefined || idx === null ? '' : `?monthIdx=${idx}`)
 function reportQuery(monthIdx, period) {

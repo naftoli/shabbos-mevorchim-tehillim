@@ -118,6 +118,15 @@ test('schoolSoldierLeaderboard unwraps {soldiers} and passes n', async () => {
   const rows = await api.schoolSoldierLeaderboard(89, 10)
   assert.equal(rows.length, 1)
   assert.equal(rows[0].name, 'A')
+  assert.equal(lastCall().apiPath, '/schools/89/leaderboard?n=10')
+})
+
+test('schoolSoldierLeaderboard without n asks for the whole board', async () => {
+  reset()
+  mock({ 'GET /schools/89/leaderboard': { body: { schoolId: 89, soldiers: [{ id: 2, name: 'B', grade: '4', saidMonth: 150 }] } } })
+  const rows = await api.schoolSoldierLeaderboard(89)
+  assert.equal(rows[0].name, 'B')
+  assert.equal(lastCall().apiPath, '/schools/89/leaderboard')
 })
 
 test('schoolClassLeaderboard unwraps {classes}', async () => {

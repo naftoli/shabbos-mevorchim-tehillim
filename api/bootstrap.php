@@ -949,19 +949,19 @@ function wwtcParticipatedBySchool(int $date): array
 
 /**
  * SPA ladder (5..12, the grade a soldier finishes training to say the whole
- * Tehillim by) <-> DB user_tracks.track_id. Ladder 12 = track 1, 11 = track 2,
- * ... 5 = track 8, so track_id = 13 - ladder and ladder = 13 - track_id. (Only
- * tracks 3..8 — ladders 10..5 — exist today; 11 and 12 come when 1 and 2 are added.)
+ * Tehillim by) <-> DB user_tracks.track_id. Ladder 12 = track 3, 11 = track 4,
+ * ... 7 = track 8, so track_id = 15 - ladder and ladder = 15 - track_id. (Only
+ * tracks 3..8 — ladders 12..7 — exist today.)
  */
 function wwtcLadderFromTrack($trackId): ?int
 {
     $trackId = (int) $trackId;
-    return $trackId > 0 ? 13 - $trackId : null;
+    return $trackId > 0 ? 15 - $trackId : null;
 }
 
 function wwtcTrackFromLadder(int $ladder): int
 {
-    return 13 - $ladder;
+    return 15 - $ladder;
 }
 
 /** Public soldier payload (never the dob). Keyed by user_serial as the SPA id. */

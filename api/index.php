@@ -15,6 +15,7 @@ require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/marking.php';
 require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
+require __DIR__ . '/soldierBoard.php';
 
 function wwtcRoutePath(): string
 {
@@ -822,7 +823,14 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
     if (!isset(wwtcEligibleSchools()[$id])) {
         wwtcError('School not found.', 404);
     }
-    $limit = max(1, min(50, (int) ($_GET['n'] ?? 10)));
+    // The board pages ten at a time and ranks ties across the whole school.
+    // A SQL LIMIT of 10 kept an arbitrary slice of a tie (everyone on 150
+    // looked like places 1–10). ?n= still slices, but only after the name sort.
+    $cap = 2000;
+    $limit = $cap;
+    if (isset($_GET['n']) && $_GET['n'] !== '') {
+        $limit = max(1, min($cap, (int) $_GET['n']));
+    }
     $date = wwtcCurrentDate();
     // This month only. A year total made a chayol look like they said hundreds
     // of kapitlach in the month on the board.
@@ -836,8 +844,8 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
           WHERE u.school_id = :id AND dt.grid_id = ' . WWTC_GRID_KAPITELACH . '
             AND dtmm.subject_id = ' . WWTC_SUBJECT_ID . ' AND dtmm.start_date = :d
           GROUP BY u.user_id
-          ORDER BY said DESC
-          LIMIT ' . $limit
+          ORDER BY said DESC, u.last ASC, u.first ASC, u.user_id ASC
+          LIMIT ' . $cap
     );
     $stmt->execute([':id' => $id, ':d' => $date]);
     $rows = [];
@@ -849,7 +857,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
             'saidMonth' => (int) $r['said'],
         ];
     }
-    wwtcJson(['schoolId' => $id, 'soldiers' => $rows]);
+    wwtcJson(['schoolId' => $id, 'soldiers' => wwtcOrderSoldiers($rows, $limit)]);
 }
 
 // ---- perfect platoons (nationwide) -----------------------------------------
@@ -1513,12 +1521,9 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
 
     $input = wwtcInput();
     $ladder = (int) ($input['ladder'] ?? 0);
-    // A ladder is the grade a soldier finishes training by, so it can't be below
-    // their current grade (max(5, grade)..12 — the SPA's availableLadders).
-    $gradeNum = is_numeric($kid['class_grade']) ? (int) $kid['class_grade'] : 0;
-    $minLadder = max(5, $gradeNum);
-    if ($ladder < $minLadder || $ladder > 12) {
-        wwtcError("Choose a ladder between $minLadder and 12.", 422);
+    // Any ladder 5..12 is selectable regardless of grade (tracks 3..10 all exist).
+    if ($ladder < 5 || $ladder > 12) {
+        wwtcError("Choose a ladder between 5 and 12.", 422);
     }
     $track = wwtcTrackFromLadder($ladder);
 

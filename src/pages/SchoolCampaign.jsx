@@ -4,9 +4,10 @@ import { Card, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { Pending, QuotaReached, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
+import SoldierLeaderboard from '@/components/SoldierLeaderboard.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
-import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { MONTH_HEB } from '@/data/ladders.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import {
   getSchool,
@@ -15,7 +16,6 @@ import {
   CURRENT_MONTH,
 } from '@/services/api.js'
 
-const RANK_MEDAL = ['🥇', '🥈', '🥉']
 const RACE_FILLS = [
   'linear-gradient(90deg, #86a8db 0%, var(--color-race-blue) 55%, #1f4f9e 100%)',
   'linear-gradient(90deg, #fde58f 0%, var(--color-race-yellow) 55%, #f0b929 100%)',
@@ -32,7 +32,7 @@ const classMono = (c) => {
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
   const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
-  const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId, 10), [schoolId])
+  const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId), [schoolId])
   const { data: classesData } = useLiveData(() => schoolClassLeaderboard(schoolId), [schoolId])
   const classes = classesData ?? []
   const soldierRows = soldiers ?? []
@@ -131,21 +131,7 @@ export default function SchoolCampaign() {
         </Card>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          {/* Soldier leaderboard */}
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-4 font-display text-xl font-black text-navy">Top Soldiers</h2>
-            <ol className="space-y-2">
-              {soldierRows.map((s, i) => (
-                <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]">
-                  <span className="w-7 text-center font-display text-lg font-bold italic text-blue-accent">{RANK_MEDAL[i] || i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate font-semibold text-navy">{s.name}</span>
-                  <span className="text-xs text-muted">{GRADE_LABEL[s.grade]}</span>
-                  <span className="font-display font-bold tabular-nums text-green">{fmt(s.saidMonth ?? 0)}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="mt-2 text-xs text-muted">Kapitlach said this month. Ranked by this month only.</p>
-          </Card>
+          <SoldierLeaderboard key={schoolId} soldiers={soldierRows} />
 
           {/* Class leaderboard — toggle the metric like the home page race */}
           {(() => {

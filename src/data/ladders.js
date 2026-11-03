@@ -38,18 +38,18 @@ export const LADDERS = [12, 11, 10, 9, 8, 7, 6, 5]
 // The grade in which a ladder reaches the full 150 kapitlach — the ladder number.
 export const finishGrade = (ladder) => ladder
 
-// Ladders available to a grade (numeric grade; Pre-1A counts as 0). A child can
-// only pick a ladder that finishes in their current grade or later.
-export function availableLadders(grade) {
-  const g = grade === 'pre1a' ? 0 : Number(grade)
-  return LADDERS.filter((L) => L >= Math.max(5, g))
+// Ladders available to a grade. Every ladder (5..12) is selectable regardless of
+// grade; the backend accepts the same range. (grade is kept for signature
+// compatibility.)
+export function availableLadders(grade) { // eslint-disable-line no-unused-vars
+  return LADDERS.filter((L) => L >= 5)
 }
 
 // GENERATED, indexed by pace 1..8. Re-keyed below to the public ladder number
 // (finish grade = pace + 4), so do not read QUOTA_RAW directly — use QUOTA.
 const QUOTA_RAW = {
   'pre1a': {
-    Tishrei: { 1:{k:"א-לא",v:31,m:80}, 2:{k:"א-יז",v:17,m:53}, 3:{k:"א-ז",v:7,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
+    Tishrei: { 1:{k:"א-לא",v:31,m:80}, 2:{k:"א-יז",v:17,m:53}, 3:{k:"א-יא",v:11,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
     Cheshvan: { 1:{k:"א-לג",v:33,m:80}, 2:{k:"א-יח",v:18,m:55}, 3:{k:"א-יא",v:11,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
     Kislev: { 1:{k:"א-לג",v:33,m:80}, 2:{k:"א-יח",v:18,m:55}, 3:{k:"א-יא",v:11,m:38}, 4:{k:"א-ז",v:7,m:30}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
     Teves: { 1:{k:"א-לז",v:37,m:80}, 2:{k:"א-יט",v:19,m:60}, 3:{k:"א-יב",v:12,m:42}, 4:{k:"א-ח",v:8,m:32}, 5:{k:"א-ה",v:5,m:25}, 6:{k:"א-ד",v:4,m:20}, 7:{k:"א-ב",v:2,m:10}, 8:{k:"א",v:1,m:10} },
@@ -63,7 +63,7 @@ const QUOTA_RAW = {
     Elul: { 1:{k:"א-מו",v:46,m:85}, 2:{k:"א-כז",v:27,m:80}, 3:{k:"א-טו",v:15,m:45}, 4:{k:"א-י",v:10,m:36}, 5:{k:"א-ו",v:6,m:26}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ג",v:3,m:15}, 8:{k:"א-ב",v:2,m:10} },
   },
   '1': {
-    Tishrei: { 1:{k:"א-נד",v:54,m:90}, 2:{k:"א-לא",v:31,m:80}, 3:{k:"א-יז",v:17,m:53}, 4:{k:"א-ז",v:7,m:38}, 5:{k:"א-ז",v:7,m:30}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ד",v:4,m:20}, 8:{k:"א-ב",v:2,m:10} },
+    Tishrei: { 1:{k:"א-נד",v:54,m:90}, 2:{k:"א-לא",v:31,m:80}, 3:{k:"א-יז",v:17,m:53}, 4:{k:"א-יא",v:11,m:38}, 5:{k:"א-ז",v:7,m:30}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ד",v:4,m:20}, 8:{k:"א-ב",v:2,m:10} },
     Cheshvan: { 1:{k:"א-נו",v:56,m:90}, 2:{k:"א-לג",v:33,m:80}, 3:{k:"א-יח",v:18,m:55}, 4:{k:"א-יא",v:11,m:38}, 5:{k:"א-ז",v:7,m:30}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ד",v:4,m:20}, 8:{k:"א-ב",v:2,m:10} },
     Kislev: { 1:{k:"א-נז",v:57,m:90}, 2:{k:"א-לג",v:33,m:80}, 3:{k:"א-יח",v:18,m:55}, 4:{k:"א-יא",v:11,m:38}, 5:{k:"א-ז",v:7,m:30}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ד",v:4,m:20}, 8:{k:"א-ב",v:2,m:10} },
     Teves: { 1:{k:"א-נט",v:59,m:90}, 2:{k:"א-לז",v:37,m:80}, 3:{k:"א-יט",v:19,m:60}, 4:{k:"א-יב",v:12,m:42}, 5:{k:"א-ח",v:8,m:32}, 6:{k:"א-ה",v:5,m:25}, 7:{k:"א-ד",v:4,m:20}, 8:{k:"א-ב",v:2,m:10} },
