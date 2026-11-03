@@ -14,6 +14,7 @@ declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/marking.php';
 require __DIR__ . '/schoolLogo.php';
+require __DIR__ . '/platoonRoll.php';
 
 function wwtcRoutePath(): string
 {
@@ -1010,9 +1011,69 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
     wwtcJson(['month' => $monthLabel, 'school' => $names[$id], 'schoolId' => $id, 'rows' => $rows]);
 }
 
+/**
+ * Staff bearer on the platoon route, or null. A missing token, a soldier
+ * token, or a bad token stays null — the class summary is still public, so
+ * this must not 401.
+ */
+function wwtcOptionalStaffActor(): ?array
+{
+    $token = wwtcBearerToken();
+    if (!$token) {
+        return null;
+    }
+    $payload = wwtcVerifySignedPayload($token);
+    if (!$payload || empty($payload['type'])) {
+        return null;
+    }
+    if ($payload['type'] !== 'admin' && $payload['type'] !== 'teacher') {
+        return null;
+    }
+    return $payload;
+}
+
+/** @return int[] */
+function wwtcAdminAuthIds(int $adminId, string $auth): array
+{
+    global $MASHPIA_DB;
+    if ($adminId <= 0 || !isset($MASHPIA_DB)) {
+        return [];
+    }
+    try {
+        $stmt = $MASHPIA_DB->prepare(
+            'SELECT id FROM admin_auths WHERE admin_id = :id AND auth = :auth'
+        );
+        $stmt->execute([':id' => $adminId, ':auth' => $auth]);
+        $ids = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[] = (int) $id;
+        }
+        return $ids;
+    } catch (Exception $e) {
+        error_log('WWTC platoon roll auth lookup failed: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function wwtcPlatoonRollAllowed(int $classId, int $schoolId): bool
+{
+    $actor = wwtcOptionalStaffActor();
+    if (!$actor) {
+        return false;
+    }
+    $schoolIds = [];
+    $classIds = [];
+    if (($actor['type'] ?? '') === 'admin' && ($actor['auth'] ?? '') !== 'super') {
+        $schoolIds = wwtcAdminAuthIds((int) $actor['id'], 'school');
+        $classIds = wwtcAdminAuthIds((int) $actor['id'], WWTC_CLASS_AUTH);
+    }
+    return wwtcCanSeePlatoonRoll($actor, $classId, $schoolId, $schoolIds, $classIds);
+}
+
 if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
-    // Public class board. The reports page is the screen the school puts up;
-    // it has to render without an admin token. Names are the class roll.
+    // Class summary is public. The student roll is not — wwtcPlatoonResponse
+    // omits names and amounts unless wwtcPlatoonRollAllowed says this caller
+    // is HQ, this school's admin, or this class's teacher.
     $classId = (int) $m[1];
     $schoolId = (int) ($MASHPIA_DB->query('SELECT school_id FROM classes WHERE class_id = ' . $classId)->fetchColumn() ?: 0);
     if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
@@ -1052,14 +1113,15 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
             'met' => $s['met'],
         ];
     }
-    wwtcJson([
+    $summary = [
         'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
         'className' => $className,
         'completed' => $completed,
         'size' => count($rows),
-        'rows' => $rows,
-    ]);
+        'perfect' => count($rows) > 0 && $completed === count($rows),
+    ];
+    wwtcJson(wwtcPlatoonResponse($summary, $rows, wwtcPlatoonRollAllowed($classId, $schoolId)));
 }
 
 // Who hasn't completed this month, per class (drives the teacher deadline list).

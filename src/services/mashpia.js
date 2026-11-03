@@ -183,7 +183,21 @@ function reportQuery(monthIdx, period) {
 }
 export const getArmyReport = (monthIdx, period) => req(`/reports/army${reportQuery(monthIdx, period)}`)
 export const getBaseReport = (schoolId, monthIdx, period) => req(`/reports/base/${schoolId}${reportQuery(monthIdx, period)}`)
-export const getPlatoonReport = (classId, monthIdx, period) => req(`/reports/platoon/${classId}${reportQuery(monthIdx, period)}`)
+export async function getPlatoonReport(classId, monthIdx, period) {
+  const path = `/reports/platoon/${classId}${reportQuery(monthIdx, period)}`
+  // The summary is public. Attach the staff token when we have one so the
+  // server can add the roll. A rejected token must not blank the class summary.
+  if (!readToken('admin')) return req(path)
+  try {
+    return await req(path, { as: 'admin' })
+  } catch (error) {
+    const message = String(error?.message || '')
+    if (/authentication|permission|invalid|request failed \(40[13]\)/i.test(message)) {
+      return req(path)
+    }
+    throw error
+  }
+}
 
 // The signed-in soldier (token-scoped, so no id is sent).
 export const getKidProgress = () => req('/me/progress', { as: 'kid' })

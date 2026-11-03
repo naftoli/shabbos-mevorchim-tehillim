@@ -291,6 +291,9 @@ function PlatoonView({ data, error, loading, reload }) {
   if (error) return <ErrorNote error={error} onRetry={reload} what="this platoon" />
   if (!data) return loading ? <Pending label="Getting this platoon" /> : <ErrorNote error="This platoon has no soldiers on the report for that month." onRetry={reload} what="this platoon" />
   const perfect = data.size > 0 && data.completed === data.size
+  // Paint names only when the server (or the demo gate) set roll. A response
+  // that still contains rows without that flag — an older API — stays hidden.
+  const showRoll = data.roll === true && Array.isArray(data.rows)
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
@@ -303,16 +306,18 @@ function PlatoonView({ data, error, loading, reload }) {
           {data.completed} of {data.size} completed kapitlach quota
         </span>
       </div>
-      <ul className="divide-y divide-line">
-        {(data.rows || []).map((r) => (
-          <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
-            <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
-            <span className="min-w-0 flex-1 font-semibold text-navy">{r.name}</span>
-            <span className="text-sm text-navy"><span className="font-heb">{r.goalLabel}</span> <span className="text-muted">· said {fmt(r.said)} of {fmt(r.goal)}</span></span>
-            {r.ladder ? <span className="rounded-full bg-track px-2 py-1 text-[11px] font-bold text-navy">L{r.ladder}</span> : null}
-          </li>
-        ))}
-      </ul>
+      {showRoll ? (
+        <ul className="divide-y divide-line">
+          {data.rows.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+              <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
+              <span className="min-w-0 flex-1 font-semibold text-navy">{r.name}</span>
+              <span className="text-sm text-navy"><span className="font-heb">{r.goalLabel}</span> <span className="text-muted">· said {fmt(r.said)} of {fmt(r.goal)}</span></span>
+              {r.ladder ? <span className="rounded-full bg-track px-2 py-1 text-[11px] font-bold text-navy">L{r.ladder}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </Card>
   )
 }
