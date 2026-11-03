@@ -5,6 +5,7 @@
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
+import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import * as mashpia from './mashpia.js'
@@ -530,7 +531,9 @@ function demoSchool(id) {
   return { ...agg, classes, dedication: schoolDedication(id) }
 }
 
-export async function schoolSoldierLeaderboard(id, n = 10) {
+// n omitted returns the whole board. The page shows ten at a time; ranking
+// (and alphabetical ties) has to see everyone, not an arbitrary top 10.
+export async function schoolSoldierLeaderboard(id, n = null) {
   if (!IS_DEMO) return mashpia.getSoldierLeaderboard(id, n)
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return []
@@ -549,7 +552,8 @@ export async function schoolSoldierLeaderboard(id, n = 10) {
       })
     }
   }
-  return kids.sort((a, b) => b.saidMonth - a.saidMonth || b.missions - a.missions).slice(0, n)
+  kids.sort(compareSoldiers)
+  return n == null ? kids : kids.slice(0, n)
 }
 
 export async function schoolClassLeaderboard(id) {
