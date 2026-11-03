@@ -45,8 +45,8 @@ Writes — the signed-in soldier's own, scoped by the bearer token to their
   the quota, exactly as `mark_tehillim2.php` does, in one transaction, then bumps
   `Cache::bumpVersion('shabbos_mevorchim:v')` so the reports refresh.
 - `PUT /me/ladder` — `{ ladder }` (5..12) → writes `user_tracks.track_id` for the
-  Tehillim subject. Ladder ↔ track mapping: `track_id = 13 - ladder` (ladder 12 =
-  track 1 … 5 = track 8; only tracks 3..8 exist today).
+  Tehillim subject. Ladder ↔ track mapping: `track_id = 15 - ladder` (ladder 12 =
+  track 3 … 7 = track 8; only tracks 3..8 exist today).
 
 Still **405** by design: dedications (`PATCH /schools/:id/dedication`) — the SPA
 keeps dedications client-side until that write is designed.
