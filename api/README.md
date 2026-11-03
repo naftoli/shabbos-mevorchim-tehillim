@@ -24,9 +24,10 @@ Reads — all implemented (same figures as the WWTC report pages):
   `GET /schools/:id`, `GET /schools/:id/class-leaderboard`,
   `GET /schools/:id/leaderboard` (public — full soldier names),
   `GET /schools/:id/not-completed` (admin), `GET /perfect-platoons`,
-  `GET /reports/army`, `GET /reports/base/:schoolId`, `GET /reports/platoon/:classId`
-  (all take `?monthIdx=` for an elapsed month; default current),
-  `GET /me/progress`, `GET /me/social`.
+  `GET /reports/army`, `GET /reports/base/:schoolId`,
+  `GET /reports/platoon/:classId` (class summary is public; the student roll is staff-only — see below).
+  Reports take `?monthIdx=` for an elapsed month, or `?year=&month=`; default is the current month.
+- `GET /me/progress`, `GET /me/social`.
 
 Per-school / per-class "soldiers who completed" and "perfect platoons" come from
 the mission-mark signal (`date_tasks_mission_marks`) via cheap grouped queries
@@ -35,6 +36,47 @@ scale to the whole army. "Perfect platoon" here means every enrolled soldier in 
 class earned the mission this month (met === size), matching the SPA.
 
 Send the token as `Authorization: Bearer <token>`.
+
+## Class roll (not public)
+
+`GET /reports/platoon/:classId` stays on the reports screen without a login, but
+the public JSON is only the class summary:
+
+```json
+{ "month": "Cheshvan", "school": "…", "className": "5-B", "completed": 3, "size": 5, "perfect": false, "roll": false }
+```
+
+There is no `rows` array. Student names, ladders, quotas, and "said X of Y" are
+not in the body. `roll: true` plus `rows` is added only for a staff bearer.
+A missing token, a soldier token, or a token for a different school is still
+**200** with the summary (not 401), so the public page keeps working.
+
+Who sees the roll (`WWTC_PLATOON_ROLL_AUDIENCE` in `api/platoonRoll.php`, same
+default as `PLATOON_ROLL_AUDIENCE` in `src/lib/decisions.js`): **`staff`**.
+
+- HQ — `admins.auth = super` — every class
+- School admin — `admin_auths.auth = 'school'` and `id = school_id` — every class in that school
+- Class teacher — `admin_auths.auth = 'class'` and `id = class_id` — that class only
+- A future token `type: "teacher"` with `classId` — that class only (nothing issues this yet; the SPA sends the admin token)
+
+There is no separate teacher login. This API does not read the mashpia.com
+cookie session (`header.php` is not included). `classes.class_teacher` is the
+name printed on the perfect-platoon chip, not an account.
+
+### What Naftoli does on mashpia.com
+
+1. Deploy `api/platoonRoll.php` and the updated `api/index.php` with the app.
+   The new SPA will not paint a roll unless the response says `roll: true`, so
+   the public page hides names as soon as the SPA is deployed. Staff see the
+   roll only after this PHP is on the server too. Until then, `curl` of the
+   old endpoint still returns names — deploy the PHP before treating the API
+   as closed.
+2. Teachers sign in on the existing School Admin page (`POST /admin/login`,
+   Mashpia username and password). HQ and a school admin need no new rows.
+3. A teacher who should see only their own class needs an `admin_auths` row:
+   `auth = 'class'`, `id = class_id`. If the live table uses a different
+   `auth` string for a class, change `WWTC_CLASS_AUTH` in `api/platoonRoll.php`.
+4. No new secret. The existing `WWTC_TOKEN_SECRET` signs the admin token.
 
 Writes — the signed-in soldier's own, scoped by the bearer token to their
 `user_id`:

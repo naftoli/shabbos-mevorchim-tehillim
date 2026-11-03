@@ -4,7 +4,7 @@
 // SPA consumes them. Run via `npm run test:web`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mock, lastCall, reset } from './harness.mjs'
+import { mock, lastCall, calledWith, reset } from './harness.mjs'
 
 const { IS_DEMO } = await import('@/lib/liveMode.js')
 const api = await import('@/services/api.js')
@@ -177,14 +177,38 @@ test('getArmyReport passes monthIdx as a query param', async () => {
 
 test('getBaseReport and getPlatoonReport hit the right month-scoped paths', async () => {
   reset()
+  api.endSession('admin')
   mock({
     'GET /reports/base/89?monthIdx=1': { body: { school: 'A', schoolId: 89, rows: [] } },
-    'GET /reports/platoon/555?monthIdx=1': { body: { className: '5A', completed: 3, size: 10, rows: [] } },
+    'GET /reports/platoon/555?monthIdx=1': { body: { className: '5A', completed: 3, size: 10, roll: false } },
   })
   await api.getBaseReport(89, 1)
   assert.equal(lastCall().apiPath, '/reports/base/89?monthIdx=1')
   await api.getPlatoonReport(555, 1)
   assert.equal(lastCall().apiPath, '/reports/platoon/555?monthIdx=1')
+  assert.equal(lastCall().headers.Authorization, undefined)
+})
+
+test('getPlatoonReport sends the staff token, and falls back to the public summary if it is rejected', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok3', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
+    'GET /reports/platoon/555?monthIdx=1': (opts) => (
+      opts.headers?.Authorization
+        ? { status: 401, body: { error: 'Invalid authentication token.' } }
+        : { body: { className: '5-B', completed: 3, size: 5, roll: false } }
+    ),
+  })
+  await api.verifyAdmin('teacher', 'pw')
+  const report = await api.getPlatoonReport(555, 1)
+  assert.equal(report.roll, false)
+  assert.equal(report.className, '5-B')
+  const calls = calledWith().filter((c) => c.apiPath.startsWith('/reports/platoon/'))
+  assert.equal(calls.length, 2)
+  assert.match(calls[0].headers.Authorization, /^Bearer atok3$/)
+  assert.equal(calls[1].headers.Authorization, undefined)
+  api.endSession('admin')
 })
 
 test('notCompleted unwraps {classes} and sends an admin token', async () => {

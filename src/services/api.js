@@ -4,6 +4,7 @@
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
+import { canSeeClassRoll } from '@/lib/decisions.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
@@ -644,7 +645,25 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
   }
 }
 
-// Platoon report: one row per child in a class.
+// Same key AuthContext uses for the staff session. Demo has no PHP API, so the
+// roll gate reads this record the way the live API reads the admin bearer.
+const DEMO_ADMIN_KEY = 'wwtc_session_admin'
+function readDemoStaff() {
+  try {
+    if (typeof localStorage === 'undefined') return null
+    const raw = localStorage.getItem(DEMO_ADMIN_KEY)
+    if (!raw) return null
+    const { exp, data } = JSON.parse(raw)
+    if (!exp || exp < Date.now() || !data || typeof data !== 'object') return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+// Platoon report. Public callers get the class summary only. The student roll
+// is added for HQ, that school's admin, or that class's teacher (see
+// PLATOON_ROLL_AUDIENCE). Demo follows the same rule as the live API.
 export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, period = null) {
   if (!IS_DEMO) return mashpia.getPlatoonReport(classId, monthIdx, period)
   const month = period?.month || monthName(monthIdx)
@@ -654,14 +673,26 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
     const cls = school.classes.find((c) => c.id === classId)
     if (!cls) continue
     let completed = 0
+    for (const kid of cls.kids) {
+      if (metAt(kid, dataMonth, year)) completed += 1
+    }
+    const summary = {
+      month,
+      school: school.name,
+      className: cls.name,
+      completed,
+      size: cls.kids.length,
+      perfect: cls.kids.length > 0 && completed === cls.kids.length,
+      roll: false,
+    }
+    if (!canSeeClassRoll(readDemoStaff(), { classId: cls.id, schoolId: school.id })) return summary
     const rows = cls.kids.map((kid) => {
       const q = quotaFor(kid.grade, dataMonth, kid.ladder)
       const said = saidOf(kid, dataMonth, year)
       const met = metAt(kid, dataMonth, year)
-      if (met) completed += 1
       return { id: kid.id, name: kid.name, ladder: kid.ladder, goal: q?.v ?? 0, goalLabel: q?.k ?? '—', said, met }
     })
-    return { month, school: school.name, className: cls.name, completed, size: cls.kids.length, rows }
+    return { ...summary, roll: true, rows }
   }
   return null
 }

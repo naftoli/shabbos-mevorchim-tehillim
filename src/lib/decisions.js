@@ -72,6 +72,58 @@ export const RANK_PROMOTION_ANNOUNCE = false
 /** How many past campaign years the chooser offers. Live data fills each one. */
 export const PAST_YEARS_BACK = 4
 
+/**
+ * Who may see one class's student roll (name, ladder, "said X of Y").
+ *
+ * 'staff' — the default. Public reports and GET /reports/platoon/:id never
+ * include the roll. It is returned only to HQ (any class), that school's
+ * mashpia admin (admin_auths auth school), and the class teacher
+ * (admin_auths auth 'class', id = class_id — see WWTC_CLASS_AUTH).
+ * 'hq' would limit the roll to super-admins. 'off' would show it to nobody.
+ *
+ * Open point, shipped as 'staff': there is no separate teacher login. Mashpia
+ * admin login (POST /admin/login) is the session that unlocks the roll. A
+ * school admin sees every class in their school, not one class, until Naftoli
+ * adds an admin_auths row with auth 'class' for that teacher. A future bearer
+ * with type 'teacher' and classId is already accepted for that one class.
+ * The API does not read the mashpia.com cookie session.
+ */
+export const PLATOON_ROLL_AUDIENCE = 'staff'
+
+function sameRollId(a, b) {
+  if (a == null || b == null) return false
+  const left = String(a)
+  const right = String(b)
+  if (left === '' || right === '' || left === '0' || right === '0') return false
+  return left === right
+}
+
+/** viewer is the stored admin/teacher session. scope is { classId, schoolId }. */
+export function canSeeClassRoll(viewer, scope = {}) {
+  if (!viewer || PLATOON_ROLL_AUDIENCE === 'off') return false
+  const kind = viewer.kind
+    || (viewer.type === 'teacher' ? 'teacher'
+      : viewer.type === 'admin' && viewer.auth === 'super' ? 'super'
+        : viewer.type === 'admin' ? 'school'
+          : null)
+  if (kind === 'super') return true
+  if (PLATOON_ROLL_AUDIENCE === 'hq') return false
+  const { classId, schoolId } = scope
+  if (kind === 'school' || kind === 'admin') {
+    const schools = Array.isArray(viewer.schoolIds) ? viewer.schoolIds : [viewer.schoolId]
+    if (schools.some((id) => sameRollId(id, schoolId))) return true
+    const classes = Array.isArray(viewer.classIds) ? viewer.classIds : [viewer.classId]
+    if (classes.some((id) => sameRollId(id, classId))) return true
+    return false
+  }
+  if (kind === 'teacher') {
+    if (!sameRollId(viewer.classId, classId)) return false
+    if (viewer.schoolId == null || viewer.schoolId === '') return true
+    return sameRollId(viewer.schoolId, schoolId)
+  }
+  return false
+}
+
 /** D1. 'ask' shows an opt-in. 'on' opens the commander. 'off' stays quiet. */
 export const COMMANDER_AUTO_DEFAULT = 'ask'
 
