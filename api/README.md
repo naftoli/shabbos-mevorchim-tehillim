@@ -104,8 +104,14 @@ Writes — admin (bearer from `POST /admin/login`):
   needs HQ or that school's admin (a class-only teacher is limited to their
   class). Same column as `/me/ladder`.
 
-Still **405** by design: dedications (`PATCH /schools/:id/dedication`) — the SPA
-keeps dedications client-side until that write is designed.
+- `GET /dedication?scope=army|school[&schoolId=&year=&month=]` and
+  `PUT /dedication` — `{ scope, schoolId?, text, year?, month? }` → the monthly
+  dedication, stored per `(scope, school_id, campaign_year, month_name)` in
+  `wwtc_dedications` (run `api/sql/wwtc_dedications.sql` once; the PUT returns
+  **503** until it exists). Empty `text` deletes the row. Army scope is HQ only;
+  school scope needs HQ or that school's admin. The army dedication shows on the
+  home page; the school dedication shows on that school's campaign page
+  (`GET /schools/:id` returns it for the current month).
 
 > Writes have been verified read-only (the mission/task lookups resolve correctly
 > against live data) but the INSERT/UPDATE/DELETE path has NOT been exercised

@@ -799,9 +799,13 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
         wwtcCompletionCounts($current)
     );
     $data = wwtcSchoolData($id);
+    // This month's school dedication (set by HQ or that school's admin via
+    // PUT /dedication). Returns null when nothing is set or the table is not
+    // installed, so the campaign page simply shows no dedication line.
+    $dedication = wwtcDedicationRead('school', wwtcYear(), wwtcMonthForDate($current), $id);
     wwtcJson($row + [
         'classes' => $data['classes'],
-        'dedication' => null, // static/hidden in live mode for now
+        'dedication' => $dedication,
     ]);
 }
 
