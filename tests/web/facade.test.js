@@ -222,3 +222,26 @@ test('notCompleted unwraps {classes} and sends an admin token', async () => {
   assert.equal(rows[0].missing[0], 'Dovid')
   assert.match(lastCall().headers.Authorization, /^Bearer atok2$/)
 })
+
+test('adminSetLadder PUTs the scope and sends an admin token', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok4', expiresIn: 43200, admin: { kind: 'super' } } },
+    'PUT /admin/ladder': { body: { ok: true, matched: 12, updated: 9, ladder: 8 } },
+  })
+  await api.verifyAdmin('hq', 'pw')
+
+  // Whole school: no classId / kidId.
+  const res = await api.adminSetLadder({ schoolId: 89, ladder: 8 })
+  assert.equal(res.matched, 12)
+  assert.equal(lastCall().method, 'PUT')
+  assert.equal(lastCall().apiPath, '/admin/ladder')
+  assert.deepEqual(lastCall().body, { schoolId: 89, classId: null, kidId: null, ladder: 8 })
+  assert.match(lastCall().headers.Authorization, /^Bearer atok4$/)
+
+  // One child in a class.
+  await api.adminSetLadder({ schoolId: 89, classId: 555, kidId: 7, ladder: 10 })
+  assert.deepEqual(lastCall().body, { schoolId: 89, classId: 555, kidId: 7, ladder: 10 })
+  api.endSession('admin')
+})

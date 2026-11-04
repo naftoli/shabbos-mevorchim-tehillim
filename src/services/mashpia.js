@@ -220,3 +220,9 @@ export const setDedication = async ({ scope, schoolId, text, year, month }) => {
 }
 export const setKidLadder = (ladder) =>
   write('/me/ladder', { method: 'PUT', body: { ladder }, as: 'kid' })
+
+// Admin sets a ladder for a whole school (classId/kidId null), one class
+// (classId set), or one soldier (classId + kidId). kidId is the platoon roll's
+// row id (the soldier's user_id). Server scopes it to the admin's authority.
+export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
+  write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })

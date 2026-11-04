@@ -90,6 +90,20 @@ Writes — the signed-in soldier's own, scoped by the bearer token to their
   Tehillim subject. Ladder ↔ track mapping: `track_id = 15 - ladder` (ladder 12 =
   track 3 … 7 = track 8; only tracks 3..8 exist today).
 
+Writes — admin (bearer from `POST /admin/login`):
+
+- `PUT /admin/ladder` — `{ schoolId, classId?, kidId?, ladder }` (ladder 5..12) →
+  sets `user_tracks.track_id` for every registered soldier with a Tehillim track
+  (`subject_id = 1`) in the chosen scope — no `enrolled = 1` filter, matching the
+  mobile `changeLevel.php` write — returning `{ ok, matched, updated, ladder }`
+  (`matched` = soldiers in scope, `updated` = rows actually changed). Scope:
+  whole school (`classId`/`kidId` omitted), one class (`classId`), or one soldier
+  (`kidId` — the platoon roll's row id, i.e. the soldier's `user_id`). Authority
+  is the same staff rule as the roll: HQ sets any school, a school admin only
+  their own school, a class teacher only their own class. A whole-school write
+  needs HQ or that school's admin (a class-only teacher is limited to their
+  class). Same column as `/me/ladder`.
+
 Still **405** by design: dedications (`PATCH /schools/:id/dedication`) — the SPA
 keeps dedications client-side until that write is designed.
 

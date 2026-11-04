@@ -10,6 +10,8 @@ import {
   getSchools,
   getSchool,
   getBaseReport,
+  getPlatoonReport,
+  adminSetLadder,
   notCompleted,
   setSchoolDedication,
   removeSchoolDedication,
@@ -87,6 +89,109 @@ function DedicationEditor({ school, onSaved }) {
       ) : (
         <p className="mt-2 text-sm text-muted">No dedication this month yet.</p>
       )}
+    </Card>
+  )
+}
+
+// Put a whole school, one class, or one soldier onto a ladder. Picking a class
+// reveals a child dropdown (all children in that class, or one named soldier).
+function LadderSetter({ schoolId, classes }) {
+  const [classId, setClassId] = useState('') // '' = whole school
+  const [kidId, setKidId] = useState('') // '' = all children in the class
+  const [ladder, setLadder] = useState(LADDERS[0])
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState(null)
+
+  // The children in the chosen class come from the platoon roll (staff-only;
+  // an admin's token carries the roll). Whole-school needs no child list.
+  // classId is the select's string value: a numeric class_id live, a slug like
+  // "…-c1" in the demo roster. Pass it through as-is (the live API path and the
+  // demo roster both match the raw value; coercing to a number breaks the demo).
+  const { data: platoon, error: platoonError } = useLiveData(
+    () => (classId ? getPlatoonReport(classId) : Promise.resolve(null)),
+    [classId],
+  )
+  const kids = platoon?.rows ?? []
+
+  // A new class selection clears any previously chosen child.
+  function pickClass(value) {
+    setClassId(value)
+    setKidId('')
+  }
+
+  async function apply() {
+    setBusy(true)
+    setNote(null)
+    try {
+      const res = await adminSetLadder({
+        schoolId,
+        classId: classId || null,
+        kidId: kidId || null,
+        ladder: Number(ladder),
+      })
+      const n = res?.matched ?? res?.updated ?? 0
+      setNote(
+        n > 0
+          ? { kind: 'ok', text: `Set ladder ${ladder} for ${n} soldier${n === 1 ? '' : 's'}.` }
+          : { kind: 'warn', text: 'No enrolled soldiers matched that choice.' },
+      )
+    } catch (e) {
+      setNote({ kind: 'warn', text: e?.message || 'Could not set the ladder.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <p className="sh mb-1">Set Ladders</p>
+      <p className="mb-4 text-sm text-muted">Put a whole class — or the entire school — onto one ladder at once. Pick a class to set just one child.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="mb-1 block font-semibold text-navy">Class</span>
+          <select
+            value={classId}
+            onChange={(e) => pickClass(e.target.value)}
+            className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+          >
+            <option value="">Whole school</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+
+        {classId ? (
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold text-navy">Child</span>
+            <select
+              value={kidId}
+              onChange={(e) => setKidId(e.target.value)}
+              className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+            >
+              <option value="">All children in this class</option>
+              {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </label>
+        ) : null}
+
+        <label className="text-sm">
+          <span className="mb-1 block font-semibold text-navy">Ladder</span>
+          <select
+            value={ladder}
+            onChange={(e) => setLadder(Number(e.target.value))}
+            className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+          >
+            {LADDERS.map((L) => <option key={L} value={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
+          </select>
+        </label>
+
+        <Button variant="navy" onClick={apply} disabled={busy}>{busy ? 'Applying…' : 'Apply'}</Button>
+      </div>
+      {classId && platoonError ? (
+        <p className="mt-2 text-sm text-navy">Couldn’t load this class’s soldiers.</p>
+      ) : null}
+      {note ? (
+        <p className={`mt-3 text-sm ${note.kind === 'ok' ? 'text-green' : 'text-navy'}`}>{note.text}</p>
+      ) : null}
     </Card>
   )
 }
@@ -179,27 +284,8 @@ export default function AdminDashboard() {
             {/* Dedication — add / edit / remove */}
             <DedicationEditor school={school} onSaved={reloadSchool} />
 
-            {/* Set a class/school onto a ladder */}
-            <Card className="p-5 sm:p-6">
-              <p className="sh mb-1">Set Ladders</p>
-              <p className="mb-4 text-sm text-muted">Put a whole class — or the entire school — onto one ladder at once.</p>
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="text-sm">
-                  <span className="mb-1 block font-semibold text-navy">Class</span>
-                  <select className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2">
-                    <option>Whole school</option>
-                    {(base?.rows ?? []).map((c) => <option key={c.id}>{c.name}</option>)}
-                  </select>
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block font-semibold text-navy">Ladder</span>
-                  <select className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2">
-                    {LADDERS.map((L) => <option key={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
-                  </select>
-                </label>
-                <Button variant="navy">Apply</Button>
-              </div>
-            </Card>
+            {/* Set a school / class / child onto a ladder */}
+            <LadderSetter schoolId={school.id} classes={base?.rows ?? []} />
 
             {/* Base report */}
             <Card className="overflow-x-auto">

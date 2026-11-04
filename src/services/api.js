@@ -425,6 +425,41 @@ export async function setKidLadder(id, ladder) {
   return demoKidProgress(id)
 }
 
+// Admin sets a ladder across a scope: a whole school (classId/kidId null), one
+// class (classId set), or one soldier (classId + kidId). kidId is the platoon
+// roll's row id — the soldier's internal id in the demo roster, the user_id
+// live. Live: PUT /admin/ladder (the server enforces the admin's authority).
+// Demo: mutate the roster and re-derive missions, like setKidLadder does.
+// Returns { ok, matched, updated } — matched is the number of soldiers in scope.
+export async function adminSetLadder({ schoolId, classId = null, kidId = null, ladder }) {
+  if (!IS_DEMO) return mashpia.adminSetLadder({ schoolId, classId, kidId, ladder })
+  const next = Number(ladder)
+  if (next < 5 || next > 12) return { ok: false, matched: 0, updated: 0 }
+  const school = ROSTER.find((s) => s.id === schoolId)
+  if (!school) return { ok: false, matched: 0, updated: 0 }
+  const targets = []
+  for (const cls of school.classes) {
+    if (classId && cls.id !== classId) continue
+    for (const kid of cls.kids) {
+      if (kidId && kid.id !== kidId) continue
+      targets.push(kid)
+    }
+  }
+  let updated = 0
+  for (const kid of targets) {
+    if (kid.ladder === next) continue
+    kid.ladder = next
+    let met = 0
+    for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+    kid.metThisYear = met
+    kid.missionsTotal = kid.priorMissions + met
+    saveKidProgress(kid)
+    updated += 1
+  }
+  invalidate()
+  return { ok: true, matched: targets.length, updated }
+}
+
 // Social context for a soldier: where their class stands in the school, where
 // the school stands worldwide, and the nudge to climb a rank. Drives the
 // "your class needs you" line on the dashboard.

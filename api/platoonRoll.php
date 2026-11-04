@@ -85,6 +85,31 @@ function wwtcCanSeePlatoonRoll($actor, int $classId, int $schoolId, array $admin
 }
 
 /**
+ * Who may set ladders for a WHOLE school: HQ (super) or that school's mashpia
+ * admin (admin_auths auth 'school', id = school_id). A class-only teacher
+ * (auth 'class') manages one class, not the school, so they go through
+ * wwtcCanSeePlatoonRoll with the class id instead.
+ *
+ * @param array|null $actor Bearer payload.
+ * @param int[] $adminSchoolIds school ids from admin_auths auth=school
+ */
+function wwtcCanManageSchool($actor, int $schoolId, array $adminSchoolIds = []): bool
+{
+    if (!is_array($actor) || ($actor['type'] ?? '') !== 'admin') {
+        return false;
+    }
+    if (($actor['auth'] ?? '') === 'super') {
+        return true;
+    }
+    foreach ($adminSchoolIds as $id) {
+        if (wwtcSameId($id, $schoolId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Public payload never includes the roll. Staff payload sets roll=true and rows.
  * Summary keys are class-level only (name, counts, perfect). Rows are the only
  * place student names and amounts go.

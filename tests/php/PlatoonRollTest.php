@@ -30,6 +30,14 @@ expect(wwtcCanSeePlatoonRoll($teacherToken, 555, 89) === true, 'teacher token se
 expect(wwtcCanSeePlatoonRoll($teacherToken, 556, 89) === false, 'teacher token does not see another class');
 expect(WWTC_CLASS_AUTH === 'class', 'class auth string is class');
 
+// Whole-school ladder authority (PUT /admin/ladder, no classId).
+expect(wwtcCanManageSchool($hq, 89) === true, 'HQ manages any school');
+expect(wwtcCanManageSchool($school, 89, [89]) === true, 'school admin manages own school');
+expect(wwtcCanManageSchool($school, 90, [89]) === false, 'school admin does not manage another school');
+expect(wwtcCanManageSchool($school, 90, [], [90]) === false, 'class-only auth does not manage a whole school');
+expect(wwtcCanManageSchool($soldier, 89) === false, 'soldier does not manage a school');
+expect(wwtcCanManageSchool(null, 89) === false, 'public caller does not manage a school');
+
 $rows = [[
     'id' => 7,
     'name' => 'Ahrele Benshimon',

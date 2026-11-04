@@ -1558,6 +1558,105 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
     wwtcJson(wwtcKidProgress(wwtcKidByUserId((int) $kid['user_id']) ?: $kid));
 }
 
+/**
+ * Admin sets a ladder for a whole school, one class, or one soldier. HQ may set
+ * any school; a school admin only their own school; a class teacher only their
+ * own class (authority is the same staff rule as the platoon roll). Writes
+ * user_tracks.track_id for every registered soldier with a Tehillim track in the
+ * chosen scope — the same column /me/ladder writes for one kid, and like the
+ * mobile changeLevel.php it does not require ut.enrolled = 1.
+ */
+if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
+    $actor = wwtcRequireActor(['admin']);
+    $input = wwtcInput();
+
+    $ladder = (int) ($input['ladder'] ?? 0);
+    // Any ladder 5..12 is selectable regardless of grade (tracks 3..10 exist).
+    if ($ladder < 5 || $ladder > 12) {
+        wwtcError('Choose a ladder between 5 and 12.', 422);
+    }
+    $track = wwtcTrackFromLadder($ladder);
+
+    $schoolId = (int) ($input['schoolId'] ?? 0);
+    if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
+        wwtcError('School not found.', 404);
+    }
+
+    $classId = (isset($input['classId']) && $input['classId'] !== '' && $input['classId'] !== null)
+        ? (int) $input['classId'] : 0;
+    // The child dropdown sends the platoon roll's row id, which is the user_id.
+    $kidId = (isset($input['kidId']) && $input['kidId'] !== '' && $input['kidId'] !== null)
+        ? (int) $input['kidId'] : 0;
+
+    // A single soldier scope with no class named: find the soldier's class so the
+    // authority check below runs against the real class, and confirm the school.
+    if ($kidId && !$classId) {
+        $who = $MASHPIA_DB->prepare('SELECT class_id, school_id FROM users WHERE user_id = :u LIMIT 1');
+        $who->execute([':u' => $kidId]);
+        $u = $who->fetch(PDO::FETCH_ASSOC);
+        if (!$u || (int) $u['school_id'] !== $schoolId) {
+            wwtcError('Soldier not found.', 404);
+        }
+        $classId = (int) $u['class_id'];
+    }
+
+    // Authority: a class/soldier scope needs the platoon-roll staff rule for that
+    // class; a whole-school scope needs HQ or that school's admin.
+    if ($classId) {
+        $classSchool = (int) ($MASHPIA_DB->query('SELECT school_id FROM classes WHERE class_id = ' . $classId)->fetchColumn() ?: 0);
+        if ($classSchool !== $schoolId) {
+            wwtcError('Class not found.', 404);
+        }
+        if (!wwtcPlatoonRollAllowed($classId, $schoolId)) {
+            wwtcError('You do not have permission to perform this action.', 403);
+        }
+    } else {
+        $schoolIds = (($actor['auth'] ?? '') === 'super') ? [] : wwtcAdminAuthIds((int) $actor['id'], 'school');
+        if (!wwtcCanManageSchool($actor, $schoolId, $schoolIds)) {
+            wwtcError('You do not have permission to perform this action.', 403);
+        }
+    }
+
+    // Scope: one soldier, one class, or the whole school. Every registered
+    // soldier with a Tehillim track is set, enrolled or not — the mobile
+    // changeLevel.php writes track_id for subject_id 1 without an enrolled
+    // filter, and the child dropdown already lists only registered soldiers
+    // (class.shabbosMevorchim.php filters user_registered > 0). The
+    // user_registered guard here is belt-and-suspenders for the class/school
+    // scope, which does not come from that list.
+    $where = 'ut.subject_id = ' . WWTC_SUBJECT_ID . '
+              AND u.user_registered > 0 AND u.school_id = :school';
+    $params = [':school' => $schoolId];
+    if ($kidId) {
+        $where .= ' AND u.user_id = :uid';
+        $params[':uid'] = $kidId;
+    } elseif ($classId) {
+        $where .= ' AND u.class_id = :class';
+        $params[':class'] = $classId;
+    }
+
+    // Count the soldiers in scope first, so the response is stable even when some
+    // are already on this ladder (an UPDATE only reports the rows it changed).
+    $countStmt = $MASHPIA_DB->prepare(
+        'SELECT COUNT(*) FROM user_tracks ut JOIN users u ON u.user_id = ut.user_id WHERE ' . $where
+    );
+    $countStmt->execute($params);
+    $matched = (int) $countStmt->fetchColumn();
+
+    $upStmt = $MASHPIA_DB->prepare(
+        'UPDATE user_tracks ut JOIN users u ON u.user_id = ut.user_id SET ut.track_id = :track WHERE ' . $where
+    );
+    $upStmt->execute([':track' => $track] + $params);
+    $changed = $upStmt->rowCount();
+
+    // Quota (and so missions met) changes with the ladder — refresh the reports.
+    if (class_exists('Cache')) {
+        Cache::bumpVersion('shabbos_mevorchim:v');
+    }
+
+    wwtcJson(['ok' => true, 'matched' => $matched, 'updated' => $changed, 'ladder' => $ladder]);
+}
+
 function wwtcDedicationsReady(): bool
 {
     return wwtcColumnExists('wwtc_dedications', 'body');
