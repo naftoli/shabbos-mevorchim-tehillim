@@ -141,6 +141,13 @@ export default function HowTo() {
           <p>Your ladder is your training path toward saying the entire Tehillim. Which ladder will you choose to climb?</p>
           <p>Ladder 12 builds toward completing your training by 12th grade. Ladder 5 builds toward completing it by 5th grade.</p>
           <p>Every ladder leads to the same goal. Choose the pace that's right for you, to determine your quota of tehillim to say each month.</p>
+          <Banner
+            src="design/how/ladders.webp"
+            width={2000}
+            height={741}
+            scroll
+            alt="שבת מברכים תהלים תשרי — Shabbos Mevorchim Tehillim ladders chart for Tishrei"
+          />
         </Block>
 
         <Block title="Medals">
