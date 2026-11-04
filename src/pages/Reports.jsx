@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { Card, Button, SchoolLogo, ErrorNote } from '@/components/ui.jsx'
 import { CheckMark, IconImg, Meter, Pending, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
@@ -58,6 +59,7 @@ function Rank({ n }) {
 }
 
 export default function Reports() {
+  const { isAdmin } = useAuth()
   const [params, setParams] = useSearchParams()
   const [sort, setSort] = useState('finished')
   const yearParam = params.get('y')
@@ -114,6 +116,10 @@ export default function Reports() {
     : 'text-sm font-semibold'
   const className = platoon.data?.className
     || base.data?.rows?.find((r) => String(r.id) === String(classId))?.name
+
+  // Reports are admin-only. The link lives on the Admin Dashboard; anyone who
+  // reaches /reports without an admin session is sent to the admin login.
+  if (!isAdmin) return <Navigate to="/admin/login" replace />
 
   return (
     <div className={display ? 'wwtc-display' : ''}>
