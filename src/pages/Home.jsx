@@ -91,7 +91,7 @@ function SchoolsRace({ schools }) {
             </span>
             <SchoolLogo school={{ ...s, color: SCHOOL_COLORS[i % SCHOOL_COLORS.length] }} size={44} />
             <span className="min-w-0 whitespace-normal font-display text-[17px] font-semibold leading-tight text-navy sm:w-56 sm:flex-none sm:text-[19px] lg:w-80 lg:text-[20px]">{s.name}</span>
-            <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
+            <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-bar-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
               <span
                 className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-1000 ease-out"
                 style={{ width: `${Math.min(100, Math.max(metric(s), 3))}%`, background: RACE_FILLS[i % RACE_FILLS.length] }}

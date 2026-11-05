@@ -39,7 +39,8 @@
   --color-card: #c3dcff;
   --color-line: #bccfee;           /* hairlines */
   --color-muted: #46557d;          /* muted text */
-  --color-track: #cadcf8;          /* progress tracks / chips / soft fills */
+  --color-track: #cadcf8;          /* chips / soft fills */
+  --color-bar-track: #6f96c4;      /* unfilled progress bar; darker than the card, lighter than the fill */
 
   --font-display: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-sans: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
