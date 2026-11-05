@@ -216,6 +216,7 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
     $students = [];
     $sizeBy = [];
     $metBy = [];
+    $partBy = [];
     $minQuotaBy = [];
     $minDoneBy = [];
     $minQuota = 0;
@@ -234,6 +235,9 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
             $minDoneBy[$classId] = ($minDoneBy[$classId] ?? 0) + $md;
             $sizeBy[$classId] = ($sizeBy[$classId] ?? 0) + 1;
             $metBy[$classId] = ($metBy[$classId] ?? 0) + ($isMet ? 1 : 0);
+            // Participated = a kapitlach mark with done_qty > 0, matching
+            // wwtcParticipatedBySchool (the % Soldiers participated metric).
+            $partBy[$classId] = ($partBy[$classId] ?? 0) + ($d > 0 ? 1 : 0);
             $students[] = [
                 'id' => (int) $uid,
                 'name' => (string) ($names[$uid] ?? ''),
@@ -266,6 +270,8 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
             'pct' => wwtcPct($said, $quota),
             'met' => $met,
             'pctMet' => $size > 0 ? (int) round($met / $size * 100) : 0,
+            'participated' => (int) ($partBy[$classId] ?? 0),
+            'pctParticipated' => $size > 0 ? (int) round(($partBy[$classId] ?? 0) / $size * 100) : 0,
             'minutesSaid' => $minD,
             'minutesQuota' => $minQ,
             'minutesPct' => wwtcPct($minD, $minQ),
@@ -900,7 +906,8 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
         $agg['kapDone'],
         $agg['minGoal'],
         $agg['minDone'],
-        wwtcCompletionCounts($current)
+        wwtcCompletionCounts($current),
+        (int) (wwtcParticipatedBySchool($current)[$id] ?? 0)
     );
     $data = wwtcSchoolData($id);
     // This month's school dedication (set by HQ or that school's admin via
