@@ -5,7 +5,7 @@
 import { GRADE_LABEL, quotaFor } from '../data/ladders.js'
 
 const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'stand', 'streak']
-const LIFETIME_SCRIPT_IDS = ['track']
+const LIFETIME_SCRIPT_IDS = ['track', 'climb']
 export const SCRIPT_IDS = [...MONTH_SCRIPT_IDS, ...LIFETIME_SCRIPT_IDS]
 
 const STORAGE_KEY = 'wwtc.commander.scripts'
@@ -45,6 +45,20 @@ Look at how the quotas grow along your ladder. You don't have to do it all at on
 This page also shows which missions you've completed, so you can look back at your progress.
 
 And finishing your training isn't the end of your mission! That's what you're training for: to keep saying the entire Tehillim every Shabbos Mevorchim.`
+
+/** The climb picture. Drops "by [grade]" when the ladder's target grade is unknown. */
+export function fillClimb(gradeLabel) {
+  const grade = cleanName(gradeLabel)
+  const reach = grade
+    ? `This picture shows how your quota grows along your ladder: from Pre-1A through each grade, until you reach the whole Tehillim by ${grade}.`
+    : 'This picture shows how your quota grows along your ladder: from Pre-1A through each grade, until you reach the whole Tehillim.'
+  return [
+    "Now let's look at your climb to the whole Tehillim!",
+    reach,
+    "You can see the quota at each stage and where you're holding on that journey now.",
+    "The whole Tehillim might look like a lot, but look how your ladder breaks the journey into smaller steps. Focus on your next mission. That's the next step you're working toward!",
+  ].join('\n\n')
+}
 
 function readyNumber(value) {
   if (value == null || value === '') return null
@@ -170,7 +184,7 @@ export function standFacts(social) {
 }
 
 function emptyHeard() {
-  return { welcome: false, choosing: false, mission: false, stand: false, streak: false, track: false }
+  return { welcome: false, choosing: false, mission: false, stand: false, streak: false, track: false, climb: false }
 }
 
 function memory() {
@@ -203,6 +217,7 @@ export function readKidScripts(storage, kidId, month) {
   const heard = emptyHeard()
   for (const id of MONTH_SCRIPT_IDS) heard[id] = !!bucket[id]
   heard.track = !!kid.track
+  heard.climb = !!kid.climb
   const training = bucket.training === 'yes' || bucket.training === 'no' ? bucket.training : null
   return { heard, training }
 }
@@ -295,6 +310,10 @@ export function selectCommanderScripts(input = {}) {
     out.push({ id: 'track', text: TRACK_SCRIPT })
   }
 
+  if (input.climbOpen && !heard.climb) {
+    out.push({ id: 'climb', text: fillClimb(input.gradeLabel) })
+  }
+
   return out
 }
 
@@ -323,5 +342,6 @@ export function filledScripts(input = {}) {
     stand,
     streak,
     track: TRACK_SCRIPT,
+    climb: fillClimb(input.gradeLabel),
   }
 }
