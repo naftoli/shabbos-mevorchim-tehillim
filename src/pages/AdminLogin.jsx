@@ -46,8 +46,8 @@ export default function AdminLogin() {
           {IS_DEMO ? (
             <div className="mt-4 space-y-1 rounded-xl border border-dashed border-line bg-track/40 px-3 py-2 text-xs text-muted">
               <p className="font-semibold text-navy">Demo logins (password: tehillim)</p>
-              <p>HQ: <button type="button" className="underline" onClick={() => { setUsername('hq'); setPassword('tehillim') }}>hq</button></p>
-              <p>School admin: <button type="button" className="underline" onClick={() => { setUsername('cheder-menachem-sample'); setPassword('tehillim') }}>cheder-menachem-sample</button></p>
+              <p>HQ: <button type="button" className="underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-1" onClick={() => { setUsername('hq'); setPassword('tehillim') }}>hq</button></p>
+              <p>School admin: <button type="button" className="underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-1" onClick={() => { setUsername('cheder-menachem-sample'); setPassword('tehillim') }}>cheder-menachem-sample</button></p>
             </div>
           ) : null}
         </form>

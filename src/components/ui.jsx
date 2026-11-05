@@ -20,14 +20,14 @@ export function Band({ className = '' }) {
 // `wideSize` applies from 2xl.
 export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = false }) {
   return (
-    <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
+    <span className="inline-flex min-w-0 items-center gap-2 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
       <img src={asset('brand/wwtc-shield.png')} alt="Worldwide Tehillim Club" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
-      <span className="flex flex-col leading-none">
-        <span className="font-cond text-[0.95rem] uppercase leading-[1.05] tracking-[0.02em] sm:text-[1.35rem] 2xl:text-[1.55rem]"
+      <span className="flex min-w-0 flex-col leading-none">
+        <span className="whitespace-nowrap font-cond text-[0.9rem] uppercase leading-[1.05] tracking-[0.02em] sm:text-[1.35rem] 2xl:text-[1.55rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
           Tzivos Hashem
         </span>
-        <span className="mt-1 max-w-[9.5rem] font-display text-[8px] font-semibold uppercase leading-tight tracking-[0.03em] sm:max-w-none sm:text-[11px] 2xl:text-[13px]"
+        <span className="mt-1 max-w-[7.6rem] font-display text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.02em] sm:max-w-none sm:text-[11px] sm:leading-tight sm:tracking-[0.03em] 2xl:text-[13px]"
           style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
           Worldwide Tehillim Campaign
         </span>
@@ -123,7 +123,7 @@ export function Input(props) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      className={`min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 sm:min-h-0 ${props.className || ''}`}
     />
   )
 }
@@ -132,7 +132,7 @@ export function Textarea(props) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      className={`min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 sm:min-h-0 ${props.className || ''}`}
     />
   )
 }

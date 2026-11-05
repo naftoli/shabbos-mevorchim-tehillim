@@ -26,7 +26,7 @@ export default function SoldierLeaderboard({ soldiers }) {
       <h2 className="mb-4 font-display text-xl font-black text-navy">Top Soldiers</h2>
       <ul className="space-y-2">
         {shown.map((s) => (
-          <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]">
+          <li key={s.id} className="flex items-center gap-2 rounded-xl px-1 py-2 hover:bg-black/[0.03] sm:gap-3 sm:px-2 sm:py-1.5">
             <span className="w-7 text-center font-display text-lg font-bold italic text-blue-accent" aria-label={placeLabel(s)}>
               {s.medal ? RANK_MEDAL[s.medal] : s.rank}
             </span>
