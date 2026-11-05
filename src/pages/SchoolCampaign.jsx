@@ -70,11 +70,11 @@ export default function SchoolCampaign() {
   return (
     <>
       <section className="hero-navy">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-10 sm:px-6 lg:px-10">
-          <SchoolLogo school={school} size={72} className="ring-2 ring-white/30" />
+        <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-4 py-8 sm:gap-4 sm:px-6 sm:py-10 lg:px-10">
+          <SchoolLogo school={school} size={72} className="!h-14 !w-14 ring-2 ring-white/30 sm:!h-[72px] sm:!w-[72px]" />
           <div className="min-w-0">
             <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
-            <h1 className="font-display text-3xl font-black text-white sm:text-4xl">{school.name}</h1>
+            <h1 className="break-words font-display text-[1.65rem] font-black leading-tight text-white sm:text-4xl">{school.name}</h1>
             <p className="text-white/80">{school.city ? `${school.city} · ` : ''}{fmt(school.kids)} soldiers</p>
           </div>
         </div>
@@ -142,7 +142,7 @@ export default function SchoolCampaign() {
             return (
               <Card className="p-5 sm:p-6">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="font-display text-xl font-black text-navy">Platoons (Classes)</h2>
+                  <h2 className="w-full font-display text-xl font-black text-navy sm:w-auto">Platoons (Classes)</h2>
                   <RaceToggle value={classSort} onChange={setClassSort} compact />
                 </div>
                 <ul className="space-y-2 sm:space-y-3">
@@ -151,7 +151,7 @@ export default function SchoolCampaign() {
                     return (
                       <li
                         key={c.id}
-                        className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-1 py-2 sm:flex sm:gap-4"
+                        className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-2xl px-1 py-2 sm:flex sm:gap-4"
                       >
                         <span className="grid w-9 flex-none place-items-center sm:w-12">
                           {i < 3 && m > 0 ? (
@@ -161,7 +161,7 @@ export default function SchoolCampaign() {
                           )}
                         </span>
                         <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-navy font-cond text-sm font-bold text-gold sm:h-11 sm:w-11">{classMono(c)}</span>
-                        <span className="min-w-0 truncate font-display text-[16px] font-semibold text-navy sm:w-40 sm:flex-none sm:text-[18px]">
+                        <span className="min-w-0 whitespace-normal font-display text-[15px] font-semibold leading-tight text-navy sm:w-40 sm:flex-none sm:truncate sm:text-[18px]">
                           {c.name} {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
                         </span>
                         <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
@@ -170,7 +170,7 @@ export default function SchoolCampaign() {
                             style={{ width: `${Math.max(3, Math.min(100, m))}%`, background: c.perfect ? 'var(--color-green-mid)' : RACE_FILLS[i % RACE_FILLS.length] }}
                           />
                         </span>
-                        <span className="text-right font-display text-[15px] font-bold tabular-nums text-green sm:w-24 sm:flex-none sm:text-[17px]">
+                        <span className="text-right font-display text-[13px] font-bold leading-tight tabular-nums text-green sm:w-24 sm:flex-none sm:text-[17px]">
                           {m}%{classSort === 'finished' ? <span className="font-semibold text-muted"> · {c.met}/{c.size}</span> : null}
                         </span>
                       </li>

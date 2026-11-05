@@ -213,7 +213,7 @@ function ArmyView({ rows, raw, error, loading, reload, sort, setSort, pctGoal, o
       </section>
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
-          <h2 className="font-display text-xl font-black text-navy">Schools, Ranked <span className="font-semibold text-muted">· {pctGoal}% by kapitlach</span></h2>
+          <h2 className="w-full font-display text-xl font-black text-navy sm:w-auto">Schools, Ranked <span className="font-semibold text-muted">· {pctGoal}% by kapitlach</span></h2>
           <RaceToggle value={sort} onChange={setSort} />
         </div>
         <div className="divide-y divide-line">

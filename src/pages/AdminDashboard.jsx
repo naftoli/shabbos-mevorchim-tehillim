@@ -65,8 +65,8 @@ function DedicationEditor({ school, onSaved }) {
         <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
         {!editing ? (
           <div className="flex gap-2">
-            <Button variant="outline" className="!px-3 !py-1 !text-sm" onClick={open}>{school.dedication ? 'Edit' : 'Add dedication'}</Button>
-            {school.dedication ? <Button variant="ghost" className="!px-3 !py-1 !text-sm" onClick={remove}>Remove</Button> : null}
+            <Button variant="outline" className="!px-3 !py-1 !text-sm max-sm:!min-h-11" onClick={open}>{school.dedication ? 'Edit' : 'Add dedication'}</Button>
+            {school.dedication ? <Button variant="ghost" className="!px-3 !py-1 !text-sm max-sm:!min-h-11" onClick={remove}>Remove</Button> : null}
           </div>
         ) : null}
       </div>
@@ -147,12 +147,12 @@ function LadderSetter({ schoolId, classes }) {
       <p className="sh mb-1">Set Ladders</p>
       <p className="mb-4 text-sm text-muted">Put a whole class — or the entire school — onto one ladder at once. Pick a class to set just one child.</p>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
+        <label className="w-full text-sm sm:w-auto">
           <span className="mb-1 block font-semibold text-navy">Class</span>
           <select
             value={classId}
             onChange={(e) => pickClass(e.target.value)}
-            className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+            className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
           >
             <option value="">Whole school</option>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -160,12 +160,12 @@ function LadderSetter({ schoolId, classes }) {
         </label>
 
         {classId ? (
-          <label className="text-sm">
+          <label className="w-full text-sm sm:w-auto">
             <span className="mb-1 block font-semibold text-navy">Child</span>
             <select
               value={kidId}
               onChange={(e) => setKidId(e.target.value)}
-              className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+              className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
             >
               <option value="">All children in this class</option>
               {kids.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
@@ -173,12 +173,12 @@ function LadderSetter({ schoolId, classes }) {
           </label>
         ) : null}
 
-        <label className="text-sm">
+        <label className="w-full min-w-0 text-sm sm:w-auto">
           <span className="mb-1 block font-semibold text-navy">Ladder</span>
           <select
             value={ladder}
             onChange={(e) => setLadder(Number(e.target.value))}
-            className="rounded-xl border border-line bg-[#eef4ff] px-3 py-2"
+            className="min-h-11 w-full max-w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
           >
             {LADDERS.map((L) => <option key={L} value={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
           </select>
@@ -220,11 +220,11 @@ export default function AdminDashboard() {
       </PageHero>
 
       <div className="mx-auto max-w-[1200px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted">Signed in as <span className="font-semibold text-navy">{admin.name}</span> {isSuper ? <Pill className="ml-1">HQ</Pill> : null}</p>
-          <div className="flex items-center gap-2">
-            <Button to="/reports" variant="outline" className="!px-3 !text-[15px]">Monthly Reports</Button>
-            <Button variant="ghost" className="!px-3 !text-[15px]" onClick={logoutAdmin}>Sign out</Button>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Button to="/reports" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Monthly Reports</Button>
+            <Button variant="ghost" className="!px-3 !text-[15px] max-sm:min-h-11" onClick={logoutAdmin}>Sign out</Button>
           </div>
         </div>
 
@@ -239,13 +239,13 @@ export default function AdminDashboard() {
                 <button
                   key={s.id}
                   onClick={() => setSchoolId(s.id)}
-                  className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                  className={`flex min-h-11 w-full min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition sm:min-h-0 ${
                     s.id === activeId ? 'border-transparent bg-green text-white' : 'border-line bg-[#eef4ff] hover:bg-track'
                   }`}
                 >
                   <SchoolLogo school={s} size={36} />
-                  <span className="min-w-0 flex-1 truncate font-semibold">{s.name}</span>
-                  <span className={`text-sm ${s.id === activeId ? 'text-white/80' : 'text-muted'}`}>{s.pct}%</span>
+                  <span className="min-w-0 flex-1 whitespace-normal font-semibold leading-tight sm:truncate">{s.name}</span>
+                  <span className={`shrink-0 text-sm ${s.id === activeId ? 'text-white/80' : 'text-muted'}`}>{s.pct}%</span>
                 </button>
               ))}
             </div>
@@ -275,10 +275,10 @@ export default function AdminDashboard() {
                     <p className="text-sm text-muted">{fmt(school.kids)} soldiers · {CURRENT_MONTH}</p>
                   </div>
                 </div>
-                <div className="flex gap-6 text-right">
-                  <div><p className="text-xs uppercase text-muted">Quota</p><p className="font-display text-2xl font-black text-navy">{fmt(school.quotaMonth)}</p></div>
-                  <div><p className="text-xs uppercase text-muted">Said</p><p className="font-display text-2xl font-black text-green">{fmt(school.saidMonth)}</p></div>
-                  <div><p className="max-w-[9rem] text-xs uppercase text-muted">% of soldiers that met their quota</p><p className="font-display text-2xl font-black text-navy">{school.pctMet}%</p></div>
+                <div className="grid w-full grid-cols-3 gap-2 text-left sm:flex sm:w-auto sm:gap-6 sm:text-right">
+                  <div><p className="text-xs uppercase text-muted">Quota</p><p className="font-display text-xl font-black text-navy sm:text-2xl">{fmt(school.quotaMonth)}</p></div>
+                  <div><p className="text-xs uppercase text-muted">Said</p><p className="font-display text-xl font-black text-green sm:text-2xl">{fmt(school.saidMonth)}</p></div>
+                  <div><p className="text-xs uppercase text-muted sm:max-w-[9rem]">% of soldiers that met their quota</p><p className="font-display text-xl font-black text-navy sm:text-2xl">{school.pctMet}%</p></div>
                 </div>
               </div>
               <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
@@ -291,8 +291,22 @@ export default function AdminDashboard() {
             <LadderSetter schoolId={school.id} classes={base?.rows ?? []} />
 
             {/* Base report */}
-            <Card className="overflow-x-auto">
+            <Card className="overflow-hidden">
               <div className="border-b border-line px-5 py-3"><h3 className="font-display font-black text-navy">Class Report · {CURRENT_MONTH}</h3></div>
+              <ul className="divide-y divide-line sm:hidden">
+                {(base?.rows ?? []).map((c) => (
+                  <li key={c.id} className="px-4 py-3">
+                    <p className="font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</p>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                      <div><dt className="text-xs uppercase text-muted">Soldiers</dt><dd className="tabular-nums text-navy">{c.size}</dd></div>
+                      <div><dt className="text-xs uppercase text-muted">Goal</dt><dd className="tabular-nums text-navy">{fmt(c.goal)}</dd></div>
+                      <div><dt className="text-xs uppercase text-muted">Said</dt><dd className="font-bold tabular-nums text-green">{fmt(c.accomplished)}</dd></div>
+                      <div><dt className="text-xs uppercase text-muted">Completed</dt><dd className="tabular-nums text-navy">{c.completed}/{c.size}</dd></div>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[520px] text-left text-sm">
                 <thead><tr className="bg-track/60 text-muted">
                   <th className="px-4 py-2 font-cond uppercase">Class</th>
@@ -313,6 +327,7 @@ export default function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
 
             {/* Teacher deadline email */}

@@ -214,15 +214,17 @@ export default function KidDashboard() {
         <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · {CAMPAIGN_YEAR}</p>
-            <button onClick={logoutKid} className="rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/10">Sign out</button>
+            <button onClick={logoutKid} className="min-h-11 rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/10 sm:min-h-0">Sign out</button>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
-            {/* Photo once the backend provides one (Avatar falls back to initials). */}
-            <Avatar name={kid.name} src={kid.photoUrl || progress.photoUrl} size={72} className="ring-2 ring-white/50" />
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
-              <p className="mt-1.5 text-white/80">{kid.className} · {kid.schoolName}</p>
-              <p className="mt-1 text-sm font-semibold text-gold">Rank · {rankForMedals(progress.medal?.earnedCount)}</p>
+            {/* On a phone the ladder sits on its own line so the name isn't squeezed into a few letters. */}
+            <div className="flex w-full min-w-0 items-center gap-4 sm:w-auto sm:flex-1">
+              <Avatar name={kid.name} src={kid.photoUrl || progress.photoUrl} size={72} className="ring-2 ring-white/50" />
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
+                <p className="mt-1.5 leading-snug text-white/80">{kid.className} · {kid.schoolName}</p>
+                <p className="mt-1 text-sm font-semibold text-gold">Rank · {rankForMedals(progress.medal?.earnedCount)}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2.5">
               <LadderGlyph width="22" height="34" className="flex-none" />
@@ -238,9 +240,9 @@ export default function KidDashboard() {
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
         {/* Countdown to the next Shabbos Mevorchim */}
         {sMevorchim ? (
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-center">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-center sm:flex-row sm:flex-wrap sm:gap-x-3 sm:gap-y-1">
             <span className="text-xl" aria-hidden="true">⏳</span>
-            <span className="font-cond text-lg uppercase tracking-wide text-navy">
+            <span className="font-cond text-base uppercase leading-snug tracking-wide text-navy sm:text-lg">
               Next Shabbos Mevorchim bentches <span className="font-heb">{MONTH_HEB[sMevorchim.monthEn] ?? sMevorchim.monthEn}</span>
             </span>
             <span className="rounded-full bg-navy px-3 py-1 text-sm font-bold text-white">
@@ -298,10 +300,10 @@ export default function KidDashboard() {
                 </div>
               </div>
             ) : null}
-            <div className="flex flex-wrap items-end justify-center gap-3">
-              <Field label="Kapitlach I said"><Input className="w-32" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
-              <Field label="Minutes I said"><Input className="w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-              <button className="btn btn-gold !px-7" onClick={() => saveReport()}>Save</button>
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-center">
+              <Field label="Kapitlach I said"><Input className="w-full sm:w-32" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
+              <Field label="Minutes I said"><Input className="w-full sm:w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
+              <button className="btn btn-gold w-full !px-7 sm:w-auto" onClick={() => saveReport()}>Save</button>
             </div>
             <div className="mt-5 overflow-x-auto">
               <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>

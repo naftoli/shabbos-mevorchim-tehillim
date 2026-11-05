@@ -12,7 +12,7 @@ const navItem = ({ isActive }) =>
   }`
 
 const menuLink = ({ isActive }) =>
-  `block rounded-xl px-3 py-2.5 font-cond text-[20px] uppercase leading-none tracking-[0.04em] text-green transition ${
+  `flex min-h-11 items-center rounded-xl px-3 py-3 font-cond text-[20px] uppercase leading-none tracking-[0.04em] text-green transition ${
     isActive ? 'bg-white/40' : 'hover:bg-white/25'
   }`
 
@@ -50,9 +50,9 @@ export default function Layout({ children }) {
   return (
     <div className="flex min-h-screen flex-col bg-field">
       <header className="sticky top-0 z-40 bg-sky/95 backdrop-blur">
-        <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center justify-between gap-2 px-4 sm:min-h-[92px] sm:gap-3 sm:px-6 lg:px-10 2xl:min-h-[100px] 2xl:max-w-[1612px] 2xl:pl-[46px] 2xl:pr-4">
-          <Link to="/" className="shrink-0"><Brand size={52} phoneSize={44} wideSize={70} /></Link>
-          <nav className="flex items-center gap-1.5 sm:gap-1 lg:gap-2 2xl:gap-3">
+        <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center justify-between gap-2 px-3 sm:min-h-[92px] sm:gap-3 sm:px-6 lg:px-10 2xl:min-h-[100px] 2xl:max-w-[1612px] 2xl:pl-[46px] 2xl:pr-4">
+          <Link to="/" className="min-w-0 shrink sm:shrink-0"><Brand size={52} phoneSize={40} wideSize={70} /></Link>
+          <nav className="flex shrink-0 items-center gap-1 sm:gap-1 lg:gap-2 2xl:gap-3">
             <NavLink to="/" end className={navItem}>Home</NavLink>
             <NavLink to="/how-to" className={navItem}>How It Works</NavLink>
             <NavLink to={isKid ? '/me' : '/login'} className={navItem}>
@@ -63,13 +63,13 @@ export default function Layout({ children }) {
               {isAdmin ? 'Admin' : 'School Admin'}
             </NavLink>
             {/* Phone: keep a prominent login pill beside the menu toggle. */}
-            <Button to={isKid ? '/me' : '/login'} variant="green" className="px-3 text-[16px] sm:hidden">
+            <Button to={isKid ? '/me' : '/login'} variant="green" className="min-h-11 px-2.5 text-[15px] sm:hidden">
               {isKid ? 'My Tehillim' : 'Soldier Login'}
             </Button>
             <button
               ref={menuBtn}
               type="button"
-              className="btn btn-ghost -mr-2.5 px-2.5 sm:hidden"
+              className="btn btn-ghost grid h-11 w-11 shrink-0 place-items-center !p-0 sm:hidden"
               aria-label="Menu"
               aria-expanded={menuOpen}
               aria-controls={menuId}
@@ -83,7 +83,7 @@ export default function Layout({ children }) {
         </div>
         {/* Phone-only disclosure menu. */}
         <nav id={menuId} hidden={!menuOpen} aria-label="Site menu" className="border-t border-line bg-sky/95 sm:hidden">
-          <div className="mx-auto flex max-w-[1400px] flex-col gap-0.5 px-4 py-2">
+          <div className="mx-auto flex max-w-[1400px] flex-col gap-1 px-3 py-2">
             <NavLink to="/" end className={menuLink}>Home</NavLink>
             <NavLink to="/how-to" className={menuLink}>How It Works</NavLink>
             <NavLink to="/resources" className={menuLink}>Resources</NavLink>
@@ -105,7 +105,7 @@ export default function Layout({ children }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="mt-auto bg-[#1d2655] text-white/90">
+      <footer className={`mt-auto bg-[#1d2655] text-white/90 ${isKid ? 'max-sm:pb-24' : ''}`}>
         <div className="mx-auto max-w-[1400px] px-4 pt-7 sm:px-6 lg:px-10">
           <div className="rounded-2xl bg-[#1d2655] px-6 py-5 ring-1 ring-white/15">
             <p className="flex flex-wrap items-center justify-center gap-x-2 text-center text-[14px] font-medium text-white">

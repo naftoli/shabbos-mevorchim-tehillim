@@ -31,7 +31,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         </div>
         <div className="text-right">
           <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{board.done} checked · {board.total} missions on this ladder</p>
-          <button type="button" className="mt-1 text-sm font-semibold text-navy underline" onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}>
+          <button type="button" className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-navy underline sm:min-h-0" onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}>
             {allOpen ? 'Close all' : 'Expand all'}
           </button>
         </div>
@@ -49,7 +49,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
           const isOpen = open.has(g.grade)
           return (
             <div key={g.grade} className="rounded-2xl bg-track/50 ring-1 ring-line/70">
-              <button type="button" onClick={() => toggle(g.grade)} aria-expanded={isOpen} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
+              <button type="button" onClick={() => toggle(g.grade)} aria-expanded={isOpen} className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left sm:min-h-0 sm:px-4">
                 <svg viewBox="0 0 12 12" className={`h-3 w-3 flex-none text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} aria-hidden="true">
                   <path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

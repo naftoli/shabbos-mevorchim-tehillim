@@ -77,7 +77,7 @@ export default function PerfectPlatoons() {
                   <Link
                     key={`${p.schoolId}-${p.className}`}
                     to={`/s/${p.schoolId}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
                     title={`${p.className}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}
                   >
                     <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />

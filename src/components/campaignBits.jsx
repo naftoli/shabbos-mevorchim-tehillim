@@ -71,8 +71,13 @@ export const RACE_SEGMENTS = [
 ]
 
 export function RaceToggle({ value, onChange, compact = false }) {
+  // Phones: one full-width row of four, with smaller type so the labels fit at 360px.
+  // From sm up, the same fixed 104px tabs as before (compact is unused at that size).
   return (
-    <div className={`grid grid-cols-2 gap-1 rounded-[24px] p-1 font-cond uppercase leading-none tracking-[0.04em] sm:flex ${compact ? '' : ''}`} style={{ background: 'var(--grad-lilac)' }}>
+    <div
+      className={`flex w-full min-w-0 basis-full gap-0.5 rounded-[18px] p-0.5 font-cond uppercase leading-none tracking-[0.04em] sm:w-auto sm:basis-auto sm:gap-1 sm:rounded-[24px] sm:p-1 ${compact ? 'sm:flex' : 'sm:flex'}`}
+      style={{ background: 'var(--grad-lilac)' }}
+    >
       {RACE_SEGMENTS.map((sg) => {
         const active = value === sg.key
         return (
@@ -81,12 +86,12 @@ export function RaceToggle({ value, onChange, compact = false }) {
             type="button"
             onClick={() => onChange(sg.key)}
             aria-pressed={active}
-            className={`flex min-w-0 flex-col items-center gap-1 rounded-[18px] px-2 py-2 text-center transition sm:w-[104px] ${active ? 'text-navy shadow-sm' : 'text-white hover:bg-white/15'}`}
+            className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[14px] px-0.5 py-1.5 text-center transition sm:w-[104px] sm:flex-none sm:gap-1 sm:rounded-[18px] sm:px-2 sm:py-2 ${active ? 'text-navy shadow-sm' : 'text-white hover:bg-white/15'}`}
             style={active ? { background: 'linear-gradient(180deg, #c3b1d6 0%, #ede4f6 100%)' } : undefined}
           >
-            {sg.icon === 'check' ? <CheckMark className="h-6 w-6 sm:h-7 sm:w-7" /> : <IconImg name={sg.icon} className="h-6 w-auto sm:h-7" />}
-            <span className="text-[12px] leading-none sm:text-[14px]">{sg.label}</span>
-            <span className={`text-[9px] font-semibold normal-case leading-tight tracking-normal ${active ? 'text-navy/70' : 'text-white/85'}`}>{sg.sub}</span>
+            {sg.icon === 'check' ? <CheckMark className="h-4 w-4 shrink-0 sm:h-7 sm:w-7" /> : <IconImg name={sg.icon} className="h-4 w-auto max-w-full shrink-0 sm:h-7" />}
+            <span className="max-w-full text-[10px] leading-none sm:text-[14px]">{sg.label}</span>
+            <span className={`max-w-full text-balance text-[8px] font-semibold normal-case leading-[1.15] tracking-normal sm:text-[9px] sm:leading-tight ${active ? 'text-navy/70' : 'text-white/85'}`}>{sg.sub}</span>
           </button>
         )
       })}

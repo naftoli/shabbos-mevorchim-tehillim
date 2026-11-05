@@ -69,10 +69,10 @@ function SchoolsRace({ schools }) {
   const shown = ranked.slice(0, visible)
   return (
     <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 sm:mb-7">
-        <div className="min-w-0">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-7 sm:gap-4">
+        <div className="min-w-0 w-full sm:w-auto">
           <Eyebrow icon={asset('design/flag.png')} iconClass="h-[22px]">The Race</Eyebrow>
-          <h2 className="mt-1.5 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">Schools going head to head</h2>
+          <h2 className="mt-1.5 text-balance font-display text-[24px] font-bold italic leading-tight text-navy sm:text-wrap sm:text-[30px]">Schools going head to head</h2>
         </div>
         <RaceToggle value={sort} onChange={setSort} />
       </div>
@@ -262,7 +262,7 @@ export default function Home() {
               {/* Year picker removed for now — restore the <select> here once multi-year selection works. */}
               <div className={MONTH_CHOOSER === 'scroll' ? 'flex gap-1 overflow-x-auto' : 'flex flex-wrap gap-1'}>
                 {chipsFor(calendar?.months || [], calendar?.holidayMonths || []).map((m) => (
-                  <button key={m} type="button" onClick={() => setPickedMonth(m)} className={`rounded-xl px-2.5 py-1 font-heb text-lg ${m === monthLabel ? 'text-white' : 'bg-track text-navy'}`} style={m === monthLabel ? { background: 'var(--grad-cta-green)' } : undefined}>
+                  <button key={m} type="button" onClick={() => setPickedMonth(m)} className={`min-h-11 rounded-xl px-3 py-1.5 font-heb text-lg sm:min-h-0 sm:px-2.5 sm:py-1 ${m === monthLabel ? 'text-white' : 'bg-track text-navy'}`} style={m === monthLabel ? { background: 'var(--grad-cta-green)' } : undefined}>
                     {MONTH_HEB[m] || m}
                   </button>
                 ))}
@@ -342,7 +342,7 @@ export default function Home() {
                 Perfect Platoons · <span className="font-heb">{MONTH_HEB[monthLabel]}</span>
               </h2>
               <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(platoons.length)} this month</span>
-              <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
+              <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm max-sm:!min-h-11" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
             </div>
             <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
               A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.
@@ -377,7 +377,7 @@ export default function Home() {
                           <Link
                             key={`${p.schoolId}-${p.className}`}
                             to={`/s/${p.schoolId}`}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70"
+                            className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
                             title={`${p.className} · ${p.teacher || p.school} · ${p.size} soldiers`}
                           >
                             <StarMark className="h-4 w-4 flex-none" />
