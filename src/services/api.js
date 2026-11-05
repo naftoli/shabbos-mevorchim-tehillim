@@ -6,6 +6,7 @@
 import { quotaFor, availableLadders } from '@/data/ladders.js'
 import { canSeeClassRoll } from '@/lib/decisions.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
+import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
@@ -469,14 +470,14 @@ export async function getKidSocial(id) {
   if (!found) return null
   const { kid, school, cls } = found
 
-  // This soldier's rank in the class, by kapitlach said THIS month.
-  const classKids = cls.kids
-    .slice()
-    .sort((a, b) => kidMonthSaid(b, CURRENT_MONTH) - kidMonthSaid(a, CURRENT_MONTH) || a.name.localeCompare(b.name))
-  const myRankInClass = classKids.findIndex((k) => k.id === kid.id) + 1
+  // This soldier's rank in the class, and among chayolim in the base, by
+  // kapitlach said THIS month. Ties share a place (1, 1, 3). Name only orders
+  // the board; it does not split the rank.
+  const saidScore = (k) => [kidMonthSaid(k, CURRENT_MONTH)]
+  const classKids = cls.kids.slice()
+  const myClassPlace = placeAmong(classKids, saidScore, (k) => k.id, kid.id)
   const schoolKids = school.classes.flatMap((c) => c.kids)
-  schoolKids.sort((a, b) => kidMonthSaid(b, CURRENT_MONTH) - kidMonthSaid(a, CURRENT_MONTH) || a.name.localeCompare(b.name))
-  const myRankInSchool = schoolKids.findIndex((k) => k.id === kid.id) + 1
+  const mySchoolPlace = placeAmong(schoolKids, saidScore, (k) => k.id, kid.id)
 
   // Class standings within this school, by % of soldiers who completed.
   const standings = school.classes
@@ -487,6 +488,7 @@ export async function getKidSocial(id) {
     })
     .sort((a, b) => b.pctMet - a.pctMet || b.met - a.met)
 
+  const classPlace = placeAmong(standings, (c) => [c.pctMet, c.met], (c) => c.id, cls.id)
   const rank = standings.findIndex((c) => c.id === cls.id)
   const mine = standings[rank]
   const ahead = rank > 0 ? standings[rank - 1] : null
@@ -501,21 +503,26 @@ export async function getKidSocial(id) {
 
   // School standing worldwide — same Race order as Home (% soldiers met first).
   const schoolRanked = schools().slice().sort(cmpSchoolRace)
-  const schoolRank = schoolRanked.findIndex((s) => s.id === school.id)
+  const schoolPlace = placeAmong(
+    schoolRanked,
+    (s) => [s.pctMet, s.saidMonth || 0, s.pct, s.minutesPct],
+    (s) => s.id,
+    school.id,
+  )
 
   return {
     className: cls.name,
-    classRank: rank + 1,
+    classRank: classPlace?.rank || 0,
     totalClasses: standings.length,
     classAheadName: ahead?.name ?? null,
     needToPass,
-    myRankInClass,
+    myRankInClass: myClassPlace?.rank || 0,
     classSize: cls.kids.length,
-    myRankInSchool,
+    myRankInSchool: mySchoolPlace?.rank || 0,
     schoolSize: schoolKids.length,
     classPerfect: mine?.size > 0 && mine.met === mine.size,
     schoolName: school.name,
-    schoolRank: schoolRank + 1,
+    schoolRank: schoolPlace?.rank || 0,
     totalSchools: schoolRanked.length,
   }
 }

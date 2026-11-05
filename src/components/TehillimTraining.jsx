@@ -1,12 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
 import { buildTraining } from '@/lib/trainingBoard.js'
+import { emitCue } from '@/lib/commanderBus.js'
+import { TRACK_SCRIPT } from '@/lib/commanderScripts.js'
 
 export default function TehillimTraining({ grade, ladder, months, priorMissions = 0 }) {
   const board = buildTraining({ grade, ladder, months, priorMissions })
   const current = String(grade)
   const [open, setOpen] = useState(() => new Set([current]))
+  const rootRef = useRef(null)
+  useEffect(() => {
+    const node = rootRef.current
+    if (!node || typeof IntersectionObserver !== 'function') {
+      window.dispatchEvent(new CustomEvent('wwtc-training-open'))
+      return undefined
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      window.dispatchEvent(new CustomEvent('wwtc-training-open'))
+      observer.disconnect()
+    }, { threshold: 0.35 })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
   const allOpen = board.boards.every((b) => open.has(b.grade))
   const pct = board.total ? Math.round((board.done / board.total) * 100) : 0
 
@@ -20,6 +37,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
   }
 
   return (
+    <div ref={rootRef} id="tehillim-training">
     <Card className="relative overflow-hidden p-5 sm:p-6">
       <img src={asset('design/icon-soldier-hat.png')} alt="" aria-hidden="true" draggable="false" className="pointer-events-none absolute -right-5 -top-4 h-28 w-auto rotate-6 opacity-[0.06]" />
       <div className="relative flex flex-wrap items-end justify-between gap-2">
@@ -33,6 +51,9 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
           <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{board.done} checked · {board.total} missions on this ladder</p>
           <button type="button" className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-navy underline sm:min-h-0" onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}>
             {allOpen ? 'Close all' : 'Expand all'}
+          </button>
+          <button type="button" className="mt-1 block text-sm font-semibold text-blue" onClick={() => emitCue('track-replay', TRACK_SCRIPT, { force: true })}>
+            Hear it again
           </button>
         </div>
       </div>
@@ -73,5 +94,6 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         })}
       </div>
     </Card>
+    </div>
   )
 }

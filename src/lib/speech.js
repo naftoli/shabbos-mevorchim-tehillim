@@ -17,9 +17,24 @@ export function stripForSpeech(text) {
     .trim()
 }
 
+// Ashkenazi speech forms for the commander's Hebrew and Yiddish words.
+// The on-screen text stays spelled the usual way. "ch" here is the guttural
+// ches (loch / Bach), never the English "ch" of "chair". Shabbos is left as
+// Shabbos: it has no ches. Longer words are replaced before the shorter ones.
+const SPEECH_WORDS = [
+  [/\bkapitlach\b/gi, 'kahpeetlockh'],
+  [/\bkapitel\b/gi, 'kahpeetel'],
+  [/\bchayolim\b/gi, 'khahyolim'],
+  [/\bchayol\b/gi, 'khahyole'],
+  [/\btehillim\b/gi, 'tuhhillim'],
+  [/\bmevorchim\b/gi, 'mehvorkhim'],
+]
+
 // If a "613" is still spoken, say "six thirteen", not "six hundred and thirteen".
 export function spokenText(text) {
-  return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+  let spoken = stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+  for (const [pattern, say] of SPEECH_WORDS) spoken = spoken.replace(pattern, say)
+  return spoken
 }
 
 // Chrome drops an utterance that runs much past 15 seconds. Stay under that,

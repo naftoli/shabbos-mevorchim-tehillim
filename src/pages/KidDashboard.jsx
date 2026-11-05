@@ -18,8 +18,9 @@ import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
-import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueJourney, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueRankings, cueReport } from '@/lib/commanderCues.js'
+import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueJourney, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
+import { fillStand, fillStreak, standFacts } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions, } from '@/lib/streaks.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
@@ -363,7 +364,10 @@ export default function KidDashboard() {
             <p className="sh">Where you stand this month</p>
             <p className="mt-1 text-xs text-muted">Ranked by kapitlach said in {MONTH_HEB[cur.month]}. Same numbers as the school board.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <button type="button" className="rounded-2xl bg-navy p-4 text-left text-white" onClick={() => emitCue('ranks', cueRankings({ myRank: social.myRankInClass, classRank: social.classRank, schoolRank: social.schoolRank }))}>
+              <button type="button" className="rounded-2xl bg-navy p-4 text-left text-white" onClick={() => {
+                const text = fillStand(standFacts(social))
+                if (text) emitCue(`stand-${cur.month}`, text, { force: true })
+              }}>
                 <IconImg name="school" className="h-8 w-auto" />
                 <p className="mt-2 font-display text-3xl font-black">#{social.schoolRank}</p>
                 <p className="text-sm text-white/80">of {social.totalSchools}</p>
@@ -396,6 +400,16 @@ export default function KidDashboard() {
             <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.best} <span className="text-lg">missions</span></p>
           </div>
           <p className="sm:col-span-2 text-sm text-muted">A streak is missions you complete in a row. A recorded miss starts the next one at 1. Your longest streak stays. A month with no record is not counted as a miss.</p>
+          <button
+            type="button"
+            className="sm:col-span-2 text-left text-sm font-semibold text-blue"
+            onClick={() => {
+              const text = fillStreak({ current: streaks.current, longest: streaks.best })
+              if (text) emitCue(`streak-${cur.month}`, text, { force: true })
+            }}
+          >
+            Hear it again
+          </button>
         </Card>
 
         {advice ? (

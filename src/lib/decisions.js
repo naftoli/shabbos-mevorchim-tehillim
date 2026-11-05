@@ -142,6 +142,7 @@ export const AI_CHILD_FIELDS = [
   'name', 'gender', 'childGrade', 'childGradeLabel', 'ladder', 'finishTrainingByGrade',
   'focusLadder', 'situation', 'greeting', 'cue', 'monthEn', 'ladderChoices',
   'thisMonth', 'missionsTotal', 'medal', 'streak', 'rank', 'nextShabbosMevorchim',
+  'scripts', 'scriptNow',
 ]
 
 export function rankForMedals(earnedCount) {

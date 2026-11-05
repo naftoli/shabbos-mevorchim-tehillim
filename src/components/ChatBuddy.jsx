@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { getKidProgress, getKidSocial } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
@@ -15,6 +15,21 @@ import { connectRealtimeCall } from '@/lib/realtimeCall.js'
 import { asset } from '@/lib/asset.js'
 import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 import { resetCues } from '@/lib/commanderBus.js'
+import {
+  TRAINING_NOT_NOW,
+  filledScripts,
+  missionQuota,
+  readKidScripts,
+  readTrainingAnswer,
+  rememberScript,
+  rememberTraining,
+  selectCommanderScripts,
+  standFacts,
+  suppressLegacyGreeting,
+  trainByGrade,
+} from '@/lib/commanderScripts.js'
+import { streakFromMissions } from '@/lib/streaks.js'
+import { streakMissions } from '@/lib/trainingBoard.js'
 
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
 // the real choices out loud and saves the one the child accepts. Otherwise he
@@ -51,9 +66,21 @@ function aiContext(ctx) {
     missionsTotal: ctx.progress?.missionsTotal ?? 0,
     medal: medal ? { current: medal.current?.name ?? null, next: medal.next?.name ?? null, missionsToNext: medal.missionsToNext ?? null } : null,
     rank: s ? { className: s.className, classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
+    streak: ctx.streakInfo ?? null,
+    scripts: scriptPayload(ctx.commanderScripts),
+    scriptNow: Array.isArray(ctx.scriptNow) ? ctx.scriptNow : [],
     nextShabbosMevorchim: sm ? { month: sm.monthEn, daysUntil: sm.daysUntil, hebDate: sm.hebDateLabel } : null,
     answerSheet: answerSheet(ctx),
   }
+}
+
+function scriptPayload(scripts) {
+  if (!scripts || typeof scripts !== 'object') return null
+  const out = {}
+  for (const [key, value] of Object.entries(scripts)) {
+    if (typeof value === 'string' && value.trim()) out[key] = value
+  }
+  return Object.keys(out).length ? out : null
 }
 
 // Ask the backend AI. Throws on any failure so the caller can fall back.
@@ -259,6 +286,7 @@ const MUTE_KEY = 'wwtc_general_muted'
 export default function ChatBuddy() {
   const { kid, changeLadder } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [peekClosed, setPeekClosed] = useState(false)
   const [messages, setMessages] = useState([])
@@ -280,6 +308,7 @@ export default function ChatBuddy() {
   const [pinnedGreeting, setPinnedGreeting] = useState(null)
   // Which soldier already got the auto-opened panel this login.
   const [openedFor, setOpenedFor] = useState(null)
+  const [trackOpen, setTrackOpen] = useState(false)
   const [commanderPref, setCommanderPref] = useState(() => {
     try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
   })
@@ -297,6 +326,7 @@ export default function ChatBuddy() {
     setPinnedGreeting(null)
     setEngine('scripted')
     setMessages([])
+    setTrackOpen(false)
     resetCues()
     greetedId.current = null
   }
@@ -327,12 +357,16 @@ export default function ChatBuddy() {
   const streamIdRef = useRef(null)
   const skipAssistantRef = useRef(false)
   const liveHandlersRef = useRef(() => ({}))
+  const scriptInputRef = useRef(null)
+  const trainingRef = useRef(null)
+  const lastScriptRef = useRef(null)
 
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
-  const { data: social } = useLiveData(
+  const { data: social, loading: socialLoading } = useLiveData(
     () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
     [kid],
   )
+  const [scriptRev, setScriptRev] = useState(0)
 
   const reportMonth = progress && progress.current ? progress.current.month : null
   const ctx = useMemo(() => {
@@ -359,7 +393,59 @@ export default function ChatBuddy() {
   }, [kid, progress, social, focusLadder, reportMonth])
 
   const greeting = ctx?.greeting ?? ''
-  const quickReplies = useMemo(() => (ctx ? quickRepliesFor(ctx) : []), [ctx])
+  const monthKey = ctx?.monthEn || ''
+  const chayolName = (kid?.name || '').trim().split(/\s+/)[0] || null
+  const storedScripts = readKidScripts(typeof localStorage === 'undefined' ? null : localStorage, kidId, monthKey)
+  const streaks = progress ? streakFromMissions(streakMissions(progress)) : null
+  const quota = ctx?.ladder != null && ctx?.grade != null && monthKey
+    ? missionQuota(ctx.grade, monthKey, ctx.ladder)
+    : { kapitlach: null, minutes: null }
+  const facts = standFacts(social)
+  const scriptInput = {
+    name: chayolName,
+    ladder: ctx?.ladder,
+    gradeLabel: ctx?.ladder != null ? trainByGrade(ctx.ladder) : null,
+    month: monthKey,
+    cardsOnScreen: pathname === '/ladders',
+    training: storedScripts.training,
+    heard: storedScripts.heard,
+    quota,
+    resultsReady: !!facts && (
+      (facts.baseRank != null && facts.baseTotal != null)
+      || (facts.platoonRank != null && facts.platoonTotal != null)
+      || (facts.soldierRank != null && facts.soldierTotal != null)
+      || facts.perfect
+    ),
+    stand: facts || {},
+    streakCurrent: streaks ? streaks.current : null,
+    streakLongest: streaks ? streaks.best : null,
+    trackOpen,
+  }
+  const dueNow = ctx ? selectCommanderScripts(scriptInput) : []
+  const suppressLegacy = ctx ? suppressLegacyGreeting(scriptInput) : false
+  const scriptKey = [
+    kidId ?? '',
+    ctx?.ladder ?? '',
+    monthKey,
+    pathname,
+    storedScripts.training ?? '',
+    scriptRev,
+    socialLoading ? 'loading' : 'ready',
+    social ? `${social.schoolRank}|${social.classRank}|${social.myRankInSchool}|${social.classPerfect ? 1 : 0}|${social.totalSchools}|${social.totalClasses}|${social.schoolSize}` : '',
+    streaks ? `${streaks.current}|${streaks.best}` : '',
+    quota.kapitlach ?? '',
+    quota.minutes ?? '',
+    trackOpen ? 'track' : '',
+  ].join('~')
+  const quickReplies = !ctx
+    ? []
+    : !ctx.ladder
+      ? (storedScripts.training === 'yes'
+        ? ['Hear that again', 'How does it work?']
+        : storedScripts.training === 'no'
+          ? ['Start training', 'Hear that again']
+          : ['Yes', 'Not now', 'Hear that again'])
+      : ['Hear that again', ...quickRepliesFor(ctx)].slice(0, 4)
   if (kid && ctx && (pinnedGreeting == null || pinnedGreeting.id !== kid.id)) {
     setPinnedGreeting({ id: kid.id, text: ctx.greeting, situation: ctx.situation })
   }
@@ -372,14 +458,29 @@ export default function ChatBuddy() {
     setOpen(autoOpen.open)
   }
 
+  useEffect(() => {
+    const onTraining = () => setTrackOpen(true)
+    window.addEventListener('wwtc-training-open', onTraining)
+    return () => window.removeEventListener('wwtc-training-open', onTraining)
+  }, [])
+
   // Latest values for async speech/mic callbacks. Written here, not during render.
   useEffect(() => {
     mutedRef.current = muted
     openRef.current = open
     inputRef.current = input
-    ctxRef.current = ctx
+    ctxRef.current = ctx ? {
+      ...ctx,
+      commanderScripts: filledScripts(scriptInput),
+      scriptNow: selectCommanderScripts(scriptInput).map((item) => item.id),
+      streakInfo: scriptInput.streakCurrent == null
+        ? null
+        : { current: scriptInput.streakCurrent, longest: scriptInput.streakLongest },
+    } : null
     greetingRef.current = greeting
     focusLadderRef.current = focusLadder
+    scriptInputRef.current = scriptInput
+    trainingRef.current = storedScripts.training
   })
 
   function setVoice(on) {
@@ -680,6 +781,42 @@ export default function ChatBuddy() {
     setInput('')
     setMicNote('')
     stopListening()
+    const early = ctxRef.current
+    const trainingAnswer = early?.ladder ? null : readTrainingAnswer(text)
+    const namesLadder = /\bladder\s*\d{1,2}\b/i.test(text)
+    if (trainingAnswer && !namesLadder && early) {
+      ++turnRef.current
+      stopSpeaking()
+      setMessages((m) => [...m, { id: `k${(msgSeq.current += 1)}`, from: 'kid', text }])
+      if (trainingAnswer === 'yes' && trainingRef.current !== 'yes') {
+        rememberTraining(localStorage, kid.id, early.monthEn, 'yes')
+        setScriptRev((n) => n + 1)
+        setTyping(false)
+        navigate('/ladders')
+        return
+      }
+      const reply = trainingAnswer === 'no' && trainingRef.current !== 'yes'
+        ? TRAINING_NOT_NOW
+        : trainingAnswer === 'no'
+          ? 'No problem. Keep looking, or come back later. The ladder you pick is your choice.'
+          : 'Take your time. When you find the ladder that is right for you, tap PICK THIS LADDER.'
+      if (trainingAnswer === 'no' && trainingRef.current !== 'yes') {
+        rememberTraining(localStorage, kid.id, early.monthEn, 'no')
+        setScriptRev((n) => n + 1)
+      }
+      setTyping(false)
+      setMessages((m) => [...m, { id: `b${(msgSeq.current += 1)}`, from: 'bot', text: reply }])
+      if (liveCallRef.current && engineRef.current === 'live') {
+        liveCallRef.current.sayExact(reply)
+        return
+      }
+      callModeRef.current = true
+      if (canListen()) setVoice(true)
+      const statusPromise = say(reply)
+      if (!mutedRef.current && canListen()) beginListening()
+      await statusPromise
+      return
+    }
     if (liveCallRef.current && engineRef.current === 'live') {
       sendLive(text)
       return
@@ -838,11 +975,28 @@ export default function ChatBuddy() {
 
   useEffect(() => {
     convoRef.current = messages
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    const node = scrollRef.current
+    if (!node) return
+    const latest = node.querySelector('[data-script-latest="true"]')
+    if (latest && typeof latest.scrollIntoView === 'function') latest.scrollIntoView({ block: 'start' })
+    else node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
   }, [messages, typing])
 
-  // Greet out loud once each time a soldier is here. Login is a click, so speech
-  // usually starts right away; if the browser blocks it, the next tap or key says it.
+  function replayScript(text) {
+    if (!text) return
+    stopListening()
+    lastScriptRef.current = { text }
+    callModeRef.current = true
+    if (canListen()) setVoice(true)
+    const statusPromise = say(text)
+    if (canListen() && !listenHandle.current) beginListening()
+    void statusPromise
+  }
+
+  // Official scripts, then the older short greeting when no script owns this visit.
+  // Login is a click, so speech usually starts right away. A new moment (yes,
+  // ladder cards, a new month) may speak again. A script already heard this
+  // month stays quiet until the child taps Hear again.
   useEffect(() => {
     if (!kid) {
       bootGen.current += 1
@@ -861,19 +1015,47 @@ export default function ChatBuddy() {
       releaseCallMic()
       return
     }
-    if (!greeting) return
-    if (greetedId.current === kid.id) return
-    liveCallRef.current?.close()
-    liveCallRef.current = null
-    engineRef.current = 'scripted'
+    if (kid.ladder && socialLoading) return
+    const input = scriptInputRef.current
+    const due = input ? selectCommanderScripts(input) : []
+    const suppress = input ? suppressLegacyGreeting(input) : false
+    const line = due.length ? due.map((item) => item.text).join('\n\n') : (suppress ? '' : greeting)
+    const mark = `${kid.id}:${due.length ? due.map((item) => item.id).join('+') : (suppress ? 'quiet' : 'legacy')}`
+    if (!line || greetedId.current === mark) {
+      if (!line && suppress) greetedId.current = `${kid.id}:quiet`
+      return
+    }
     const id = kid.id
-    const line = greeting
+    const month = input?.month
     const gen = ++bootGen.current
     const timer = window.setTimeout(() => {
-      if (greetedId.current === id || gen !== bootGen.current) return
-      greetedId.current = id
-      if (turnRef.current > 0) return
+      if (gen !== bootGen.current) return
+      greetedId.current = mark
+      if (due.length && month) {
+        due.forEach((item) => rememberScript(localStorage, id, month, item.id))
+        setScriptRev((n) => n + 1)
+        setMessages((m) => {
+          const have = new Set(m.map((row) => row.scriptId).filter(Boolean))
+          const add = due.filter((item) => !have.has(item.id)).map((item) => ({
+            id: `s${(msgSeq.current += 1)}`,
+            from: 'bot',
+            text: item.text,
+            scriptId: item.id,
+          }))
+          if (add.length) lastScriptRef.current = add[add.length - 1]
+          return add.length ? [...m, ...add] : m
+        })
+        openRef.current = true
+        setOpen(true)
+      }
+      if (!due.length && turnRef.current > 0) return
       void (async () => {
+        if (liveCallRef.current && engineRef.current === 'live') {
+          if (gen !== bootGen.current) return
+          skipAssistantRef.current = true
+          liveCallRef.current.greet(line)
+          return
+        }
         let live = null
         if (!IS_DEMO) {
           setEngineMode('pending')
@@ -902,13 +1084,13 @@ export default function ChatBuddy() {
         }
         setEngineMode('scripted')
         const status = await talkRef.current(line)
+        if (gen !== bootGen.current || status === 'interrupted') return
         if (status === 'blocked') pendingSpeech.current = line
-        if (status === 'interrupted') return
         listenAfterRef.current()
       })()
     }, 60)
     return () => window.clearTimeout(timer)
-  }, [kid, greeting, say])
+  }, [kid, greeting, say, scriptKey, socialLoading])
 
   useEffect(() => {
     const onGesture = () => {
@@ -947,15 +1129,21 @@ export default function ChatBuddy() {
     const onCue = (event) => {
       const text = event.detail?.text
       if (!text) return
-      setMessages((m) => [...m, { id: `c${(msgSeq.current += 1)}`, from: 'bot', text }])
-      if (openRef.current || commanderPref === 'on') say(text)
+      const force = !!event.detail?.force
+      setMessages((m) => [...m, { id: `c${(msgSeq.current += 1)}`, from: 'bot', text, scriptId: force ? 'replay' : undefined }])
+      if (force) {
+        openRef.current = true
+        setOpen(true)
+      }
+      if (force || openRef.current || commanderPref === 'on') say(text)
     }
     window.addEventListener('wwtc-cue', onCue)
     return () => window.removeEventListener('wwtc-cue', onCue)
   }, [say, commanderPref])
 
   if (!kid) return null
-  const peek = ctx ? peekText(ctx) : ''
+  const peekLine = dueNow[0]?.text?.split('\n').find((line) => line.trim()) || (ctx ? peekText(ctx) : '')
+  const peek = peekLine
   const shownGreeting = pinnedGreeting?.id === kid.id && pinnedGreeting.situation === 'pick'
     ? pinnedGreeting.text
     : greeting
@@ -964,7 +1152,9 @@ export default function ChatBuddy() {
   const micOk = canListen()
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
-  const thread = shownGreeting ? [{ id: 'w', from: 'bot', text: shownGreeting }, ...messages] : messages
+  const showLegacy = !suppressLegacy && dueNow.length === 0 && !!shownGreeting
+  const thread = showLegacy ? [{ id: 'w', from: 'bot', text: shownGreeting }, ...messages] : messages
+  const latestScriptId = [...thread].reverse().find((m) => m.scriptId && m.scriptId !== 'replay')?.scriptId
   const statusLine = engine === 'pending'
     ? 'Connecting…'
     : engine === 'live'
@@ -1015,7 +1205,7 @@ export default function ChatBuddy() {
 
       {/* Panel */}
       {open ? (
-        <div className="fixed bottom-4 right-4 z-[70] flex h-[32rem] max-h-[80vh] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[22px] bg-card shadow-hover ring-1 ring-line sm:bottom-6 sm:right-6">
+        <div className={`fixed bottom-4 right-4 z-[70] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[22px] bg-card shadow-hover ring-1 ring-line sm:bottom-6 sm:right-6 ${pathname === '/ladders' ? 'h-[20rem] max-h-[46vh]' : 'h-[32rem] max-h-[80vh]'}`}>
           <div className="hero-navy flex items-center gap-3 px-4 py-3">
             <Avatar />
             <div className="min-w-0 flex-1">
@@ -1039,8 +1229,17 @@ export default function ChatBuddy() {
           <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-paper/50 px-3 py-3">
             {thread.map((m) => (
               <div key={m.id} className={`flex ${m.from === 'kid' ? 'justify-end' : 'justify-start'}`}>
-                <span className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'}`}>
+                <span
+                  data-script={m.scriptId || undefined}
+                  data-script-latest={m.scriptId && m.scriptId === latestScriptId ? 'true' : undefined}
+                  className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'}`}
+                >
                   {m.text}
+                  {m.scriptId && m.scriptId !== 'replay' ? (
+                    <button type="button" onClick={() => replayScript(m.text)} className="mt-2 block text-[12px] font-semibold text-blue">
+                      Hear again
+                    </button>
+                  ) : null}
                 </span>
               </div>
             ))}
