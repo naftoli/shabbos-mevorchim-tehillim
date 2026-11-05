@@ -18,6 +18,7 @@ import {
   rememberScript,
   rememberTraining,
   selectCommanderScripts,
+  standPlaceCards,
   trainByGrade,
 } from '../../src/lib/commanderScripts.js'
 
@@ -83,6 +84,46 @@ test('a mission sentence is skipped when its number is missing', () => {
   const noName = fillMission({ ladder: 9, gradeLabel: trainByGrade(9), kapitlach: 4, minutes: 20 })
   assert.equal(noName.includes('Hi '), false)
   assert.match(noName, /by 9th grade/)
+})
+
+test('where you stand cards use live ranks in full sentences, each in its own scope', () => {
+  const cards = standPlaceCards({
+    schoolRank: 23,
+    totalSchools: 75,
+    classRank: 4,
+    totalClasses: 47,
+    myRankInClass: 1,
+    classSize: 12,
+    myRankInSchool: 8,
+    schoolSize: 581,
+  })
+  assert.deepEqual(cards.map((card) => card.text), [
+    'Your school is #23 of 75 Bases in the world.',
+    'Your platoon is #4 of 47 platoons in your base.',
+    'You are #8 of 581 Chayolim in your Base.',
+  ])
+  assert.deepEqual(cards.map((card) => card.icon), ['school', 'platoon', 'hat'])
+  assert.equal(cards.some((card) => card.text.includes('plattons')), false)
+
+  const soldier = standPlaceCards({
+    schoolRank: 2,
+    totalSchools: 10,
+    classRank: 3,
+    totalClasses: 9,
+    myRankInClass: 8,
+    classSize: 581,
+    myRankInSchool: 0,
+    schoolSize: 0,
+  })
+  assert.deepEqual(soldier.map((card) => card.key), ['school', 'platoon'])
+
+  assert.deepEqual(standPlaceCards({
+    myRankInSchool: 1200,
+    schoolSize: 3400,
+  }).map((card) => card.text), [
+    'You are #1,200 of 3,400 Chayolim in your Base.',
+  ])
+  assert.deepEqual(standPlaceCards(null), [])
 })
 
 test('where you stand uses only the ranks that exist, and perfect platoon only when earned', () => {

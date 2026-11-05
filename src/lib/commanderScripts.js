@@ -3,6 +3,7 @@
 // A sentence whose number is missing is left out. Nothing is invented.
 
 import { GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { fmt } from './format.js'
 
 const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'stand', 'streak']
 const LIFETIME_SCRIPT_IDS = ['track', 'climb']
@@ -181,6 +182,29 @@ export function standFacts(social) {
     soldierTotal: num(social.schoolSize),
     perfect: social.classPerfect === true,
   }
+}
+
+// Logged-in "Where you stand" cards. Same scopes as standFacts:
+// school among bases in the world, platoon among platoons in the base,
+// soldier among chayolim in the base. A missing rank is left out.
+// Class rank and class size are not a stand-in for the soldier's base place.
+export function standPlaceCards(social) {
+  const facts = standFacts(social)
+  if (!facts) return []
+  const card = (key, icon, rank, total, sentence) => {
+    if (rank == null || total == null) return null
+    const rankText = fmt(rank)
+    const totalText = fmt(total)
+    return { key, icon, rankText, totalText, text: sentence(rankText, totalText) }
+  }
+  return [
+    card('school', 'school', facts.baseRank, facts.baseTotal,
+      (rank, total) => `Your school is #${rank} of ${total} Bases in the world.`),
+    card('platoon', 'platoon', facts.platoonRank, facts.platoonTotal,
+      (rank, total) => `Your platoon is #${rank} of ${total} platoons in your base.`),
+    card('soldier', 'hat', facts.soldierRank, facts.soldierTotal,
+      (rank, total) => `You are #${rank} of ${total} Chayolim in your Base.`),
+  ].filter(Boolean)
 }
 
 function emptyHeard() {

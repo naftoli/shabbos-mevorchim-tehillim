@@ -20,7 +20,7 @@ import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
 import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
-import { fillClimb, fillStand, fillStreak, standFacts, trainByGrade } from '@/lib/commanderScripts.js'
+import { fillClimb, fillStand, fillStreak, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions, } from '@/lib/streaks.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
@@ -30,6 +30,19 @@ import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 
 // Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
 // component identity across renders.
+function StandRank({ text, rankText }) {
+  const token = `#${rankText}`
+  const at = text.indexOf(token)
+  if (at < 0) return text
+  return (
+    <>
+      {text.slice(0, at)}
+      <span className="font-black">{token}</span>
+      {text.slice(at + token.length)}
+    </>
+  )
+}
+
 function LadderGlyph(props) {
   return (
     <svg viewBox="0 0 26 40" aria-hidden="true" {...props}>
@@ -358,33 +371,41 @@ export default function KidDashboard() {
           </div>
         </Card>
 
-        {/* Your standing — class rank in the school + the school's rank worldwide */}
+        {/* School among bases worldwide, platoon within the base, soldier within the base. */}
         {social ? (
           <Card className="p-5 sm:p-6">
             <p className="sh">Where you stand this month</p>
-            <p className="mt-1 text-xs text-muted">Ranked by kapitlach said in {MONTH_HEB[cur.month]}. Same numbers as the school board.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <button type="button" className="rounded-2xl bg-navy p-4 text-left text-white" onClick={() => {
-                const text = fillStand(standFacts(social))
-                if (text) emitCue(`stand-${cur.month}`, text, { force: true })
-              }}>
-                <IconImg name="school" className="h-8 w-auto" />
-                <p className="mt-2 font-display text-3xl font-black">#{social.schoolRank}</p>
-                <p className="text-sm text-white/80">of {social.totalSchools}</p>
-                <p className="mt-2 text-xs uppercase tracking-wide text-gold">Base in the world</p>
-              </button>
-              <div className="rounded-2xl bg-track p-4">
-                <IconImg name="platoon" className="h-8 w-auto" />
-                <p className="mt-2 font-display text-3xl font-black text-navy">#{social.classRank}</p>
-                <p className="text-sm text-muted">of {social.totalClasses} in the base</p>
-                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">Your platoon</p>
-              </div>
-              <div className="rounded-2xl bg-track p-4">
-                <IconImg name="hat" className="h-8 w-auto" />
-                <p className="mt-2 font-display text-3xl font-black text-navy">#{social.myRankInSchool || social.myRankInClass}</p>
-                <p className="text-sm text-muted">of {social.schoolSize || social.classSize} chayolim</p>
-                <p className="mt-2 text-xs uppercase tracking-wide text-navy/70">You in your school</p>
-              </div>
+            <p className="mt-1 text-xs text-muted">
+              <span className="font-heb">{MONTH_HEB[cur.month]}</span> — your school in the world, your platoon in your base, and you among the Chayolim in your base.
+            </p>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              {standPlaceCards(social).map((card) => {
+                const body = (
+                  <>
+                    <IconImg name={card.icon} className="h-8 w-auto shrink-0" />
+                    <p className="min-w-0 font-display text-base font-semibold leading-snug text-navy lg:mt-2">
+                      <StandRank text={card.text} rankText={card.rankText} />
+                    </p>
+                  </>
+                )
+                const cardClass = 'flex h-full w-full items-center gap-3 rounded-2xl bg-track p-4 text-left text-navy lg:block'
+                if (card.key !== 'school') {
+                  return <div key={card.key} className={cardClass}>{body}</div>
+                }
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    className={`${cardClass} border-0 font-sans`}
+                    onClick={() => {
+                      const text = fillStand(standFacts(social))
+                      if (text) emitCue(`stand-${cur.month}`, text, { force: true })
+                    }}
+                  >
+                    {body}
+                  </button>
+                )
+              })}
             </div>
             {social.classPerfect ? <p className="mt-3 flex items-center gap-2 font-semibold text-green"><CheckMark className="h-5 w-5" /> {cuePerfectPlatoon()}</p> : null}
           </Card>
