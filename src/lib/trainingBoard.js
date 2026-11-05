@@ -19,10 +19,16 @@ export const OCCASIONS = [
 
 const GRADE_ORDER = ['pre1a', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
-export function gradesOnLadder(ladder) {
-  const finish = Number(ladder)
-  if (!finish) return GRADE_ORDER.slice()
-  return GRADE_ORDER.filter((g) => (g === 'pre1a' ? 0 : Number(g)) <= finish)
+const gradeNum = (g) => (g === 'pre1a' ? 0 : Number(g) || 0)
+
+// Grades to show on the board: training runs through the ladder's finish grade,
+// but a soldier who kept going past it (e.g. grade 6 still on ladder 5, which
+// finishes in grade 5) must still get their current grade's row — otherwise this
+// year's completed missions have nowhere to be checked off.
+export function gradesOnLadder(ladder, throughGrade) {
+  const cap = Math.max(Number(ladder) || 0, gradeNum(throughGrade))
+  if (!cap) return GRADE_ORDER.slice()
+  return GRADE_ORDER.filter((g) => gradeNum(g) <= cap)
 }
 
 function monthRecord(byMonth, key) {
@@ -33,8 +39,8 @@ function monthRecord(byMonth, key) {
  * One cell per mission on this ladder. A check means a record says the quota
  * was met. No record stays blank — it is not shown as a miss.
  */
-export function buildTraining({ grade, ladder, months, priorMissions = 0 }) {
-  const grades = gradesOnLadder(ladder)
+export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {} }) {
+  const grades = gradesOnLadder(ladder, grade)
   const byMonth = {}
   for (const month of months || []) {
     if (month?.month) byMonth[month.month] = month
@@ -46,21 +52,35 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0 }) {
   const occasions = OCCASIONS.filter((occ) => !occ.holiday || activeHolidays.has(occ.key))
   const boards = grades.map((g) => {
     const isCurrent = String(g) === String(grade)
+    // Earned missions from real DB marks (history[gradeKey]). The value is the
+    // ladder the child was on then (a number), or `true` when the track is unknown.
+    const earnedPast = history?.[String(g)] || history?.[g] || null
     const missions = occasions.map((occ) => {
+      const occKey = occ.holiday ? 'Tishrei' : occ.key
+      const histVal = earnedPast?.[occ.key]
+      const histLadder = typeof histVal === 'number' ? histVal : null
+      if (!isCurrent) {
+        // A mark exists only when the mission was earned (said ≥ quota), so a
+        // recorded past occasion is a completed mission. Use the ladder the child
+        // was on then (falling back to the current ladder) for the quota shown.
+        const done = histVal != null && histVal !== false
+        const cellLadder = histLadder ?? (ladder ? Number(ladder) : null)
+        const quota = cellLadder ? quotaFor(g, occKey, cellLadder) : null
+        return { ...occ, record: done, met: done, ladder: done ? cellLadder : null, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
+      }
       // Holidays (Rosh Hashana / Yom Kippur) board off the Shabbos-Mevorchim
       // Tishrei quota of the year — same rule the server uses.
-      const quota = ladder ? quotaFor(g, occ.holiday ? 'Tishrei' : occ.key, ladder) : null
-      if (!isCurrent) {
-        return { ...occ, record: false, met: false, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
-      }
+      const quota = ladder ? quotaFor(g, occKey, ladder) : null
+      const cellLadder = histLadder ?? (ladder ? Number(ladder) : null)
       const rec = monthRecord(byMonth, occ.key)
       if (!rec || rec.reported === false) {
-        return { ...occ, record: false, met: false, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
+        return { ...occ, record: false, met: false, ladder: null, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
       }
       return {
         ...occ,
         record: true,
         met: !!rec.met,
+        ladder: rec.met ? cellLadder : null,
         quota: rec.quota ?? quota?.v ?? null,
         quotaLabel: rec.quotaLabel || quota?.k || null,
         minutes: rec.minutes ?? quota?.m ?? null,

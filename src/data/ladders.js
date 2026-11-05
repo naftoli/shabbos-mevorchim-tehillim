@@ -250,7 +250,18 @@ export const QUOTA = Object.fromEntries(
 // Leap years have two Adars (Adar I + Adar II); both use the same Adar quota.
 export function quotaFor(grade, month, ladder) {
   const mo = month === 'Adar I' || month === 'Adar II' ? 'Adar' : month
-  return QUOTA[grade]?.[mo]?.[ladder] ?? null
+  const cells = QUOTA[grade]?.[mo]
+  if (!cells) return null
+  const direct = cells[ladder]
+  if (direct) return direct
+  // A ladder below this grade's range was finished in an earlier grade (e.g. a
+  // 6th-grader still on ladder 5, which completes the whole Tehillim by grade 5),
+  // so the table omits it. Such a child is simply done — full 150 every month,
+  // which is exactly the grade's lowest (finished) ladder cell.
+  const L = Number(ladder)
+  const minLadder = Math.min(...Object.keys(cells).map(Number))
+  if (L >= 5 && L < minLadder) return cells[minLadder]
+  return null
 }
 
 // Integer → Hebrew numeral (gematria): 10→"י", 15→"טו", 119→"קיט", 150→"קנ".

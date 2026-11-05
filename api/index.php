@@ -526,6 +526,75 @@ function wwtcKidMissionsLifetime(int $userId): int
     return (int) $stmt->fetchColumn();
 }
 
+/** SPA grade key ('pre1a', '1'..'12') → number for math; -1 if unknown. */
+function wwtcGradeNum(string $grade): int
+{
+    $g = strtolower(trim($grade));
+    if ($g === '') {
+        return -1;
+    }
+    return strpos($g, 'pre') === 0 ? 0 : (int) $g;
+}
+
+/**
+ * Which missions the soldier actually earned, across every grade of the journey,
+ * keyed by SPA grade and occasion so the training board checks the real cells
+ * (not just this year). Source is date_tasks_mission_marks — the same marks the
+ * medal board counts — joined to the mission so we also know the ladder the child
+ * was on at that time (track_id → ladder = 15 − track_id). Each mark's mark_date
+ * is a Shabbos-Mevorchim jd, which maps to a campaign year (grades advance one per
+ * year, so grade G sat in year currentYear − (currentGrade − G)) and an occasion.
+ * The cell value is the ladder number then, or true when the track is unknown.
+ * Shape: ['3' => ['Tishrei' => 7, ...], 'pre1a' => [...], ...].
+ */
+function wwtcKidMissionHistoryByGrade(array $kid): array
+{
+    global $MASHPIA_DB;
+    $currentGrade = wwtcGradeNum((string) ($kid['class_grade'] ?? ''));
+    if ($currentGrade < 0) {
+        return [];
+    }
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT mm.mark_date, m.track_id
+           FROM date_tasks_mission_marks mm
+           JOIN date_tasks_missions m ON m.date_tasks_mission_id = mm.date_tasks_mission_id
+          WHERE mm.user_id = :uid AND mm.subject_id = ' . WWTC_SUBJECT_ID
+    );
+    $stmt->execute([':uid' => (int) $kid['user_id']]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) {
+        return [];
+    }
+    // Build jd → [gradeKey, occasion] for every grade the board shows (pre1a..current).
+    $currentYear = wwtcYear();
+    $jdMap = [];
+    for ($gn = 0; $gn <= $currentGrade; $gn++) {
+        $year = $currentYear - ($currentGrade - $gn);
+        $gradeKey = $gn === 0 ? 'pre1a' : (string) $gn;
+        foreach (wwtcMonthDatesForYear($year) as $month => $jd) {
+            // The SPA shows one "Adar" occasion; a leap year's two Adars collapse to it.
+            $occ = strpos($month, 'Adar') === 0 ? 'Adar' : $month;
+            $jdMap[(int) $jd] = [$gradeKey, $occ];
+        }
+        foreach (wwtcHolidayDates($year) as $name => $jds) {
+            foreach ($jds as $hjd) {
+                $jdMap[(int) $hjd] = [$gradeKey, $name];
+            }
+        }
+    }
+    $out = [];
+    foreach ($rows as $r) {
+        $jd = (int) $r['mark_date'];
+        if (!isset($jdMap[$jd])) {
+            continue; // a mark outside the shown grade span (e.g. before pre1a)
+        }
+        [$gradeKey, $occ] = $jdMap[$jd];
+        $ladder = wwtcLadderFromTrack($r['track_id']);
+        $out[$gradeKey][$occ] = $ladder ?: true;
+    }
+    return $out;
+}
+
 /**
  * The signed-in soldier's progress payload (GET /me/progress, and the fresh
  * state POST /me/report returns). medal stays null — medal logic is client-side.
@@ -550,6 +619,7 @@ function wwtcKidProgress(array $kid): array
         'metThisYear' => $metThisYear,
         'missionsTotal' => $missionsTotal,
         'priorMissions' => $priorMissions,
+        'missionHistory' => wwtcKidMissionHistoryByGrade($kid),
         'medal' => null,
         'current' => $current,
     ]);

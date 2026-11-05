@@ -267,8 +267,8 @@ export default function KidDashboard() {
               <div className="flex flex-col items-center gap-2">
                 <img src={asset('design/icon-book.webp')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
                 <div className="text-xs uppercase tracking-wide text-white/80">Kapitlach</div>
-                <div className="font-heb text-4xl font-bold leading-none text-white">{cur.quotaLabel}</div>
-                <div className="text-sm text-white/80">{cur.quota} kapitlach</div>
+                <div className="font-cond text-4xl leading-none text-white">{cur.quota}</div>
+                <div className="text-sm text-white/80">kapitlach</div>
               </div>
               <div className="flex flex-col items-center gap-2">
                 <img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
@@ -437,7 +437,7 @@ export default function KidDashboard() {
           </p>
         </Card>
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} />
 
         <MedalBoard
           progress={progress}

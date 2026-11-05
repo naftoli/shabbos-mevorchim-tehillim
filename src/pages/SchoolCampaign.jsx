@@ -9,6 +9,7 @@ import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { useLiveData } from '@/lib/useLiveData.js'
+import { raceMetric, rankByRace } from '@/lib/schoolRace.js'
 import {
   getSchool,
   schoolSoldierLeaderboard,
@@ -135,10 +136,10 @@ export default function SchoolCampaign() {
 
           {/* Class leaderboard — toggle the metric like the home page race */}
           {(() => {
-            const metricOf = (c) => (classSort === 'participated' ? (c.pctParticipated || 0) : classSort === 'finished' ? c.pctMet : classSort === 'kapitlach' ? c.pct : c.minutesPct)
-            const ranked = [...classes].sort(
-              (a, b) => metricOf(b) - metricOf(a) || b.pctMet - a.pctMet || b.pct - a.pct || a.name.localeCompare(b.name),
-            )
+            // Same ranking as the schools race: a tie on the selected metric breaks
+            // toward whoever has more of that metric's raw count (see rankByRace).
+            const metricOf = (c) => raceMetric(c, classSort)
+            const ranked = rankByRace(classes, classSort)
             return (
               <Card className="p-5 sm:p-6">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

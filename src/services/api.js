@@ -361,6 +361,15 @@ function demoKidProgress(id) {
       isCurrent: false,
     }
   })
+  // The demo roster only holds one prior year, so stand in a mission history for
+  // it under the prior grade — enough for the training board to draw real checks
+  // locally. Live builds the full multi-year history from DB marks (index.php).
+  const GRADE_SEQ = ['pre1a', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+  const gi = GRADE_SEQ.indexOf(String(kid.grade))
+  const priorGrade = gi > 0 ? GRADE_SEQ[gi - 1] : null
+  const missionHistory = priorGrade
+    ? { [priorGrade]: Object.fromEntries(historyMonths.filter((m) => m.met).map((m) => [m.month, Number(kid.ladder) || true])) }
+    : {}
   return {
     ...safeKid(kid, found.school, found.cls),
     months: months.map((m) => ({ ...m, reported: Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
@@ -368,6 +377,7 @@ function demoKidProgress(id) {
     priorMissions: kid.priorMissions,
     metThisYear: kid.metThisYear,
     missionsTotal: kid.missionsTotal,
+    missionHistory,
     medal: medalState(kid.missionsTotal),
     current: months.find((m) => m.isCurrent) ?? null,
   }
@@ -546,14 +556,17 @@ function demoSchool(id) {
     let said = 0
     let quota = 0
     let met = 0
+    let participated = 0
     let minsSaid = 0
     let minsQuota = 0
     for (const kid of cls.kids) {
-      said += kidMonthSaid(kid, CURRENT_MONTH)
+      const kidSaid = kidMonthSaid(kid, CURRENT_MONTH)
+      said += kidSaid
       quota += kidMonthQuota(kid, CURRENT_MONTH)
       minsSaid += kidMonthMinutes(kid, CURRENT_MONTH)
       minsQuota += quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)?.m ?? 0
       if (metQuota(kid, CURRENT_MONTH)) met += 1
+      if (reportedOf(kid, CURRENT_MONTH, CAMPAIGN_YEAR) && kidSaid > 0) participated += 1
     }
     const size = cls.kids.length
     return {
@@ -564,10 +577,13 @@ function demoSchool(id) {
       size,
       said,
       quota,
+      met,
+      participated,
+      minutesSaid: minsSaid,
       pct: quota > 0 ? Math.round((said / quota) * 100) : 0,
       pctMet: size > 0 ? Math.round((met / size) * 100) : 0,
+      pctParticipated: size > 0 ? Math.round((participated / size) * 100) : 0,
       minutesPct: minsQuota > 0 ? Math.round((minsSaid / minsQuota) * 100) : 0,
-      met,
       perfect: size > 0 && met === size,
     }
   })

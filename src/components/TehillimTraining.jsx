@@ -5,8 +5,8 @@ import { buildTraining } from '@/lib/trainingBoard.js'
 import { emitCue } from '@/lib/commanderBus.js'
 import { TRACK_SCRIPT } from '@/lib/commanderScripts.js'
 
-export default function TehillimTraining({ grade, ladder, months, priorMissions = 0 }) {
-  const board = buildTraining({ grade, ladder, months, priorMissions })
+export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory }) {
+  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory })
   const current = String(grade)
   const [open, setOpen] = useState(() => new Set([current]))
   const rootRef = useRef(null)
@@ -25,7 +25,11 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
     return () => observer.disconnect()
   }, [])
   const allOpen = board.boards.every((b) => open.has(b.grade))
-  const pct = board.total ? Math.round((board.done / board.total) * 100) : 0
+  // Lifetime missions earned (matches the medal board). The grid only draws checks
+  // for occasions we hold records for (this year), so the headline/bar use the
+  // lifetime total while earlier earned missions are summarized in the note below.
+  const earned = Number.isFinite(missionsTotal) ? missionsTotal : priorMissions + board.done
+  const pct = board.total ? Math.min(100, Math.round((earned / board.total) * 100)) : 0
 
   function toggle(g) {
     setOpen((prev) => {
@@ -48,7 +52,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
           </p>
         </div>
         <div className="text-right">
-          <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{board.done} checked · {board.total} missions on this ladder</p>
+          <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{earned} earned · {board.total} missions on this ladder</p>
           <button type="button" className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-navy underline sm:min-h-0" onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}>
             {allOpen ? 'Close all' : 'Expand all'}
           </button>
@@ -58,7 +62,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         </div>
       </div>
       <div className="relative mt-3 h-2.5 w-full overflow-hidden rounded-full bg-track">
-        <div className="h-full rounded-full" style={{ width: `${Math.max(pct, board.done ? 2 : 0)}%`, background: 'var(--grad-progress)' }} />
+        <div className="h-full rounded-full" style={{ width: `${Math.max(pct, earned ? 2 : 0)}%`, background: 'var(--grad-progress)' }} />
       </div>
       {priorMissions > 0 ? (
         <p className="relative mt-3 text-[13px] font-semibold text-navy/75">{priorMissions} earlier missions are on record in total. A line with no record is not a miss.</p>
@@ -81,10 +85,16 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
               {isOpen ? (
                 <div className="grid grid-cols-2 gap-1.5 px-4 pb-3 sm:grid-cols-4 lg:grid-cols-7">
                   {g.missions.map((m) => (
-                    <span key={m.key} className={`flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-center ${m.met ? 'bg-green/15 text-green ring-1 ring-green/30' : m.record ? 'bg-card text-navy ring-1 ring-line' : 'bg-card text-muted ring-1 ring-dashed ring-line'}`}>
+                    <span key={m.key} className={`relative flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-center ${m.met ? 'bg-green/15 text-green ring-1 ring-green/30' : m.record ? 'bg-card text-navy ring-1 ring-line' : 'bg-card text-muted ring-1 ring-dashed ring-line'}`}>
+                      {m.met ? (
+                        <svg viewBox="0 0 16 16" aria-hidden="true" className="absolute left-1 top-1 h-3.5 w-3.5 text-green">
+                          <circle cx="8" cy="8" r="8" fill="currentColor" />
+                          <path d="M4.5 8.2l2.3 2.3 4.4-4.6" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : null}
                       <span className="font-heb text-[13px] font-bold leading-none">{m.heb}</span>
                       <span className="text-[10px] font-semibold leading-tight">{m.minutes ? `${m.minutes} min` : '—'}{m.quotaLabel ? ` / ${m.quotaLabel}` : ''}</span>
-                      <span className="text-[10px] font-bold uppercase">{m.met ? 'Done' : m.record ? 'Reported' : 'No record'}</span>
+                      <span className="text-[10px] font-bold uppercase">{m.met ? (m.ladder ? `Done (Ladder ${m.ladder})` : 'Done') : m.record ? 'Reported' : 'No record'}</span>
                     </span>
                   ))}
                 </div>
