@@ -52,6 +52,7 @@ expect(str_contains($prompt, 'New month, new mission!'), 'new-month script');
 expect(str_contains($prompt, 'where you stand this month'), 'where-you-stand script');
 expect(str_contains($prompt, 'Your first streak is waiting to begin!'), 'no-streak script');
 expect(str_contains($prompt, 'This is your Tehillim training track, soldier.'), 'training-track script');
+expect(str_contains($prompt, "Now let's look at your climb to the whole Tehillim!"), 'climb script');
 expect(str_contains($prompt, 'chayolim'), 'pronounces chayolim');
 expect(str_contains($prompt, 'kapitel'), 'pronounces kapitel');
 expect(str_contains($prompt, 'Tehillim'), 'pronounces Tehillim');

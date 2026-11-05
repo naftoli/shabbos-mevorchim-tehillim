@@ -6,6 +6,7 @@ import { placeAmong } from '../../src/lib/placeRank.js'
 import {
   CHOOSING_SCRIPT,
   TRACK_SCRIPT,
+  fillClimb,
   TRAINING_NOT_NOW,
   fillMission,
   fillStand,
@@ -206,6 +207,25 @@ test('the training track script plays once per kid, only while that board is ope
   assert.equal(later.heard.track, true)
   assert.equal(later.heard.mission, false)
   assert.equal(selectCommanderScripts({ ...base, trackOpen: true, heard: later.heard }).some((item) => item.id === 'track'), false)
+})
+
+test('the climb script uses the ladder target grade and plays once per kid', () => {
+  const text = fillClimb(trainByGrade(9))
+  assert.match(text, /^Now let's look at your climb to the whole Tehillim!/)
+  assert.match(text, /until you reach the whole Tehillim by 9th grade\./)
+  assert.match(text, /Focus on your next mission\. That's the next step you're working toward!$/)
+  const missing = fillClimb(null)
+  assert.equal(missing.includes('by '), false)
+  assert.match(missing, /until you reach the whole Tehillim\./)
+  const store = memory()
+  const base = { name: 'Meir', ladder: 9, gradeLabel: '9th grade', heard: {}, streakCurrent: null, resultsReady: false }
+  assert.equal(selectCommanderScripts({ ...base, climbOpen: false }).some((item) => item.id === 'climb'), false)
+  assert.equal(selectCommanderScripts({ ...base, climbOpen: true }).at(-1).text, fillClimb('9th grade'))
+  rememberScript(store, 's4', 'Kislev', 'climb')
+  const later = readKidScripts(store, 's4', 'Tevet')
+  assert.equal(later.heard.climb, true)
+  assert.equal(later.heard.mission, false)
+  assert.equal(selectCommanderScripts({ ...base, climbOpen: true, heard: later.heard }).some((item) => item.id === 'climb'), false)
 })
 
 test('a spoken yes or no is the welcome answer, and Hebrew words keep their speech forms', () => {

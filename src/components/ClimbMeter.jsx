@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { QUOTA, MONTHS, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
 import { asset } from '@/lib/asset.js'
 import { CrownIcon } from '@/components/ui.jsx'
@@ -24,6 +25,21 @@ function gradeMarks(ladder) {
 }
 
 export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen }) {
+  const rootRef = useRef(null)
+  useEffect(() => {
+    const node = rootRef.current
+    if (!node || typeof IntersectionObserver !== 'function') {
+      window.dispatchEvent(new CustomEvent('wwtc-climb-open'))
+      return undefined
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      window.dispatchEvent(new CustomEvent('wwtc-climb-open'))
+      observer.disconnect()
+    }, { threshold: 0.35 })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
   const r = Math.max(0, Math.min(TOTAL, reached))
   const t = Math.max(0, Math.min(TOTAL, target))
   const pct = (n) => (n / TOTAL) * 100
@@ -58,7 +74,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
   const bottomSpace = `${sides.below.length ? BELOW_BASE + sides.below.length * ROW + 0.4 : 0.6}rem`
 
   return (
-    <button type="button" onClick={onOpen} className="block w-full rounded-2xl bg-paper/70 p-5 text-left sm:p-6">
+    <button type="button" ref={rootRef} id="tehillim-climb" onClick={onOpen} className="block w-full rounded-2xl bg-paper/70 p-5 text-left sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="sh">Your climb to the whole Tehillim</p>

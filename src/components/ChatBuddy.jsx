@@ -309,6 +309,7 @@ export default function ChatBuddy() {
   // Which soldier already got the auto-opened panel this login.
   const [openedFor, setOpenedFor] = useState(null)
   const [trackOpen, setTrackOpen] = useState(false)
+  const [climbOpen, setClimbOpen] = useState(false)
   const [commanderPref, setCommanderPref] = useState(() => {
     try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
   })
@@ -327,6 +328,7 @@ export default function ChatBuddy() {
     setEngine('scripted')
     setMessages([])
     setTrackOpen(false)
+    setClimbOpen(false)
     resetCues()
     greetedId.current = null
   }
@@ -420,6 +422,7 @@ export default function ChatBuddy() {
     streakCurrent: streaks ? streaks.current : null,
     streakLongest: streaks ? streaks.best : null,
     trackOpen,
+    climbOpen,
   }
   const dueNow = ctx ? selectCommanderScripts(scriptInput) : []
   const suppressLegacy = ctx ? suppressLegacyGreeting(scriptInput) : false
@@ -436,6 +439,7 @@ export default function ChatBuddy() {
     quota.kapitlach ?? '',
     quota.minutes ?? '',
     trackOpen ? 'track' : '',
+    climbOpen ? 'climb' : '',
   ].join('~')
   const quickReplies = !ctx
     ? []
@@ -460,8 +464,13 @@ export default function ChatBuddy() {
 
   useEffect(() => {
     const onTraining = () => setTrackOpen(true)
+    const onClimb = () => setClimbOpen(true)
     window.addEventListener('wwtc-training-open', onTraining)
-    return () => window.removeEventListener('wwtc-training-open', onTraining)
+    window.addEventListener('wwtc-climb-open', onClimb)
+    return () => {
+      window.removeEventListener('wwtc-training-open', onTraining)
+      window.removeEventListener('wwtc-climb-open', onClimb)
+    }
   }, [])
 
   // Latest values for async speech/mic callbacks. Written here, not during render.

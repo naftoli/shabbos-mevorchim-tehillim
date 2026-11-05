@@ -18,9 +18,9 @@ import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
-import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueJourney, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
+import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
-import { fillStand, fillStreak, standFacts } from '@/lib/commanderScripts.js'
+import { fillClimb, fillStand, fillStreak, standFacts, trainByGrade } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions, } from '@/lib/streaks.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
@@ -486,7 +486,10 @@ export default function KidDashboard() {
             ladder={kid.ladder}
             finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
             gender={kid.gender || progress.gender}
-            onOpen={() => emitCue('journey', cueJourney())}
+            onOpen={() => {
+              const text = fillClimb(trainByGrade(kid.ladder))
+              if (text) emitCue(`climb-${kid.id}`, text, { force: true })
+            }}
           />
         </Card>
       </div>
