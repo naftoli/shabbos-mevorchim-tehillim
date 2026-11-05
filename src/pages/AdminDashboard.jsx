@@ -24,7 +24,12 @@ import {
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
   const { data: dedication, reload: reloadDedication } = useLiveData(() => getArmyDedication(), [])
-  const [text, setText] = useState(dedication?.text || '')
+  // getArmyDedication is async, so `dedication` is null on the first render and
+  // arrives a moment later. `draft` is null until the admin actually types;
+  // until then the textarea shows whatever is already saved (`dedication.text`),
+  // so returning to the page always shows the existing dedication.
+  const [draft, setDraft] = useState(null)
+  const text = draft ?? (dedication?.text || '')
   const [savedNote, setSavedNote] = useState('')
   return (
     <Card className="p-5 sm:p-6">
@@ -44,7 +49,7 @@ function HqTools() {
       ) : null}
       <div className="mt-5">
         <p className="sh">Army dedication</p>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="This month’s Tehillim is dedicated…" className="mt-2 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-navy" />
+        <textarea value={text} onChange={(e) => setDraft(e.target.value)} rows={3} placeholder="This month’s Tehillim is dedicated…" className="mt-2 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-navy" />
         <Button variant="navy" className="mt-2" onClick={async () => { await setArmyDedication(text); setSavedNote('Saved for this month.'); reloadDedication() }}>Save dedication</Button>
         {savedNote ? <p className="mt-2 text-sm text-green">{savedNote}</p> : null}
       </div>

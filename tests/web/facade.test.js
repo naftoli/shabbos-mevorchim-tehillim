@@ -245,3 +245,58 @@ test('adminSetLadder PUTs the scope and sends an admin token', async () => {
   assert.deepEqual(lastCall().body, { schoolId: 89, classId: 555, kidId: 7, ladder: 10 })
   api.endSession('admin')
 })
+
+test('getSchool passes through the saved dedication (admin editor + campaign page read it)', async () => {
+  reset()
+  mock({
+    'GET /schools/89': {
+      body: { id: 89, name: 'Test School', kids: 100, pct: 50, dedication: { text: 'In memory of…', month: 'Cheshvan', year: 5786 } },
+    },
+  })
+  const s = await api.getSchool(89)
+  assert.equal(s.dedication.text, 'In memory of…')
+  assert.equal(s.dedication.month, 'Cheshvan')
+})
+
+test('getArmyDedication GETs scope=army and unwraps {dedication}', async () => {
+  reset()
+  mock({ 'GET /dedication?scope=army': { body: { storage: 'ready', dedication: { text: 'For the army', month: 'Cheshvan', year: 5786 } } } })
+  const d = await api.getArmyDedication()
+  assert.equal(d.text, 'For the army')
+  assert.match(lastCall().apiPath, /^\/dedication\?scope=army$/)
+})
+
+test('setSchoolDedication PUTs scope=school with the school id and text, as admin', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok5', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
+    'PUT /dedication': { body: { dedication: { text: 'In memory of…', year: 5786, month: 'Cheshvan' } } },
+  })
+  await api.verifyAdmin('x', 'y')
+  const d = await api.setSchoolDedication(89, 'In memory of…')
+  assert.equal(d.text, 'In memory of…')
+  assert.equal(lastCall().method, 'PUT')
+  assert.equal(lastCall().apiPath, '/dedication')
+  assert.equal(lastCall().body.scope, 'school')
+  assert.equal(lastCall().body.schoolId, 89)
+  assert.equal(lastCall().body.text, 'In memory of…')
+  assert.match(lastCall().headers.Authorization, /^Bearer atok5$/)
+  api.endSession('admin')
+})
+
+test('setArmyDedication PUTs scope=army as admin', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok6', expiresIn: 43200, admin: { kind: 'super' } } },
+    'PUT /dedication': { body: { dedication: { text: 'For the army', year: 5786, month: 'Cheshvan' } } },
+  })
+  await api.verifyAdmin('hq', 'pw')
+  await api.setArmyDedication('For the army')
+  assert.equal(lastCall().method, 'PUT')
+  assert.equal(lastCall().body.scope, 'army')
+  assert.equal(lastCall().body.text, 'For the army')
+  assert.match(lastCall().headers.Authorization, /^Bearer atok6$/)
+  api.endSession('admin')
+})
