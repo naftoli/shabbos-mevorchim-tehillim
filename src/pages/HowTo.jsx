@@ -2,21 +2,58 @@ import { useEffect, useRef, useState } from 'react'
 import { Card, Button } from '@/components/ui.jsx'
 import { asset } from '@/lib/asset.js'
 
+// Milestone copy stays exactly as published. The first ten names are crops of
+// design/how/medals.webp (1600×146); left/width are the opaque coin bounds.
+// Bronze, Silver, and Gold are milestones on this page but are not drawn in
+// that strip. Their disc colors are the ones already used in src/lib/medals.js.
+const SPRITE_W = 1600
+const SPRITE_H = 146
 const MEDALS = [
-  ['5', 'White'],
-  ['11', 'Red'],
-  ['18', 'Orange'],
-  ['26', 'Yellow'],
-  ['35', 'Green'],
-  ['45', 'Blue'],
-  ['56', 'Purple'],
-  ['68', 'Brown'],
-  ['81', 'Gray'],
-  ['95', 'Black'],
-  ['110', 'Bronze'],
-  ['126', 'Silver'],
-  ['143', 'Gold'],
+  ['5', 'White', { left: 1, width: 148 }],
+  ['11', 'Red', { left: 162, width: 148 }],
+  ['18', 'Orange', { left: 323, width: 148 }],
+  ['26', 'Yellow', { left: 485, width: 147 }],
+  ['35', 'Green', { left: 646, width: 147 }],
+  ['45', 'Blue', { left: 807, width: 147 }],
+  ['56', 'Purple', { left: 968, width: 147 }],
+  ['68', 'Brown', { left: 1129, width: 148 }],
+  ['81', 'Gray', { left: 1290, width: 148 }],
+  ['95', 'Black', { left: 1451, width: 148 }],
+  ['110', 'Bronze', { color: '#8c6239', ink: '#ffffff' }],
+  ['126', 'Silver', { color: '#c5ced6', ink: '#1b2a4e' }],
+  ['143', 'Gold', { color: '#e0b000', ink: '#1b2a4e' }],
 ]
+
+function MedalMark({ n, art }) {
+  if (art.left != null) {
+    return (
+      <span
+        aria-hidden="true"
+        className="mx-auto block w-[5.75rem] bg-no-repeat sm:w-[7.25rem] md:w-36"
+        style={{
+          aspectRatio: `${art.width} / ${SPRITE_H}`,
+          backgroundImage: `url("${asset('design/how/medals.webp')}")`,
+          backgroundSize: `${(SPRITE_W / art.width) * 100}% 100%`,
+          backgroundPosition: `${(100 * art.left) / (SPRITE_W - art.width)}% 0`,
+        }}
+      />
+    )
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="mx-auto grid w-[5.75rem] place-items-center rounded-full font-display text-2xl font-black tabular-nums sm:w-[7.25rem] sm:text-3xl md:w-36 md:text-4xl"
+      style={{
+        aspectRatio: '1',
+        background: `radial-gradient(circle at 32% 28%, rgba(255,255,255,.62), rgba(255,255,255,0) 46%), ${art.color}`,
+        color: art.ink,
+        boxShadow: 'inset 0 0 0 3px rgba(255,255,255,.7), inset 0 0 0 5px rgba(29,38,85,.16), 0 6px 14px rgba(29, 38, 85, 0.22)',
+      }}
+    >
+      {n}
+    </span>
+  )
+}
 
 // Small section marks. Same rendered height on every section (56px, 64px from sm).
 const ICONS = {
@@ -95,9 +132,9 @@ function Banner({ src, alt, width, height, scroll }) {
     />
   )
   if (!scroll) return img
-  // The medal row is very wide. On a phone, content width would shrink each
-  // coin to a sliver, so the row scrolls until the card is wide enough.
-  // The fade shows only while more coins are waiting off to the right.
+  // A wide chart would shrink to a sliver if it had to fit the card, so it
+  // scrolls until the card is wide enough. The fade shows only while more
+  // of the chart is waiting off to the right.
   return (
     <div className="relative">
       <div ref={scroller} className="overflow-x-auto touch-pan-x [scrollbar-width:thin]">{img}</div>
@@ -152,18 +189,14 @@ export default function HowTo() {
 
         <Block title="Medals">
           <p>Celebrate your progress, one medal at a time.</p>
-          <Banner
-            src="design/how/medals.webp"
-            width={1600}
-            height={146}
-            scroll
-            alt="Row of Tehillim medals for 5 white, 11 red, 18 orange, 26 yellow, 35 green, 45 blue, 56 purple, 68 brown, 81 gray, and 95 black missions"
-          />
           <p>Complete your quota for 5 missions to earn your white Tehillim medal. Complete 6 more missions - 11 in total - to earn your red medal. Each new medal takes one more mission than the last step.</p>
           <p>Your medal milestones, in total completed missions:</p>
-          <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
-            {MEDALS.map(([n, name]) => (
-              <li key={name} className="font-semibold text-navy">{n} - {name}</li>
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-6">
+            {MEDALS.map(([n, name, art]) => (
+              <li key={name} className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+                <MedalMark n={n} art={art} />
+                <span className="font-semibold leading-tight text-navy">{n} - {name}</span>
+              </li>
             ))}
           </ul>
           <p>Every completed mission brings you closer to your next medal. If you miss a mission, the progress you've earned stays with you.</p>
