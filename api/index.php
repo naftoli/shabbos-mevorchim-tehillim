@@ -88,6 +88,40 @@ function wwtcCmpSchoolRace(array $a, array $b): int
         ?: strcmp($a['name'], $b['name']);
 }
 
+/** True when two already-sorted rows share every ranking metric (not the name). */
+function wwtcScoreTie(array $a, array $b, array $keys): bool
+{
+    foreach ($keys as $key) {
+        if ((float) ($a[$key] ?? 0) != (float) ($b[$key] ?? 0)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Competition place in a list that is already best-first.
+ * Ties share a rank and the next place skips. 0 means the id was not found.
+ */
+function wwtcCompetitionRank(array $rows, $id, callable $idOf, array $keys): int
+{
+    $n = count($rows);
+    $i = 0;
+    while ($i < $n) {
+        $j = $i + 1;
+        while ($j < $n && wwtcScoreTie($rows[$i], $rows[$j], $keys)) {
+            $j++;
+        }
+        for ($k = $i; $k < $j; $k++) {
+            if ($idOf($rows[$k]) === $id) {
+                return $i + 1;
+            }
+        }
+        $i = $j;
+    }
+    return 0;
+}
+
 /**
  * [school_id => logo URL|null] for the WWTC roster. One query, cached for the
  * request: /schools, /schools/:id and the army report all read it.
@@ -1188,10 +1222,12 @@ if ($method === 'GET' && $path === '/me/social') {
         return $b['pctMet'] <=> $a['pctMet'] ?: $b['met'] <=> $a['met'];
     });
     $myClassId = (int) $kid['class_id'];
-    $classRank = 0; $className = ''; $classSize = 0; $aheadName = null;
+    $classRank = wwtcCompetitionRank($classes, $myClassId, static function ($row) {
+        return (int) $row['id'];
+    }, ['pctMet', 'met']);
+    $className = ''; $classSize = 0; $aheadName = null;
     foreach ($classes as $i => $c) {
         if ($c['id'] === $myClassId) {
-            $classRank = $i + 1;
             $className = $c['name'];
             $classSize = $c['size'];
             $aheadName = $i > 0 ? $classes[$i - 1]['name'] : null;
@@ -1206,24 +1242,16 @@ if ($method === 'GET' && $path === '/me/social') {
     usort($mates, static function ($a, $b) {
         return $b['said'] <=> $a['said'];
     });
-    $myRank = 0;
-    foreach ($mates as $i => $s) {
-        if ($s['id'] === (int) $kid['user_id']) {
-            $myRank = $i + 1;
-            break;
-        }
-    }
+    $myRank = wwtcCompetitionRank($mates, (int) $kid['user_id'], static function ($row) {
+        return (int) $row['id'];
+    }, ['said']);
     $schoolmates = $data['students'];
     usort($schoolmates, static function ($a, $b) {
         return $b['said'] <=> $a['said'];
     });
-    $myRankInSchool = 0;
-    foreach ($schoolmates as $i => $s) {
-        if ($s['id'] === (int) $kid['user_id']) {
-            $myRankInSchool = $i + 1;
-            break;
-        }
-    }
+    $myRankInSchool = wwtcCompetitionRank($schoolmates, (int) $kid['user_id'], static function ($row) {
+        return (int) $row['id'];
+    }, ['said']);
     $classPerfect = false;
     foreach ($data['classes'] as $c) {
         if ($c['id'] === $myClassId) {
@@ -1235,13 +1263,9 @@ if ($method === 'GET' && $path === '/me/social') {
     // School standing nationwide — same Race order as Home (% soldiers met first).
     // Previously ranked by raw kapitlach said, which disagreed with the main page.
     $ranked = wwtcNationwideSchools();
-    $schoolRank = 0;
-    foreach ($ranked as $i => $row) {
-        if ((int) $row['id'] === $schoolId) {
-            $schoolRank = $i + 1;
-            break;
-        }
-    }
+    $schoolRank = wwtcCompetitionRank($ranked, $schoolId, static function ($row) {
+        return (int) $row['id'];
+    }, ['pctMet', 'saidMonth', 'pct', 'minutesPct']);
 
     // How many more classmates finishing would pass the class ahead (pctMet).
     $needToPass = 0;

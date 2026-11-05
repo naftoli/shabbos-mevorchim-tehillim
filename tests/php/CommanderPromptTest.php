@@ -46,6 +46,16 @@ expect(!str_contains($prompt, 'should not be copied'), 'drops client answer shee
 expect(!str_contains($prompt, 'Frierdiker'), 'does not teach unconfirmed history');
 expect(!str_contains($prompt, 'Suggested answer'), 'does not leak sheet notes');
 expect(str_contains($prompt, 'OFF TOPIC. Say only:'), 'homework and jokes are refused');
+expect(str_contains($prompt, 'Would you like to start training toward saying the entire Tehillim each Shabbos Mevorchim?'), 'welcome script');
+expect(str_contains($prompt, 'tap PICK THIS LADDER'), 'choosing-a-ladder script');
+expect(str_contains($prompt, 'New month, new mission!'), 'new-month script');
+expect(str_contains($prompt, 'where you stand this month'), 'where-you-stand script');
+expect(str_contains($prompt, 'Your first streak is waiting to begin!'), 'no-streak script');
+expect(str_contains($prompt, 'This is your Tehillim training track, soldier.'), 'training-track script');
+expect(str_contains($prompt, 'chayolim'), 'pronounces chayolim');
+expect(str_contains($prompt, 'kapitel'), 'pronounces kapitel');
+expect(str_contains($prompt, 'Tehillim'), 'pronounces Tehillim');
+expect(str_contains($prompt, 'scriptNow'), 'filled scripts come from the child');
 
 $payload = wwtcRealtimeSessionPayload(['name' => 'Mushky'], 'gpt-realtime-2.1', 'marin');
 $session = $payload['session'];

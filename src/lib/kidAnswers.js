@@ -261,7 +261,7 @@ export function voiceCommand(text) {
   const t = norm(text)
   if (/^(stop talking|be quiet|please be quiet|stop talking please)$/.test(t)) return 'stop'
   if (/^(talk again|you can talk|start talking)$/.test(t)) return 'unmute'
-  if (/^(say that again|repeat that|what did you say)$/.test(t)) return 'repeat'
+  if (/^(say that again|repeat that|what did you say|hear that again|hear it again|hear the welcome again)$/.test(t)) return 'repeat'
   return null
 }
 
