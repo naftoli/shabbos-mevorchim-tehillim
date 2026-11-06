@@ -20,7 +20,7 @@ import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
 import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
-import { fillClimb, fillStand, fillStreak, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
+import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions, } from '@/lib/streaks.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
@@ -421,16 +421,6 @@ export default function KidDashboard() {
             <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.best} <span className="text-lg">missions</span></p>
           </div>
           <p className="sm:col-span-2 text-sm text-muted">A streak is missions you complete in a row. A recorded miss starts the next one at 1. Your longest streak stays. A month with no record is not counted as a miss.</p>
-          <button
-            type="button"
-            className="sm:col-span-2 text-left text-sm font-semibold text-blue"
-            onClick={() => {
-              const text = fillStreak({ current: streaks.current, longest: streaks.best })
-              if (text) emitCue(`streak-${cur.month}`, text, { force: true })
-            }}
-          >
-            Hear it again
-          </button>
         </Card>
 
         {advice ? (

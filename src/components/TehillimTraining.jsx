@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
 import { buildTraining } from '@/lib/trainingBoard.js'
-import { emitCue } from '@/lib/commanderBus.js'
-import { TRACK_SCRIPT } from '@/lib/commanderScripts.js'
 
 export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory }) {
   const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory })
@@ -60,9 +58,6 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
             onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}
           >
             {allOpen ? 'Close all' : 'Expand all'}
-          </button>
-          <button type="button" className="mt-1 block text-sm font-semibold text-blue" onClick={() => emitCue('track-replay', TRACK_SCRIPT, { force: true })}>
-            Hear it again
           </button>
         </div>
       </div>

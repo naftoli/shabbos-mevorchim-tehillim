@@ -361,8 +361,6 @@ export default function ChatBuddy() {
   const liveHandlersRef = useRef(() => ({}))
   const scriptInputRef = useRef(null)
   const trainingRef = useRef(null)
-  const lastScriptRef = useRef(null)
-
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social, loading: socialLoading } = useLiveData(
     () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
@@ -445,11 +443,11 @@ export default function ChatBuddy() {
     ? []
     : !ctx.ladder
       ? (storedScripts.training === 'yes'
-        ? ['Hear that again', 'How does it work?']
+        ? ['How does it work?']
         : storedScripts.training === 'no'
-          ? ['Start training', 'Hear that again']
-          : ['Yes', 'Not now', 'Hear that again'])
-      : ['Hear that again', ...quickRepliesFor(ctx)].slice(0, 4)
+          ? ['Start training']
+          : ['Yes', 'Not now'])
+      : quickRepliesFor(ctx).slice(0, 4)
   if (kid && ctx && (pinnedGreeting == null || pinnedGreeting.id !== kid.id)) {
     setPinnedGreeting({ id: kid.id, text: ctx.greeting, situation: ctx.situation })
   }
@@ -991,21 +989,10 @@ export default function ChatBuddy() {
     else node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
   }, [messages, typing])
 
-  function replayScript(text) {
-    if (!text) return
-    stopListening()
-    lastScriptRef.current = { text }
-    callModeRef.current = true
-    if (canListen()) setVoice(true)
-    const statusPromise = say(text)
-    if (canListen() && !listenHandle.current) beginListening()
-    void statusPromise
-  }
-
   // Official scripts, then the older short greeting when no script owns this visit.
   // Login is a click, so speech usually starts right away. A new moment (yes,
   // ladder cards, a new month) may speak again. A script already heard this
-  // month stays quiet until the child taps Hear again.
+  // month stays quiet.
   useEffect(() => {
     if (!kid) {
       bootGen.current += 1
@@ -1051,7 +1038,6 @@ export default function ChatBuddy() {
             text: item.text,
             scriptId: item.id,
           }))
-          if (add.length) lastScriptRef.current = add[add.length - 1]
           return add.length ? [...m, ...add] : m
         })
         openRef.current = true
@@ -1244,11 +1230,6 @@ export default function ChatBuddy() {
                   className={`inline-block max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-[14px] leading-snug ${m.from === 'kid' ? 'rounded-br-md bg-navy text-white' : 'rounded-bl-md bg-card text-navy ring-1 ring-line'}`}
                 >
                   {m.text}
-                  {m.scriptId && m.scriptId !== 'replay' ? (
-                    <button type="button" onClick={() => replayScript(m.text)} className="mt-2 block text-[12px] font-semibold text-blue">
-                      Hear again
-                    </button>
-                  ) : null}
                 </span>
               </div>
             ))}
