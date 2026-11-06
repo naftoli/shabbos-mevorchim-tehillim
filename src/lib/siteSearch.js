@@ -62,14 +62,38 @@ function wordsOf(passage) {
   return tokens(`${passage.title} ${passage.text}`)
 }
 
+function near(a, b) {
+  if (!a || !b || a.length < 5 || b.length < 5) return false
+  if (Math.abs(a.length - b.length) > 1) return false
+  if (a === b) return true
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i += 1) {
+    let left = i
+    let best = i
+    for (let j = 1; j <= b.length; j += 1) {
+      const next = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : Math.min(prev[j] + 1, left + 1, prev[j - 1] + 1)
+      prev[j - 1] = left
+      left = next
+      if (next < best) best = next
+    }
+    prev[b.length] = left
+    if (best > 1) return false
+  }
+  return prev[b.length] <= 1
+}
+
 function scorePassage(queryTokens, passage) {
   if (!queryTokens.length) return 0
-  const literal = new Set(wordsOf(passage))
+  const literal = wordsOf(passage)
+  const exact = new Set(literal)
   let hit = 0
   for (const word of queryTokens) {
     const base = stem(word)
-    if (literal.has(word) || literal.has(base)) hit += 1
-    else if (family(word).some((option) => literal.has(option))) hit += 0.55
+    if (exact.has(word) || exact.has(base)) hit += 1
+    else if (family(word).some((option) => exact.has(option))) hit += 0.55
+    else if (literal.some((option) => near(word, option) || near(base, option))) hit += 0.7
   }
   return hit / queryTokens.length
 }
