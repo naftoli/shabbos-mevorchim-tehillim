@@ -16,6 +16,7 @@ require __DIR__ . '/marking.php';
 require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
 require __DIR__ . '/soldierBoard.php';
+require __DIR__ . '/soldierRank.php';
 
 function wwtcRoutePath(): string
 {
@@ -607,6 +608,7 @@ function wwtcKidMissionHistoryByGrade(array $kid): array
  */
 function wwtcKidProgress(array $kid): array
 {
+    global $MASHPIA_DB;
     $months = wwtcKidMonths($kid);
     $metThisYear = 0;
     $current = null;
@@ -627,6 +629,8 @@ function wwtcKidProgress(array $kid): array
         'priorMissions' => $priorMissions,
         'missionHistory' => wwtcKidMissionHistoryByGrade($kid),
         'medal' => null,
+        // Tzivos Hashem rank (all campaigns), not a label from Tehillim medals.
+        'rank' => wwtcCurrentRank($MASHPIA_DB, (int) $kid['user_id']),
         'current' => $current,
     ]);
 }

@@ -17,7 +17,7 @@ import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
-import { rankForMedals, isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
+import { isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
 import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
 import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
@@ -237,7 +237,7 @@ export default function KidDashboard() {
               <div className="min-w-0 flex-1">
                 <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
                 <p className="mt-1.5 leading-snug text-white/80">{kid.className} · {kid.schoolName}</p>
-                <p className="mt-1 text-sm font-semibold text-gold">Rank · {rankForMedals(progress.medal?.earnedCount)}</p>
+                {progress.rank ? <p className="mt-1 text-sm font-semibold text-gold">Rank · {progress.rank}</p> : null}
               </div>
             </div>
             <div className="flex items-center gap-2.5">

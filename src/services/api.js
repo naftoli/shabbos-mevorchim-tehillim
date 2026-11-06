@@ -4,7 +4,7 @@
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
-import { canSeeClassRoll } from '@/lib/decisions.js'
+import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
@@ -370,6 +370,7 @@ function demoKidProgress(id) {
   const missionHistory = priorGrade
     ? { [priorGrade]: Object.fromEntries(historyMonths.filter((m) => m.met).map((m) => [m.month, Number(kid.ladder) || true])) }
     : {}
+  const medal = medalState(kid.missionsTotal)
   return {
     ...safeKid(kid, found.school, found.cls),
     months: months.map((m) => ({ ...m, reported: Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
@@ -378,7 +379,8 @@ function demoKidProgress(id) {
     metThisYear: kid.metThisYear,
     missionsTotal: kid.missionsTotal,
     missionHistory,
-    medal: medalState(kid.missionsTotal),
+    medal,
+    rank: rankForMedals(medal.earnedCount),
     current: months.find((m) => m.isCurrent) ?? null,
   }
 }

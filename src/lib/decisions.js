@@ -57,10 +57,10 @@ export const LADDER_REENGAGE_MISSIONS = 3
 export const GENTLER_LADDER_MISSES = 3
 
 /**
- * Rank. Only these two steps are defined. Below them the chayol is a Soldier.
+ * Demo-only labels, from Tehillim medals alone. The live personal page shows
+ * the soldier's Tzivos Hashem rank from rank_marks (every campaign's medals).
  * Promotion is NOT announced by the commander until RANK_PROMOTION_ANNOUNCE
- * is true — the full schedule is still open, and rank is not inferred out loud
- * from medals alone.
+ * is true, and rank is not inferred out loud from medals alone.
  */
 export const RANK_SCHEDULE = [
   { medals: 3, rank: 'Sergeant' },
