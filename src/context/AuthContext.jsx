@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { verifyKid, verifyAdmin, getKid, setKidLadder, endSession } from '@/services/api.js'
+import { verifyKid, verifyKidHandoff, verifyAdmin, getKid, setKidLadder, endSession } from '@/services/api.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 
 // Session store. Demo mode verifies against the anonymized roster; live mode
@@ -64,6 +64,17 @@ export function AuthProvider({ children }) {
     return found
   }, [])
 
+  // Same session as loginKid(), from the parent site's code instead of the
+  // child's serial and date of birth.
+  const loginKidWithHandoff = useCallback(async (code) => {
+    const found = await verifyKidHandoff(code)
+    if (found) {
+      setKid(found)
+      save(KID_KEY, found)
+    }
+    return found
+  }, [])
+
   const loginAdmin = useCallback(async (username, password) => {
     const found = await verifyAdmin(username, password)
     if (!found) throw new Error('That username or password is not correct.')
@@ -93,12 +104,13 @@ export function AuthProvider({ children }) {
       isAdmin: !!admin,
       isSuper: admin?.kind === 'super',
       loginKid,
+      loginKidWithHandoff,
       loginAdmin,
       logoutKid,
       logoutAdmin,
       changeLadder,
     }),
-    [kid, admin, loginKid, loginAdmin, logoutKid, logoutAdmin, changeLadder],
+    [kid, admin, loginKid, loginKidWithHandoff, loginAdmin, logoutKid, logoutAdmin, changeLadder],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

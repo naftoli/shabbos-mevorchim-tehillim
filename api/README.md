@@ -13,6 +13,8 @@ returns the figures those reports show.
 Reads — all implemented (same figures as the WWTC report pages):
 
 - `POST /soldier/login` — `{ serial, dob: "YYYY-MM-DD" }` → `{ token, expiresIn, soldier }`
+- `POST /parent/handoff` — `{ parent, child }` → `{ code, expiresIn }` (parent mobile session; one of that parent's registered children)
+- `POST /soldier/handoff` — `{ code }` → the same kid session as `/soldier/login`. The parent site opens `/shabbos-mevorchim-tehillim/?handoff=<code>`, and the SPA lands on the personal page.
 - `POST /admin/login` — `{ username, password }` → `{ token, expiresIn, admin }`
 - `GET /campaign` — `{ year, currentMonth, currentMonthIndex, months[], monthDates }`
 - `GET /stats` — nationwide totals:

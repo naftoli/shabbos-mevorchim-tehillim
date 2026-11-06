@@ -131,6 +131,19 @@ export async function verifyKid(serial, dob) {
   }
 }
 
+/**
+ * The parent site's one-tap sign-in: trade the short-lived code it put in our
+ * URL for the same session POST /soldier/login issues.
+ */
+export async function verifyKidHandoff(code) {
+  const { token, expiresIn, soldier } = await req('/soldier/handoff', {
+    method: 'POST',
+    body: { code },
+  })
+  saveToken('kid', token, expiresIn)
+  return soldier
+}
+
 export async function verifyAdmin(username, password) {
   try {
     const { token, expiresIn, admin } = await req('/admin/login', {

@@ -25,6 +25,9 @@ define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 const WWTC_SUBJECT_ID = 1;
 // date_tasks.grid_id for the two tracked tasks.
 const WWTC_GRID_KAPITELACH = 8001;
+// How long a parent's handoff code stays valid, in seconds. Long enough for
+// the tap on the parent site to open the personal page, and no longer.
+const WWTC_HANDOFF_TTL = 120;
 const WWTC_GRID_MINUTES = 8002;
 // Master switch for Rosh Hashana / Yom Kippur boards, reports and personal-page
 // missions. OFF until further notice, for every year — even where marks exist
@@ -433,6 +436,88 @@ function wwtcIssueToken(string $type, int $id, array $extra = []): string
         'iat' => time(),
         'exp' => time() + max(300, $ttl),
     ], $extra));
+}
+
+/**
+ * A single-child code the parent site hands to the SPA in a URL
+ * (POST /parent/handoff). It only names a child: it carries no parent session
+ * and cannot call anything. The SPA trades it for a real kid token.
+ */
+function wwtcIssueHandoffCode(int $userId): string
+{
+    return wwtcSignPayload([
+        'v' => 1,
+        'type' => 'handoff',
+        'id' => $userId,
+        'iat' => time(),
+        'exp' => time() + WWTC_HANDOFF_TTL,
+    ]);
+}
+
+/**
+ * The parent behind a mobile session token (the `admin` value the parent site
+ * posts to mobile/reg/ajax/*.php), or a 401.
+ *
+ * A parent is an ordinary admins row. This token buys exactly one thing here:
+ * a handoff code for a child of their own.
+ */
+function wwtcParentAdminId(string $mobileToken): int
+{
+    $adminId = \mashpia\api\auth\Auth::authenticate(['key' => $mobileToken], 'mobile');
+    if (!$adminId || !ctype_digit((string) $adminId)) {
+        wwtcError('Please sign in again on the parent site.', 401);
+    }
+    return (int) $adminId;
+}
+
+/** True when that parent account is linked to this registered child. */
+function wwtcParentOwnsChild(int $adminId, int $userId): bool
+{
+    global $MASHPIA_DB;
+    $stmt = $MASHPIA_DB->prepare(
+        "SELECT 1
+           FROM admin_auths aa
+           JOIN users u ON u.user_id = aa.id
+          WHERE aa.admin_id = :admin
+            AND aa.role_id = 1
+            AND aa.auth = 'user'
+            AND u.user_id = :user
+            AND u.user_registered > 0
+          LIMIT 1"
+    );
+    $stmt->execute([':admin' => $adminId, ':user' => $userId]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/** Per-IP cap for the handoff endpoints. Same idea as the Lulav API. */
+function wwtcRateLimit(string $bucket, int $limit, int $windowSeconds): void
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $file = wwtcCacheDir() . '/rate-' . hash('sha256', $bucket . '|' . $ip) . '.json';
+    $handle = @fopen($file, 'c+');
+    if (!$handle || !flock($handle, LOCK_EX)) {
+        if ($handle) {
+            fclose($handle);
+        }
+        return;
+    }
+    $raw = stream_get_contents($handle);
+    $state = $raw ? json_decode($raw, true) : null;
+    $now = time();
+    if (!is_array($state) || empty($state['started']) || $now - (int) $state['started'] >= $windowSeconds) {
+        $state = ['started' => $now, 'count' => 0];
+    }
+    $state['count']++;
+    $blocked = $state['count'] > $limit;
+    rewind($handle);
+    ftruncate($handle, 0);
+    fwrite($handle, (string) json_encode($state));
+    fflush($handle);
+    flock($handle, LOCK_UN);
+    fclose($handle);
+    if ($blocked) {
+        wwtcError('Too many sign-in attempts. Please try again later.', 429);
+    }
 }
 
 function wwtcActor(bool $required = true): ?array

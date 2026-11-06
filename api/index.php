@@ -664,6 +664,60 @@ if ($method === 'POST' && $path === '/soldier/login') {
     ]);
 }
 
+/**
+ * Parent site → SPA handoff, step one. The parent site holds the family's
+ * mobile session, not the child's serial and date of birth, and asks for a
+ * code that signs one of its own children in.
+ *
+ * The parent token arrives in the body rather than as a cookie on purpose:
+ * the app's webview does not reliably carry cookies into a fresh page load.
+ */
+if ($method === 'POST' && $path === '/parent/handoff') {
+    wwtcRateLimit('parent-handoff', 60, 900);
+    $input = wwtcInput();
+    $parentToken = trim((string) ($input['parent'] ?? ''));
+    $childId = (string) ($input['child'] ?? '');
+    if ($parentToken === '' || !preg_match('/^\d+$/', $childId)) {
+        wwtcError('A parent session and a child are required.', 422);
+    }
+    $adminId = wwtcParentAdminId($parentToken);
+    if (!wwtcParentOwnsChild($adminId, (int) $childId)) {
+        wwtcError('That child is not on this parent account.', 404);
+    }
+    $kid = wwtcKidByUserId((int) $childId);
+    if (!$kid) {
+        wwtcError('That child is not registered for Tehillim.', 404);
+    }
+    wwtcJson([
+        'code' => wwtcIssueHandoffCode((int) $kid['user_id']),
+        'expiresIn' => WWTC_HANDOFF_TTL,
+    ]);
+}
+
+/**
+ * Parent site → SPA handoff, step two. The SPA trades the code from its URL
+ * for the same kid session POST /soldier/login issues.
+ */
+if ($method === 'POST' && $path === '/soldier/handoff') {
+    wwtcRateLimit('kid-handoff', 30, 900);
+    $input = wwtcInput();
+    $code = trim((string) ($input['code'] ?? ''));
+    $payload = $code !== '' ? wwtcVerifySignedPayload($code) : null;
+    if (!$payload || ($payload['type'] ?? '') !== 'handoff') {
+        wwtcError('This sign-in link has expired. Please tap the button again.', 401);
+    }
+    $kid = wwtcKidByUserId((int) $payload['id']);
+    if (!$kid) {
+        wwtcError('That child is not registered for Tehillim.', 404);
+    }
+    $token = wwtcIssueToken('kid', (int) $kid['user_id'], ['serial' => (string) $kid['user_serial']]);
+    wwtcJson([
+        'token' => $token,
+        'expiresIn' => (int) (wwtcEnv('WWTC_TOKEN_TTL') ?: 43200),
+        'soldier' => wwtcSafeKid($kid),
+    ]);
+}
+
 if ($method === 'POST' && $path === '/admin/login') {
     $input = wwtcInput();
     $username = trim((string) ($input['username'] ?? ''));

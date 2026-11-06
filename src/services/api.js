@@ -279,6 +279,13 @@ export async function verifyKid(serial, dob) {
   return demoVerifyKid(serial, dob)
 }
 
+// Parent-site handoff. Demo data has no parents, so there is nothing to honour
+// here when the live API is off.
+export async function verifyKidHandoff(code) {
+  if (!IS_DEMO) return mashpia.verifyKidHandoff(code)
+  return null
+}
+
 function demoVerifyKid(serial, dob) {
   for (const school of ROSTER) {
     for (const cls of school.classes) {
