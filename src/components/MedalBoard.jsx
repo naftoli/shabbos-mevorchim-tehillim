@@ -1,18 +1,11 @@
 import { Link } from 'react-router-dom'
-import { MEDALS, MEDAL_THRESHOLDS } from '@/lib/medals.js'
+import { MEDALS, MEDAL_THRESHOLDS, isPreYearMedalNote } from '@/lib/medals.js'
 import { Card, CrownIcon } from './ui.jsx'
 import MedalCoin from './MedalCoin.jsx'
 import { fmt } from '@/lib/format.js'
 
-// One medal in the strip: the real coin when earned, dimmed when locked, with
-// its mission threshold beneath. Mirrors the Mashpia medal board's medal row.
 function StripMedal({ medal, earned, current }) {
-  return (
-    <span className="flex flex-col items-center gap-0.5">
-      <MedalCoin medal={medal} size={44} locked={!earned} active={current} />
-      <span className="font-cond text-[10px] font-semibold tabular-nums text-muted">{medal.threshold}</span>
-    </span>
-  )
+  return <MedalCoin medal={medal} size={52} locked={!earned} active={current} faces />
 }
 
 // Compact medal board on the dashboard — tap to open the full levels page.
@@ -44,12 +37,18 @@ export default function MedalBoard({ progress, earnBy, earnedOn, onMedal }) {
         {/* Medal strip */}
         <div className="mt-5 flex flex-wrap items-center gap-2 sm:justify-between">
           {MEDALS.map((m) => (
-            <button key={m.index} type="button" className="rounded-xl" onClick={(e) => { e.preventDefault(); onMedal?.(m) }}>
+            <button
+              key={m.index}
+              type="button"
+              className="rounded-xl"
+              aria-label={`${m.name} medal, ${m.index < earnedCount ? 'earned' : 'not earned'}, ${m.threshold} missions`}
+              onClick={(e) => { e.preventDefault(); onMedal?.(m) }}
+            >
               <StripMedal medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
             </button>
           ))}
         </div>
-        {earnedOn && medal.current ? <p className="mt-3 text-sm font-semibold text-navy">Your {medal.current.name} medal was earned {earnedOn}.</p> : null}
+        {earnedOn && medal.current && !isPreYearMedalNote(earnedOn) ? <p className="mt-3 text-sm font-semibold text-navy">Your {medal.current.name} medal was earned {earnedOn}.</p> : null}
 
         {/* Progress bar — grey track, next-medal fill, centred label */}
         <div className="relative mt-4 h-6 w-full overflow-hidden rounded-full" style={{ background: '#c5cbd9' }}>

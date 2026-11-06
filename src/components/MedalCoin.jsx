@@ -1,11 +1,50 @@
 import { asset } from '@/lib/asset.js'
+import { medalFace } from '@/lib/medals.js'
 
-// A single medal. When the tier has real coin art (public/design/coin-<name>.png,
-// the shield coins the client supplied) we show it; otherwise we fall back to a
-// CSS-rendered coin carrying the mission threshold. `locked` dims unearned tiers,
-// `active` gives the tier in progress a gold glow.
-export default function MedalCoin({ medal, size = 44, locked = false, active = false, className = '' }) {
-  const label = `${medal.name} — ${medal.threshold} missions${locked ? '' : ' · earned'}`
+// A single medal. Crest files are public/design/coin-<name>.png. The numbered
+// reverse for those ten tiers is cropped from the official How It Works strip.
+// Tiers without that art keep the plain disc. `faces` is the dashboard strip:
+// earned shows the reverse (or a colored disc), unearned stays a pale crest.
+export default function MedalCoin({ medal, size = 44, locked = false, active = false, faces = false, className = '' }) {
+  const earned = !locked
+  const face = medalFace(medal, earned)
+  const label = `${medal.name} medal, ${earned ? 'earned' : 'not earned'}, ${medal.threshold} missions`
+  if (faces && face === 'reverse') {
+    return (
+      <span className={`medal-flip flex-none ${className}`} style={{ height: size, width: size }} role="img" aria-label={label}>
+        <img src={asset(`design/coin-reverse-${medal.coin}.png`)} alt="" draggable="false" />
+        <img className="medal-flip-front" src={asset(`design/coin-${medal.coin}.png`)} alt="" draggable="false" />
+      </span>
+    )
+  }
+  if (faces && face === 'pale-front') {
+    return (
+      <span className={`inline-grid flex-none place-items-center ${className}`} style={{ height: size, width: size }} role="img" aria-label={label}>
+        <img src={asset(`design/coin-${medal.coin}.png`)} alt="" draggable="false" className="medal-unearned" />
+      </span>
+    )
+  }
+  if (faces && (face === 'pale-disc' || face === 'color-disc')) {
+    return (
+      <span
+        className={`inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
+        style={{
+          height: size,
+          width: size,
+          fontSize: size * 0.28,
+          background: face === 'pale-disc'
+            ? '#d5dde8'
+            : `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
+          color: face === 'pale-disc' ? '#9aa6b8' : medal.ink,
+          boxShadow: '0 1px 2px rgba(29, 38, 85, 0.12)',
+        }}
+        role="img"
+        aria-label={label}
+      >
+        {face === 'color-disc' ? medal.threshold : ''}
+      </span>
+    )
+  }
   if (medal.coin) {
     return (
       <span className={`inline-grid flex-none place-items-center ${className}`} style={{ height: size, width: size }} title={label}>
@@ -13,13 +52,12 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
           src={asset(`design/coin-${medal.coin}.png`)}
           alt={medal.name}
           draggable="false"
-          className={locked ? 'opacity-40 grayscale' : ''}
-          style={{ maxHeight: '100%', maxWidth: '100%', filter: active ? 'drop-shadow(0 0 4px var(--color-gold))' : 'drop-shadow(0 1px 2px rgba(0,0,0,.25))' }}
+          className={locked ? 'medal-unearned' : ''}
+          style={{ maxHeight: '100%', maxWidth: '100%', filter: !locked && active ? 'drop-shadow(0 0 4px var(--color-gold))' : undefined }}
         />
       </span>
     )
   }
-  // No coin art for this tier — fall back to a CSS coin with its threshold number.
   return (
     <span
       className={`inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
@@ -27,8 +65,8 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
         height: size,
         width: size,
         fontSize: size * 0.3,
-        background: locked ? '#c7ccd6' : `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
-        color: locked ? '#7e8795' : medal.ink,
+        background: locked ? '#d5dde8' : `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
+        color: locked ? '#9aa6b8' : medal.ink,
         boxShadow: active ? '0 0 0 3px var(--color-gold), 0 1px 3px rgba(0,0,0,.25)' : '0 1px 3px rgba(0,0,0,.25)',
       }}
       title={label}
