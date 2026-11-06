@@ -8,10 +8,13 @@ import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
-import { answerQuestion, answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
+import { answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
 import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
+import { defaultChatReply } from '@/lib/defaultChat.js'
+import { NO_MATCH_REPLY } from '@/lib/siteSearch.js'
 import { decideLadderChange, transcriptOffersLadder } from '@/lib/ladderTool.js'
 import { connectRealtimeCall } from '@/lib/realtimeCall.js'
+import { realtimeWanted } from '@/lib/realtimeOptIn.js'
 import { asset } from '@/lib/asset.js'
 import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 import { resetCues } from '@/lib/commanderBus.js'
@@ -34,14 +37,10 @@ import { streakMissions } from '@/lib/trainingBoard.js'
 // General 613, the Tehillim Club's talking general. With no ladder yet he walks
 // the real choices out loud and saves the one the child accepts. Otherwise he
 // greets for a missed month, a quota they beat, or a soldier on track. Kids can
-// type or talk back. Scripted, client-side, kid-safe when the AI endpoint is down.
+// type or talk back. Typed replies are chosen on this device. A paid speech
+// call stays off unless wwtc.commander.realtime is on.
 
-// Real-AI endpoint on the PHP backend (served under the app's base path). When
-// it's unreachable — the static Netlify file, offline, or no API key set — the
-// chat falls back to the scripted answers below, so General 613 always works.
-const AI_ENDPOINT = `${import.meta.env.BASE_URL}api/chat`
-
-// A compact, non-sensitive snapshot of the child's data for the AI prompt.
+// A compact snapshot for the optional paid speech call. The typed chat does not use it.
 function aiContext(ctx) {
   if (!ctx) return {}
   const cur = ctx.progress?.current
@@ -81,30 +80,6 @@ function scriptPayload(scripts) {
     if (typeof value === 'string' && value.trim()) out[key] = value
   }
   return Object.keys(out).length ? out : null
-}
-
-// Ask the backend AI. Throws on any failure so the caller can fall back.
-async function aiReply(message, history, ctx) {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 15000)
-  try {
-    const res = await fetch(AI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        history: history.map((m) => ({ from: m.from, text: m.text })),
-        context: aiContext(ctx),
-      }),
-      signal: ctrl.signal,
-    })
-    if (!res.ok) throw new Error(`chat ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('no reply')
-    return data.reply.trim()
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 function buildReply(text, ctx) {
@@ -833,7 +808,6 @@ export default function ChatBuddy() {
     setMessages((m) => [...m, kidMsg])
     setTyping(true)
     const greet = greetingRef.current
-    const history = [...(greet ? [{ from: 'bot', text: greet }] : []), ...convoRef.current, kidMsg].slice(-9)
     const snapshot = { ...ctxRef.current, focusLadder: focusLadderRef.current }
     const yes = /^(yes|yeah|yep|yup|sure|okay|ok)\b/i.test(text)
     const no = /^(no|nope|nah)\b/i.test(text)
@@ -895,16 +869,10 @@ export default function ChatBuddy() {
           } else if (topicDecision(text) === 'refuse') {
             reply = OFF_TOPIC_REPLY
           } else {
-            const known = answerQuestion(text, snapshot)
-          if (known) {
-            reply = known.reply
-          } else {
-            try {
-              reply = await aiReply(text, history, snapshot)
-            } catch {
-              reply = buildReply(text, snapshot)
-            }
-          }
+            const looked = defaultChatReply(text, snapshot)
+            reply = looked.source === 'local' && looked.reply === NO_MATCH_REPLY
+              ? buildReply(text, snapshot)
+              : looked.reply
         }
       }
     }
@@ -1052,7 +1020,7 @@ export default function ChatBuddy() {
           return
         }
         let live = null
-        if (!IS_DEMO) {
+        if (!IS_DEMO && realtimeWanted()) {
           setEngineMode('pending')
           try {
             live = await connectRealtimeCall({
