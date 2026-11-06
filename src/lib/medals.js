@@ -32,6 +32,19 @@ export function legibleInk(hex) {
   return L > 0.62 ? '#1b2a4e' : hex
 }
 
+// The dashboard note "earned before this year's month-by-month record",
+// for any medal color. An in-year month is a different sentence.
+export function isPreYearMedalNote(earnedOn) {
+  return typeof earnedOn === 'string' && /before this year.s month-by-month record/i.test(earnedOn)
+}
+
+// Which picture a dashboard coin shows. Tiers without a supplied crest keep
+// the plain disc: pale when unearned, the tier color and count when earned.
+export function medalFace(medal, earned) {
+  if (medal?.coin) return earned ? 'reverse' : 'pale-front'
+  return earned ? 'color-disc' : 'pale-disc'
+}
+
 // Given a cumulative mission count, what's earned / current / next.
 export function medalState(missions) {
   const earned = MEDAL_THRESHOLDS.filter((t) => missions >= t).length

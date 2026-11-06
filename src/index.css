@@ -204,6 +204,33 @@ body.wwtc-display footer { display: none; }
 
 .font-heb { font-family: var(--font-heb); direction: rtl; unicode-bidi: isolate; }
 
+/* Dashboard medal: the numbered reverse is always the resting face.
+   When motion is allowed, the crest turns away once to reveal it. */
+.medal-flip { position: relative; display: grid; place-items: center; }
+.medal-flip img { max-width: 100%; max-height: 100%; grid-area: 1 / 1; }
+.medal-flip-front { position: relative; }
+@media (prefers-reduced-motion: no-preference) {
+  .medal-flip-front {
+    animation: medal-turn-away 0.7s ease-in forwards;
+    transform-origin: center;
+  }
+}
+@keyframes medal-turn-away {
+  from { opacity: 1; transform: rotateY(0deg); }
+  to { opacity: 0; transform: rotateY(90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .medal-flip-front { display: none; }
+}
+/* Unearned crest: the light card shows through, so the coin reads as a pale
+   blue-gray face with a faint crest. No dark drop shadow. */
+.medal-unearned {
+  opacity: 0.4;
+  filter: grayscale(1);
+  max-width: 100%;
+  max-height: 100%;
+}
+
 /* Hide the scrollbar but keep the area scrollable (used on cards that may
    overflow on long ladders but shouldn't show a track). */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
