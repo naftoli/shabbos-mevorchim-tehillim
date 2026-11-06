@@ -65,9 +65,9 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         <div className="h-full rounded-full" style={{ width: `${Math.max(pct, earned ? 2 : 0)}%`, background: 'var(--grad-progress)' }} />
       </div>
       {priorMissions > 0 ? (
-        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">{priorMissions} earlier missions are on record in total. A line with no record is not a miss.</p>
+        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">{priorMissions} earlier missions are on record in total. A Not Done line is not counted as a miss.</p>
       ) : (
-        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">A line with no record is not a miss. Only a saved report is checked off.</p>
+        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">A Not Done line is not counted as a miss. Only a saved report is checked off.</p>
       )}
       <div className="relative mt-4 space-y-2">
         {board.boards.map((g) => {
