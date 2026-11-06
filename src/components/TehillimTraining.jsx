@@ -53,7 +53,12 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         </div>
         <div className="text-right">
           <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{earned} earned · {board.total} missions on this ladder</p>
-          <button type="button" className="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-navy underline sm:min-h-0" onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}>
+          <button
+            type="button"
+            className="btn btn-o mt-2 !min-h-11 !px-4"
+            aria-expanded={allOpen}
+            onClick={() => setOpen(allOpen ? new Set([current]) : new Set(board.boards.map((b) => b.grade)))}
+          >
             {allOpen ? 'Close all' : 'Expand all'}
           </button>
           <button type="button" className="mt-1 block text-sm font-semibold text-blue" onClick={() => emitCue('track-replay', TRACK_SCRIPT, { force: true })}>

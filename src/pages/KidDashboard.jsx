@@ -448,16 +448,6 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <Card className="p-5 sm:p-6">
-          <p className="sh">Where you stand in your grade</p>
-          <p className="mt-2 text-navy/85">
-            You are in {GRADE_LABEL[String(kid.grade)] || kid.grade}. Ladder {kid.ladder} finishes training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade.
-            This month your quota is <span className="font-heb">{cur.quotaLabel}</span> ({cur.quota} kapitlach, {cur.minutes} minutes).
-            The gentlest ladder for your grade this month is <span className="font-heb">{quotaFor(kid.grade, cur.month, LADDERS.find((L) => quotaFor(kid.grade, cur.month, L)))?.k || '—'}</span>.
-            The steepest is <span className="font-heb">{quotaFor(kid.grade, cur.month, [...LADDERS].reverse().find((L) => quotaFor(kid.grade, cur.month, L)))?.k || '—'}</span>.
-          </p>
-        </Card>
-
         <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} />
 
         <MedalBoard
