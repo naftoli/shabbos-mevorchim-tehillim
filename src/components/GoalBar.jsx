@@ -9,7 +9,7 @@ export default function GoalBar({ percent, label = 'of goal', marker = true, ico
   return (
     <div className={`relative ${className}`}>
       <div
-        className="relative h-5 w-full overflow-hidden rounded-full bg-track sm:h-6"
+        className="relative h-5 w-full overflow-hidden rounded-full bg-bar-track sm:h-6"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}

@@ -104,7 +104,7 @@ export function Meter({ pct = 0, color = 'var(--grad-progress)' }) {
   const n = Math.max(0, Math.round(Number(pct) || 0))
   return (
     <div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, n)} aria-label={`${n}% of goal`}>
+      <div className="h-2.5 overflow-hidden rounded-full bg-bar-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, n)} aria-label={`${n}% of goal`}>
         <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, Math.max(n, n > 0 ? 2 : 0))}%`, background: color }} />
       </div>
       {n > 100 ? <p className="mt-1 text-right text-[11px] font-bold tabular-nums text-navy">{n}% of goal</p> : null}

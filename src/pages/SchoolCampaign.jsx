@@ -165,7 +165,7 @@ export default function SchoolCampaign() {
                         <span className="min-w-0 whitespace-normal font-display text-[15px] font-semibold leading-tight text-navy sm:w-40 sm:flex-none sm:truncate sm:text-[18px]">
                           {c.name} {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
                         </span>
-                        <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
+                        <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-bar-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
                           <span
                             className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700"
                             style={{ width: `${Math.max(3, Math.min(100, m))}%`, background: c.perfect ? 'var(--color-green-mid)' : RACE_FILLS[i % RACE_FILLS.length] }}
