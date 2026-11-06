@@ -94,7 +94,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
                       ) : null}
                       <span className="font-heb text-[13px] font-bold leading-none">{m.heb}</span>
                       <span className="text-[10px] font-semibold leading-tight">{m.minutes ? `${m.minutes} min` : '—'}{m.quotaLabel ? ` / ${m.quotaLabel}` : ''}</span>
-                      <span className="text-[10px] font-bold uppercase">{m.met ? (m.ladder ? `Done (Ladder ${m.ladder})` : 'Done') : m.record ? 'Reported' : 'No record'}</span>
+                      <span className="text-[10px] font-bold uppercase">{m.met ? (m.ladder ? `Done (Ladder ${m.ladder})` : 'Done') : m.record ? 'Not Completed' : 'Not Done'}</span>
                     </span>
                   ))}
                 </div>

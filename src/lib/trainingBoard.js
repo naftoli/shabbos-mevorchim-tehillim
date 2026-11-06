@@ -50,40 +50,71 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   // Before the enable year (or a year with no holiday missions) it is dropped.
   const activeHolidays = new Set((months || []).filter((m) => m?.holiday && m?.month).map((m) => m.month))
   const occasions = OCCASIONS.filter((occ) => !occ.holiday || activeHolidays.has(occ.key))
+  // The quota shown for a mission should reflect the ladder the soldier was on
+  // for that mission, not whatever ladder they sit on now (it may have changed).
+  // The current ladder is only a last resort.
+  const fallbackLadder = ladder ? Number(ladder) : null
+
+  // Resolve one cell's completion and, if done, the ladder it was done on. A past
+  // grade holds a mark only for an earned mission; the current grade reads live
+  // month records (met, reported-but-under, or nothing). Holidays (Rosh Hashana /
+  // Yom Kippur) board off the year's Tishrei quota — handled at quota lookup.
+  const resolve = (occ, isCurrent, earnedPast) => {
+    const histVal = earnedPast?.[occ.key]
+    const histLadder = typeof histVal === 'number' ? histVal : null
+    const rec = isCurrent ? monthRecord(byMonth, occ.key) : null
+    const reported = isCurrent ? !!(rec && rec.reported !== false) : (histVal != null && histVal !== false)
+    const met = isCurrent ? (reported && !!rec.met) : reported
+    return { rec, reported, met, doneLadder: met ? (histLadder ?? fallbackLadder) : null }
+  }
+  const earnedFor = (g) => history?.[String(g)] || history?.[g] || null
+
+  // The ladder of the earliest completed mission, scanned chronologically (grade
+  // ascending, then occasion order). Blanks that come *before* any completion
+  // borrow it, so a soldier who did, say, Pre-1A on ladder 12 before switching
+  // doesn't see those untouched early months priced at today's ladder.
+  let firstDoneLadder = null
+  for (const g of grades) {
+    const isCurrent = String(g) === String(grade)
+    const earnedPast = earnedFor(g)
+    const hit = occasions.find((occ) => resolve(occ, isCurrent, earnedPast).met)
+    if (hit) { firstDoneLadder = resolve(hit, isCurrent, earnedPast).doneLadder; break }
+  }
+
+  // Walk the board in that same chronological order, tracking the ladder of the
+  // most recent completed mission. `lastDoneLadder` only advances on a done
+  // mission, so a run of blanks all inherit the same ladder.
+  let lastDoneLadder = null
   const boards = grades.map((g) => {
     const isCurrent = String(g) === String(grade)
-    // Earned missions from real DB marks (history[gradeKey]). The value is the
-    // ladder the child was on then (a number), or `true` when the track is unknown.
-    const earnedPast = history?.[String(g)] || history?.[g] || null
+    const earnedPast = earnedFor(g)
     const missions = occasions.map((occ) => {
       const occKey = occ.holiday ? 'Tishrei' : occ.key
-      const histVal = earnedPast?.[occ.key]
-      const histLadder = typeof histVal === 'number' ? histVal : null
+      const { rec, reported, met, doneLadder } = resolve(occ, isCurrent, earnedPast)
+
+      // Done → its own ladder. Blank → the last ladder actually completed; before
+      // the first completion, the first one; only if nothing was ever done, the
+      // current ladder.
+      const quotaLadder = met ? doneLadder : (lastDoneLadder ?? firstDoneLadder ?? fallbackLadder)
+      const quota = quotaLadder ? quotaFor(g, occKey, quotaLadder) : null
+      if (met && doneLadder) lastDoneLadder = doneLadder
+
       if (!isCurrent) {
-        // A mark exists only when the mission was earned (said ≥ quota), so a
-        // recorded past occasion is a completed mission. Use the ladder the child
-        // was on then (falling back to the current ladder) for the quota shown.
-        const done = histVal != null && histVal !== false
-        const cellLadder = histLadder ?? (ladder ? Number(ladder) : null)
-        const quota = cellLadder ? quotaFor(g, occKey, cellLadder) : null
-        return { ...occ, record: done, met: done, ladder: done ? cellLadder : null, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
+        return { ...occ, record: reported, met, ladder: doneLadder, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
       }
-      // Holidays (Rosh Hashana / Yom Kippur) board off the Shabbos-Mevorchim
-      // Tishrei quota of the year — same rule the server uses.
-      const quota = ladder ? quotaFor(g, occKey, ladder) : null
-      const cellLadder = histLadder ?? (ladder ? Number(ladder) : null)
-      const rec = monthRecord(byMonth, occ.key)
-      if (!rec || rec.reported === false) {
+      if (!reported) {
         return { ...occ, record: false, met: false, ladder: null, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
       }
+      // A recorded current-month mission: when met, keep the server's exact
+      // figures; when not met, show the last-done ladder's quota (computed above).
       return {
         ...occ,
         record: true,
-        met: !!rec.met,
-        ladder: rec.met ? cellLadder : null,
-        quota: rec.quota ?? quota?.v ?? null,
-        quotaLabel: rec.quotaLabel || quota?.k || null,
-        minutes: rec.minutes ?? quota?.m ?? null,
+        met,
+        ladder: doneLadder,
+        quota: met ? (rec.quota ?? quota?.v ?? null) : (quota?.v ?? null),
+        quotaLabel: met ? (rec.quotaLabel || quota?.k || null) : (quota?.k ?? null),
+        minutes: met ? (rec.minutes ?? quota?.m ?? null) : (quota?.m ?? null),
         said: rec.said,
         saidMinutes: rec.saidMinutes,
       }
