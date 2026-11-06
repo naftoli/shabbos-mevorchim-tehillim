@@ -9,6 +9,7 @@ import ClimbMeter from '@/components/ClimbMeter.jsx'
 import LadderBreakdownTable from '@/components/LadderBreakdownTable.jsx'
 import MedalBoard from '@/components/MedalBoard.jsx'
 import TehillimTraining from '@/components/TehillimTraining.jsx'
+import StreakBar from '@/components/StreakBar.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
@@ -22,7 +23,8 @@ import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueI
 import { emitCue } from '@/lib/commanderBus.js'
 import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
-import { streakFromMissions, } from '@/lib/streaks.js'
+import { streakFromMissions } from '@/lib/streaks.js'
+import { STREAK_COPY } from '@/lib/streakBar.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
 import { ladderAdvice } from '@/lib/ladderAdvice.js'
 import { IconImg, Pending } from '@/components/campaignBits.jsx'
@@ -278,18 +280,17 @@ export default function KidDashboard() {
             <p className="relative text-center font-cond text-sm uppercase tracking-[0.14em] text-gold">You are reporting for</p>
             <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">{CAMPAIGN_YEAR}</span></p>
             <div className="relative mt-5 grid grid-cols-2 gap-4 text-center">
-              <div className="flex flex-col items-center gap-2">
-                <img src={asset('design/icon-book.webp')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
-                <div className="text-xs uppercase tracking-wide text-white/80">Kapitlach</div>
-                <div className="font-cond text-4xl leading-none text-white">{cur.quota}</div>
-                <div className="text-sm text-white/80">kapitlach</div>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <img src={asset('design/icon-clock.png')} alt="" aria-hidden="true" draggable="false" className="h-12 w-auto" />
-                <div className="text-xs uppercase tracking-wide text-white/80">Minutes</div>
-                <div className="font-cond text-4xl leading-none text-white">{cur.minutes}</div>
-                <div className="text-sm text-white/80">minutes</div>
-              </div>
+              {[
+                ['design/icon-book.webp', 420, 280, 'Kapitlach', cur.quota, 'kapitlach'],
+                ['design/icon-clock.png', 255, 256, 'Minutes', cur.minutes, 'minutes'],
+              ].map(([file, w, h, label, value, unit]) => (
+                <div key={label} className="flex flex-col items-center gap-2">
+                  <img src={asset(file)} alt="" width={w} height={h} aria-hidden="true" draggable="false" className="h-12 w-auto max-w-none" />
+                  <div className="text-xs uppercase tracking-wide text-white/80">{label}</div>
+                  <div className="font-cond text-4xl leading-none tabular-nums text-white">{value}</div>
+                  <div className="text-sm text-white/80">{unit}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -315,23 +316,23 @@ export default function KidDashboard() {
                 </div>
               </div>
             ) : null}
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-center">
-              <Field label="Kapitlach I said"><Input className="w-full sm:w-32" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
-              <Field label="Minutes I said"><Input className="w-full sm:w-32" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-              <button className="btn btn-gold w-full !px-7 sm:w-auto" onClick={() => saveReport()}>Save</button>
+            <div className="grid grid-cols-2 items-end gap-3 sm:mx-auto sm:max-w-xl sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <Field label="Kapitlach I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
+              <Field label="Minutes I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
+              <button type="button" className="btn btn-gold col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto" onClick={() => saveReport()}>Save</button>
             </div>
-            <div className="mt-5 overflow-x-auto">
+            <div className="mt-5">
               <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
-              <div className="flex min-w-[720px] gap-1">
+              <div className="grid grid-cols-4 gap-1.5">
                 {LADDERS.map((L) => {
                   const cell = quotaFor(kid.grade, cur.month, L)
                   const allowed = cell != null
                   const mine = Number(kid.ladder) === L
                   return (
-                    <div key={L} className={`flex-1 rounded-xl px-1 py-2 text-center text-[11px] ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
-                      <div className="font-bold">Ladder {L}</div>
-                      <div className="font-heb text-sm">{cell?.k || '—'}</div>
-                      <div>{cell ? `${cell.m} Min` : 'not for your grade'}</div>
+                    <div key={L} className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center leading-tight ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
+                      <div className="text-[11px] font-bold sm:text-xs">Ladder {L}</div>
+                      <div className="font-heb text-[13px] sm:text-sm">{cell?.k || '—'}</div>
+                      <div className="text-[11px] sm:text-xs">{cell ? `${cell.m} Min` : 'not for your grade'}</div>
                     </div>
                   )
                 })}
@@ -352,7 +353,7 @@ export default function KidDashboard() {
                   </div>
                   <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.quota > 0 ? Math.round((cur.said / cur.quota) * 100) : 0}%</p>
                 </div>
-                <GoalBar percent={cur.quota > 0 ? (cur.said / cur.quota) * 100 : 0} iconSrc={asset('design/icon-book.webp')} className="mt-4 sm:mr-14" />
+                <GoalBar percent={cur.quota > 0 ? (cur.said / cur.quota) * 100 : 0} iconSrc={asset('design/icon-book.webp')} className="mt-4" />
               </div>
               <div>
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
@@ -366,7 +367,7 @@ export default function KidDashboard() {
                   </div>
                   <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.minutes > 0 ? Math.round((cur.saidMinutes / cur.minutes) * 100) : 0}%</p>
                 </div>
-                <GoalBar percent={cur.minutes > 0 ? (cur.saidMinutes / cur.minutes) * 100 : 0} iconSrc={asset('design/icon-clock.png')} className="mt-4 sm:mr-14" />
+                <GoalBar percent={cur.minutes > 0 ? (cur.saidMinutes / cur.minutes) * 100 : 0} iconSrc={asset('design/icon-clock.png')} className="mt-4" />
               </div>
             </div>
           </div>
@@ -412,16 +413,22 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <Card className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-          <div>
-            <p className="sh">Current streak</p>
-            <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.current} <span className="text-lg">missions</span></p>
+        <Card className="p-5 sm:p-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="sh">Current streak</p>
+              <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.current} <span className="text-lg">missions</span></p>
+            </div>
+            <div>
+              <p className="sh">Longest streak</p>
+              <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.best} <span className="text-lg">missions</span></p>
+            </div>
           </div>
-          <div>
-            <p className="sh">Longest streak</p>
-            <p className="mt-1 font-display text-4xl font-black text-navy">{streaks.best} <span className="text-lg">missions</span></p>
+          <div className="mt-4">
+            <StreakBar current={streaks.current} />
           </div>
-          <p className="sm:col-span-2 text-sm text-muted">A streak is missions you complete in a row. A recorded miss starts the next one at 1. Your longest streak stays. A month with no record is not counted as a miss.</p>
+          <p className="mt-4 text-sm text-navy">{STREAK_COPY[0]}</p>
+          <p className="mt-2 text-sm text-navy">{STREAK_COPY[1]}</p>
         </Card>
 
         {advice ? (
