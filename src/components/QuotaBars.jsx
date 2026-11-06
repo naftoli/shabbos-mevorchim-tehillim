@@ -25,7 +25,7 @@ function Line({ figures, pct, iconSrc, fill, barColor }) {
         ))}
         <p className="ml-auto font-display text-[22px] font-black leading-none tabular-nums sm:text-[34px]" style={{ color: numberColor(barColor) }}>{pct}%</p>
       </div>
-      <GoalBar percent={pct} iconSrc={iconSrc} fill={fill} className="mt-4 pr-8 sm:mr-10 sm:pr-0" />
+      <GoalBar percent={pct} iconSrc={iconSrc} fill={fill} className="mt-4" />
     </div>
   )
 }
