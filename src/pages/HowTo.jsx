@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Card, Button } from '@/components/ui.jsx'
 import { asset } from '@/lib/asset.js'
+import { guideSection } from '@/data/siteGuide.js'
 
 // Milestone copy stays exactly as published. The first ten names are crops of
 // design/how/medals.webp (1600×146); left/width are the opaque coin bounds.
@@ -83,9 +84,9 @@ const ICONS = {
   },
 }
 
-function Block({ title, icon, children }) {
+function Block({ id, title, icon, children }) {
   return (
-    <Card className="p-6 sm:p-8">
+    <Card id={id} className="scroll-mt-24 p-6 sm:p-8">
       <div className="flex items-center gap-3 sm:gap-4">
         {icon ? (
           <img
@@ -149,6 +150,15 @@ function Banner({ src, alt, width, height, scroll }) {
 }
 
 export default function HowTo() {
+  const goal = guideSection('goal')
+  const training = guideSection('training')
+  const ladders = guideSection('ladders')
+  const medals = guideSection('medals')
+  const streaks = guideSection('streaks')
+  const platoon = guideSection('platoon')
+  const base = guideSection('base')
+  const army = guideSection('army')
+  const report = guideSection('report')
   return (
     <>
       <section className="hero-navy">
@@ -158,26 +168,26 @@ export default function HowTo() {
       </section>
 
       <div className="mx-auto max-w-[1000px] space-y-6 px-4 py-10 sm:px-6">
-        <Block title="The Goal">
-          <p>Say the entire Tehillim each Shabbos Mevorchim.</p>
+        <Block id={goal.id} title={goal.title}>
+          <p>{goal.paragraphs[0]}</p>
           <Banner
             src="design/how/goal-mipi-olelim.webp"
             width={1600}
             height={317}
             alt="Banner reading מפי עוללים ויונקים יסדת עז — From the mouths of children and infants You established strength"
           />
-          <p>The Tehillim of children has a special power: it protects and foils the plans of our enemies. Every word - matters.</p>
+          <p>{goal.paragraphs[1]}</p>
         </Block>
 
-        <Block title="Training" icon={ICONS.training}>
-          <p>Saying the entire Tehillim right now may feel like an impossible challenge. But you have your years in school to train, one step at a time.</p>
-          <p>Training can begin in Pre1A with a quota of just one kapitel. Each Shabbos Mevorchim, that quota grows a little more. Month by month, year by year, you work toward saying the entire Tehillim - building a Shabbos Mevorchim habit you can carry with you for the rest of your life.</p>
+        <Block id={training.id} title={training.title} icon={ICONS.training}>
+          <p>{training.paragraphs[0]}</p>
+          <p>{training.paragraphs[1]}</p>
         </Block>
 
-        <Block title="Ladders">
-          <p>Your ladder is your training path toward saying the entire Tehillim. Which ladder will you choose to climb?</p>
-          <p>Ladder 12 builds toward completing your training by 12th grade. Ladder 5 builds toward completing it by 5th grade.</p>
-          <p>Every ladder leads to the same goal. Choose the pace that's right for you, to determine your quota of tehillim to say each month.</p>
+        <Block id={ladders.id} title={ladders.title}>
+          <p>{ladders.paragraphs[0]}</p>
+          <p>{ladders.paragraphs[1]}</p>
+          <p>{ladders.paragraphs[2]}</p>
           <Banner
             src="design/how/ladders.webp"
             width={2000}
@@ -187,9 +197,9 @@ export default function HowTo() {
           />
         </Block>
 
-        <Block title="Medals">
-          <p>Celebrate your progress, one medal at a time.</p>
-          <p>Complete your quota for 5 missions to earn your white Tehillim medal. Complete 6 more missions - 11 in total - to earn your red medal. Each new medal takes one more mission than the last step.</p>
+        <Block id={medals.id} title={medals.title}>
+          <p>{medals.paragraphs[0]}</p>
+          <p>{medals.paragraphs[1]}</p>
           <p>Your medal milestones, in total completed missions:</p>
           <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-5 sm:gap-y-6">
             {MEDALS.map(([n, name, art]) => (
@@ -199,13 +209,13 @@ export default function HowTo() {
               </li>
             ))}
           </ul>
-          <p>Every completed mission brings you closer to your next medal. If you miss a mission, the progress you've earned stays with you.</p>
-          <p>What color medal will you earn? Be all you can be in Hashem's army.</p>
+          <p>{medals.paragraphs[2]}</p>
+          <p>{medals.paragraphs[3]}</p>
         </Block>
 
-        <Block title="Streaks">
-          <p>A streak is the number of missions you complete in a row without missing one.</p>
-          <p>Longest Streak: The most missions you've ever completed in a row without missing one.</p>
+        <Block id={streaks.id} title={streaks.title}>
+          <p>{streaks.paragraphs[0]}</p>
+          <p>{streaks.paragraphs[1]}</p>
           <Banner
             src="design/how/streaks.webp"
             width={1600}
@@ -214,21 +224,26 @@ export default function HowTo() {
           />
         </Block>
 
-        <Block title="Perfect Platoons" icon={ICONS.platoon}>
-          <p>Your class is your platoon. When every soldier in your class completes their own quota, your class is listed as a Perfect Platoon for that mission.</p>
+        <Block id={platoon.id} title={platoon.title} icon={ICONS.platoon}>
+          <p>{platoon.paragraphs[0]}</p>
         </Block>
 
-        <Block title="Base" icon={ICONS.base}>
-          <p>Your school is your base. Its quota is all the individual soldiers' quotas added together.</p>
+        <Block id={base.id} title={base.title} icon={ICONS.base}>
+          <p>{base.paragraphs[0]}</p>
         </Block>
 
-        <Block title="Army" icon={ICONS.army}>
-          <p>Together, all the soldiers' quotas around the world make up the army's quota.</p>
-          <p>When you choose your ladder, choose one with a quota you're confident you can complete. Your platoon, your base, and the entire army are counting on you.</p>
+        <Block id={army.id} title={army.title} icon={ICONS.army}>
+          <p>{army.paragraphs[0]}</p>
+          <p>{army.paragraphs[1]}</p>
           <div className="flex flex-wrap gap-3 pt-2">
             <Button to="/login" variant="navy">I'm a Soldier</Button>
             <Button to="/" variant="gold">See the Army Report</Button>
           </div>
+        </Block>
+
+        <Block id={report.id} title={report.title}>
+          <p>{report.paragraphs[0]}</p>
+          <p>{report.paragraphs[1]}</p>
         </Block>
       </div>
     </>

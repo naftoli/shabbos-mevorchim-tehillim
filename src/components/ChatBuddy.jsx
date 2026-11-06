@@ -10,6 +10,7 @@ import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepl
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerQuestion, answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
 import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
+import { searchSite } from '@/lib/siteSearch.js'
 import { decideLadderChange, transcriptOffersLadder } from '@/lib/ladderTool.js'
 import { connectRealtimeCall } from '@/lib/realtimeCall.js'
 import { asset } from '@/lib/asset.js'
@@ -899,10 +900,15 @@ export default function ChatBuddy() {
           if (known) {
             reply = known.reply
           } else {
-            try {
-              reply = await aiReply(text, history, snapshot)
-            } catch {
-              reply = buildReply(text, snapshot)
+            const lookedUp = searchSite(text, snapshot)
+            if (lookedUp) {
+              reply = lookedUp.reply
+            } else {
+              try {
+                reply = await aiReply(text, history, snapshot)
+              } catch {
+                reply = buildReply(text, snapshot)
+              }
             }
           }
         }
