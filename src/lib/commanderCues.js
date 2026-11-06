@@ -41,7 +41,7 @@ export function cueMissionComplete() {
 }
 
 export function cuePerfectPlatoon() {
-  return 'PERFECT PLATOON! Every single soldier in your platoon completed their mission — and your commander made it happen.'
+  return 'PERFECT PLATOON! Every single soldier in your platoon completed their mission.'
 }
 
 export function cueMissed() {

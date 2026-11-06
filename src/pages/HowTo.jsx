@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Card, Button } from '@/components/ui.jsx'
+import LadderComparisonChart from '@/components/LadderComparisonChart.jsx'
 import { asset } from '@/lib/asset.js'
 import { guideSection } from '@/data/siteGuide.js'
 
@@ -158,7 +159,6 @@ export default function HowTo() {
   const platoon = guideSection('platoon')
   const base = guideSection('base')
   const army = guideSection('army')
-  const report = guideSection('report')
   return (
     <>
       <section className="hero-navy">
@@ -188,13 +188,7 @@ export default function HowTo() {
           <p>{ladders.paragraphs[0]}</p>
           <p>{ladders.paragraphs[1]}</p>
           <p>{ladders.paragraphs[2]}</p>
-          <Banner
-            src="design/how/ladders.webp"
-            width={2000}
-            height={741}
-            scroll
-            alt="שבת מברכים תהלים תשרי — Shabbos Mevorchim Tehillim ladders chart for Tishrei"
-          />
+          <LadderComparisonChart />
         </Block>
 
         <Block id={medals.id} title={medals.title}>
@@ -239,11 +233,6 @@ export default function HowTo() {
             <Button to="/login" variant="navy">I'm a Soldier</Button>
             <Button to="/" variant="gold">See the Army Report</Button>
           </div>
-        </Block>
-
-        <Block id={report.id} title={report.title}>
-          <p>{report.paragraphs[0]}</p>
-          <p>{report.paragraphs[1]}</p>
         </Block>
       </div>
     </>

@@ -19,7 +19,7 @@ import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
-import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cuePerfectPlatoon, cueReport } from '@/lib/commanderCues.js'
+import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
 import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
 import { earliestMedalWhen } from '@/lib/medalWhen.js'
@@ -27,7 +27,8 @@ import { streakFromMissions } from '@/lib/streaks.js'
 import { STREAK_COPY } from '@/lib/streakBar.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
 import { ladderAdvice } from '@/lib/ladderAdvice.js'
-import { IconImg, CheckMark, Pending } from '@/components/campaignBits.jsx'
+import { IconImg, Pending } from '@/components/campaignBits.jsx'
+import PerfectPlatoonBanner from '@/components/PerfectPlatoonBanner.jsx'
 import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 
 // Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
@@ -408,7 +409,7 @@ export default function KidDashboard() {
                 )
               })}
             </div>
-            {social.classPerfect ? <p className="mt-3 flex items-center gap-2 font-semibold text-green"><CheckMark className="h-5 w-5" /> {cuePerfectPlatoon()}</p> : null}
+            {social.classPerfect ? <PerfectPlatoonBanner /> : null}
           </Card>
         ) : null}
 

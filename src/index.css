@@ -235,3 +235,12 @@ body.wwtc-display footer { display: none; }
    overflow on long ladders but shouldn't show a track). */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Ladder comparison: one shared height so the frozen grade column stays
+   row-aligned with the scrolling ladders. Smooth sideways motion is skipped
+   when the reader asks for less motion. */
+.ladder-compare { --ladder-chart-h: clamp(22rem, 70vw, 32rem); }
+.ladder-compare-scroll { scroll-behavior: smooth; overscroll-behavior-x: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .ladder-compare-scroll { scroll-behavior: auto; }
+}
