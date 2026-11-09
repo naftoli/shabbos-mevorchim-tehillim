@@ -84,19 +84,13 @@ export function AuthProvider({ children }) {
   }, [])
 
   const changeLadder = useCallback(async (ladder) => {
-    if (!kid) return { error: null }
-    // The server refuses a switch while this month's report window is open (and on
-    // other errors); surface the message instead of throwing so callers can show it.
-    try {
-      const progress = await setKidLadder(kid.id, ladder)
-      if (!progress) return { error: 'Could not change your ladder. Please try again.' }
-      const updated = { ...kid, ladder: Number(ladder) }
-      setKid(updated)
-      save(KID_KEY, updated)
-      return { progress }
-    } catch (e) {
-      return { error: String(e?.message || 'Could not change your ladder. Please try again.') }
-    }
+    if (!kid) return null
+    const progress = await setKidLadder(kid.id, ladder)
+    if (!progress) return null
+    const updated = { ...kid, ladder: Number(ladder) }
+    setKid(updated)
+    save(KID_KEY, updated)
+    return progress
   }, [kid])
 
   const logoutKid = useCallback(() => { endSession('kid'); setKid(null); save(KID_KEY, null) }, [])

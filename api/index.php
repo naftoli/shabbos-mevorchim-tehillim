@@ -1703,14 +1703,9 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
     if (empty($kid['track_id'])) {
         wwtcError('You are not enrolled in the Tehillim Club yet — ask your teacher.', 409);
     }
-    // No ladder switching while this month's report window is open (the week after
-    // Shabbos Mevorchim): the soldier is entering this month's numbers, so the quota
-    // must stay put. Once the week closes, a change applies from next Shabbos Mevorchim
-    // (user_track_history is read as-of each month's own SM — wwtcTrackAsOf).
-    if (wwtcReportWindowOpen()) {
-        wwtcError('You can’t switch ladders while this month’s Tehillim is still open. '
-            . 'You can change it once reporting closes — it will count from next Shabbos Mevorchim.', 409);
-    }
+    // A ladder change is always allowed; it takes effect from the NEXT Shabbos
+    // Mevorchim (a change after this month's SM date is read as-of the next month —
+    // wwtcTrackAsOf), so the current month's quota is never disturbed by it.
 
     $input = wwtcInput();
     $ladder = (int) ($input['ladder'] ?? 0);

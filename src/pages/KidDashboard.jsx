@@ -450,18 +450,14 @@ export default function KidDashboard() {
         {advice ? (
           <Card className="p-5 sm:p-6">
             <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler()}</p>
-            {reportOpen ? (
-              <p className="mt-3 text-sm text-muted">You can switch ladders once this month’s reporting closes — a change then counts from next Shabbos Mevorchim.</p>
-            ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="navy" onClick={() => changeLadder(advice.ladder)}>Yes, Ladder {advice.ladder}</Button>
-                <Button variant="outline" onClick={() => {
-                  const next = { kind: advice.kind, atMissions: progress.missionsTotal }
-                  setDeclined(next)
-                  try { localStorage.setItem(`wwtc.ladderInvite.${kid.id}`, JSON.stringify(next)) } catch { /* ignore */ }
-                }}>I’ll stay on Ladder {kid.ladder}</Button>
-              </div>
-            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="navy" onClick={() => changeLadder(advice.ladder)}>Yes, Ladder {advice.ladder}</Button>
+              <Button variant="outline" onClick={() => {
+                const next = { kind: advice.kind, atMissions: progress.missionsTotal }
+                setDeclined(next)
+                try { localStorage.setItem(`wwtc.ladderInvite.${kid.id}`, JSON.stringify(next)) } catch { /* ignore */ }
+              }}>I’ll stay on Ladder {kid.ladder}</Button>
+            </div>
             <p className="mt-2 text-xs text-muted">Staying put is perfectly fine. We’ll ask again after {LADDER_REENGAGE_MISSIONS} more completed missions, not before.</p>
           </Card>
         ) : null}
@@ -486,11 +482,7 @@ export default function KidDashboard() {
               </h3>
             </div>
             <div className="flex flex-wrap gap-2">
-              {reportOpen ? (
-                <span className="self-center text-xs font-semibold text-muted">Switch ladders after this month’s reporting closes</span>
-              ) : (
-                <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
-              )}
+              <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
               <label className="flex items-center gap-2 text-sm font-semibold text-navy">
                 <input type="checkbox" checked={commanderAuto === 'on'} onChange={(e) => {
                   const next = e.target.checked ? 'on' : 'off'
