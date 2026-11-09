@@ -455,10 +455,14 @@ function wwtcKidMonths(array $kid): array
             AND dt.grid_id = :grid AND dtmm.subject_id = ' . WWTC_SUBJECT_ID
     );
 
+    // Quota for grid $grid on Shabbos-Mevorchim $d, priced on the ladder the soldier
+    // was on THEN (wwtcTrackAsOf), not their current ladder — so an earlier month
+    // doesn't move when they change ladders. Level stays live.
     $qFor = function (int $grid, int $d) use ($quotaStmt, $kid): int {
+        $track = wwtcTrackAsOf((int) $kid['user_id'], $d, (int) $kid['track_id']);
         $quotaStmt->execute([
             ':grid' => $grid, ':d' => $d, ':st' => (int) $kid['school_type_id'],
-            ':track' => (int) $kid['track_id'], ':lvl' => (int) $kid['level'], ':lang' => (int) $kid['lang_id'],
+            ':track' => $track, ':lvl' => (int) $kid['level'], ':lang' => (int) $kid['lang_id'],
         ]);
         return (int) ($quotaStmt->fetchColumn() ?: 0);
     };
@@ -1698,6 +1702,14 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
     }
     if (empty($kid['track_id'])) {
         wwtcError('You are not enrolled in the Tehillim Club yet — ask your teacher.', 409);
+    }
+    // No ladder switching while this month's report window is open (the week after
+    // Shabbos Mevorchim): the soldier is entering this month's numbers, so the quota
+    // must stay put. Once the week closes, a change applies from next Shabbos Mevorchim
+    // (user_track_history is read as-of each month's own SM — wwtcTrackAsOf).
+    if (wwtcReportWindowOpen()) {
+        wwtcError('You can’t switch ladders while this month’s Tehillim is still open. '
+            . 'You can change it once reporting closes — it will count from next Shabbos Mevorchim.', 409);
     }
 
     $input = wwtcInput();

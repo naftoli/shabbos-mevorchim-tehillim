@@ -638,6 +638,43 @@ function wwtcMonthForDate(int $jd): string
     return $month === false ? '' : (string) $month;
 }
 
+/**
+ * The as-of boundary for a Shabbos-Mevorchim $jd: the month's OWN Shabbos Mevorchim
+ * as a 'Y-m-d 00:00:00' datetime. A ladder change takes effect from the NEXT Shabbos
+ * Mevorchim after it (a child may not switch during the reporting week), so a month is
+ * priced on the latest change made strictly before its own SM day. jdtogregorian gives
+ * "m/d/Y".
+ */
+function wwtcAsOfBoundary(int $jd): string
+{
+    [$mo, $day, $yr] = array_map('intval', explode('/', jdtogregorian($jd)));
+    return sprintf('%04d-%02d-%02d 00:00:00', $yr, $mo, $day);
+}
+
+/**
+ * The soldier's Tehillim track_id in effect for the Shabbos-Mevorchim $jd, from
+ * user_track_history (the latest change made before that month's own Shabbos
+ * Mevorchim). Falls back to $fallbackTrack (their current user_tracks.track_id) when
+ * there is no history before that point — a month before the history was seeded
+ * (forward-only). See tehillim_user_track_history.sql.
+ */
+function wwtcTrackAsOf(int $userId, int $jd, int $fallbackTrack): int
+{
+    $boundary = wwtcAsOfBoundary($jd);
+    global $MASHPIA_DB;
+    static $stmt = null;
+    if ($stmt === null) {
+        $stmt = $MASHPIA_DB->prepare(
+            'SELECT track_id FROM user_track_history
+              WHERE user_id = :uid AND changed_at < :boundary
+              ORDER BY changed_at DESC, id DESC LIMIT 1'
+        );
+    }
+    $stmt->execute([':uid' => $userId, ':boundary' => $boundary]);
+    $track = $stmt->fetchColumn();
+    return $track === false ? $fallbackTrack : (int) $track;
+}
+
 /** The elapsed months this year, oldest first: [ ['month'=>, 'jd'=>], ... ]. */
 function wwtcElapsedMonths(): array
 {
@@ -837,7 +874,10 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
     $year = $year ?: wwtcYear();
     sort($doneJds);
     $key = 'holiday_board.' . $year . '.' . $quotaJd . '.' . implode('-', $doneJds);
-    return wwtcCached($key, static function () use ($doneJds, $quotaJd, $MASHPIA_DB) {
+    // Holiday quota is the SM-Tishrei quota, priced on the ladder each soldier was on
+    // for Tishrei (as of Tishrei's own Shabbos Mevorchim), not their current ladder.
+    $asofBoundary = wwtcAsOfBoundary($quotaJd);
+    return wwtcCached($key, static function () use ($doneJds, $quotaJd, $asofBoundary, $MASHPIA_DB) {
         $kap = WWTC_GRID_KAPITELACH;
         $min = WWTC_GRID_MINUTES;
 
@@ -853,7 +893,10 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
                JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
                JOIN date_tasks_missions m ON m.subject_id = ' . WWTC_SUBJECT_ID . '
                     AND m.start_date = :q AND m.end_date = :q
-                    AND m.school_type_id = u.school_type_id AND m.track_id = ut.track_id
+                    AND m.school_type_id = u.school_type_id
+                    AND m.track_id = COALESCE((SELECT h.track_id FROM user_track_history h
+                          WHERE h.user_id = ut.user_id AND h.changed_at < :boundary
+                          ORDER BY h.changed_at DESC, h.id DESC LIMIT 1), ut.track_id)
                     AND m.level = ut.level AND m.lang_id = u.lang_id
                JOIN date_tasks dt ON dt.date_tasks_mission_id = m.date_tasks_mission_id
                     AND dt.grid_id IN (' . $kap . ', ' . $min . ')
@@ -861,7 +904,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
               GROUP BY u.user_id, u.school_id, u.class_id, u.first, u.last,
                        c.class_grade, c.class_sub, c.class_teacher'
         );
-        $quotaStmt->execute([':q' => $quotaJd]);
+        $quotaStmt->execute([':q' => $quotaJd, ':boundary' => $asofBoundary]);
 
         // Per-soldier done = MAX across the holiday day(s), so the two Rosh Hashana
         // days count once. Keyed by user_id, pivoted to kapitlach + minutes.
