@@ -35,6 +35,11 @@ const WWTC_GRID_MINUTES = 8002;
 // Flip to true to turn them on; each holiday then still shows only once HQ has
 // created its missions for the year (see wwtcHolidayDates).
 const WWTC_HOLIDAY_BOARDS_ENABLED = false;
+// How many days after a Shabbos Mevorchim a soldier may still enter that month's
+// own Tehillim via POST /me/report. Once this grace window closes the self-report
+// stays shut until the next Shabbos Mevorchim; a teacher can still backfill the
+// month with mark_tehillim2.php.
+const WWTC_REPORT_GRACE_DAYS = 7;
 // Shared roster predicate for the ancillary PDO counts (soldiers, classes,
 // headcounts), so they all count the same population. Needs `schools s`,
 // `classes c` and `users u` in scope. Campaign done/goal figures instead follow
@@ -607,6 +612,23 @@ function wwtcCurrentDate(): int
         $current = $all[0] ?? $now;
     }
     return (int) $current;
+}
+
+/**
+ * Last julian day a soldier may self-report the current month: the current
+ * Shabbos Mevorchim plus the grace window. Before the year's first Shabbos
+ * Mevorchim, wwtcCurrentDate() returns that first (future) SM, so the window is
+ * open then too — the grace only caps how late a report can be, never how early.
+ */
+function wwtcReportDeadline(): int
+{
+    return wwtcCurrentDate() + WWTC_REPORT_GRACE_DAYS;
+}
+
+/** Whether the current month's self-report window is still open (today on/before the deadline). */
+function wwtcReportWindowOpen(): bool
+{
+    return unixtojd() <= wwtcReportDeadline();
 }
 
 /** English month name for a Shabbos-Mevorchim jd, '' if unknown. */

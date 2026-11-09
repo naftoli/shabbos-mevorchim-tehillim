@@ -189,7 +189,13 @@ export default function KidDashboard() {
   const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
   if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
 
+  // Self-reporting closes a week after Shabbos Mevorchim (server: reportOpen on
+  // the current month). Undefined (demo) counts as open; only an explicit false
+  // from the live API closes the form.
+  const reportOpen = cur.reportOpen !== false
+
   async function saveReport(extra = {}) {
+    if (!reportOpen) return
     const wasMet = cur.met
     const beforeMedal = progress.medal?.current?.name || null
     const kap = Number(said) || 0
@@ -302,7 +308,7 @@ export default function KidDashboard() {
               <p className="mb-4 text-center text-sm font-semibold text-navy">
                 You reported {fmt(cur.said)} of {cur.quota} kapitlach{cur.saidMinutes > 0 ? <> in {fmt(cur.saidMinutes)} minutes</> : null}.
               </p>
-            ) : (
+            ) : !reportOpen ? null : (
               <p className="mb-4 text-center text-sm text-muted">Tell us what you said — it’s counted for your class, school and army.</p>
             )}
             {switched ? <p className="mb-3 text-center text-sm font-semibold text-navy">Signed out of the last soldier. You’re signed in as {kid.name.split(' ')[0]}.</p> : null}
@@ -316,11 +322,21 @@ export default function KidDashboard() {
                 </div>
               </div>
             ) : null}
-            <div className="grid grid-cols-2 items-end gap-3 sm:mx-auto sm:max-w-xl sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <Field label="Kapitlach I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
-              <Field label="Minutes I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
-              <button type="button" className="btn btn-gold col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto" onClick={() => saveReport()}>Save</button>
-            </div>
+            {reportOpen ? (
+              <div className="grid grid-cols-2 items-end gap-3 sm:mx-auto sm:max-w-xl sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <Field label="Kapitlach I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={said} onChange={(e) => { setSaid(e.target.value); setNotice('') }} onFocus={() => emitCue('report-form', cueReport())} /></Field>
+                <Field label="Minutes I said"><Input className="!min-h-11 w-full" inputMode="numeric" value={mins} onChange={(e) => setMins(e.target.value)} /></Field>
+                <button type="button" className="btn btn-gold col-span-2 min-h-11 w-full sm:col-span-1 sm:w-auto" onClick={() => saveReport()}>Save</button>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-navy/15 bg-navy/5 p-4 text-center sm:mx-auto sm:max-w-xl">
+                <p className="font-display text-base font-black text-navy">Reporting for <span className="font-heb">{MONTH_HEB[cur.month] ?? cur.month}</span> is closed</p>
+                <p className="mt-1 text-sm text-muted">
+                  You can enter your Tehillim up to a week after Shabbos Mevorchim.
+                  {cur.said > 0 ? ' Your report above is saved.' : ' Ask your teacher if you still need to add it.'}
+                </p>
+              </div>
+            )}
             <div className="mt-5">
               <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
               <div className="grid grid-cols-4 gap-1.5">

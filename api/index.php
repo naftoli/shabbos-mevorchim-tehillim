@@ -470,6 +470,10 @@ function wwtcKidMonths(array $kid): array
     };
 
     $current = wwtcCurrentDate();
+    // Whether the current month is still open to the soldier's own report (closes
+    // a week after Shabbos Mevorchim). Only the current month can be self-reported,
+    // so a past month is never open.
+    $reportOpen = wwtcReportWindowOpen();
     // Keyed by jd so the holiday rows (below) interleave chronologically — streaks
     // read this list in order, so Rosh Hashana / Yom Kippur must sit after Tishrei.
     $byDate = [];
@@ -487,6 +491,7 @@ function wwtcKidMonths(array $kid): array
             'met' => $reported && $q > 0 && $said >= $q,
             'reported' => $reported,
             'isCurrent' => $d === $current,
+            'reportOpen' => $d === $current ? $reportOpen : false,
         ];
     }
 
@@ -508,6 +513,7 @@ function wwtcKidMonths(array $kid): array
                 'met' => $reported && $q > 0 && $said >= $q,
                 'reported' => $reported,
                 'isCurrent' => false,
+                'reportOpen' => false,
                 'holiday' => true,
             ];
         }
@@ -1565,6 +1571,18 @@ if ($method === 'POST' && $path === '/me/report') {
     }
 
     $date = wwtcCurrentDate(); // current Shabbos Mevorchim only
+
+    // Self-reporting closes one week after Shabbos Mevorchim (WWTC_REPORT_GRACE_DAYS).
+    // After that the month is locked to the soldier; a teacher can still backfill it
+    // with mark_tehillim2.php.
+    if (!wwtcReportWindowOpen()) {
+        $month = wwtcMonthForDate($date);
+        wwtcError(
+            'The time to enter your Tehillim' . ($month !== '' ? ' for ' . $month : '')
+            . ' has closed — it was due a week after Shabbos Mevorchim. Ask your teacher to add it for you.',
+            409
+        );
+    }
 
     $input = wwtcInput();
     $hasKap = array_key_exists('kapitlach', $input) || array_key_exists('kapitelach', $input);
