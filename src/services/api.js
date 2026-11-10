@@ -838,6 +838,13 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
     .filter((c) => c.missing.length > 0)
 }
 
+// Site language. One call for Hebrew, Russian, Italian, and French
+// (POST /translate). No bearer token and no roster: the body is page copy.
+// A missing route or a 503 leaves the caller to keep the page in English.
+export async function translatePage(targetLang, content) {
+  return mashpia.translatePage(targetLang, content)
+}
+
 // First demo soldier's working credentials, for the login-screen hint.
 export function demoKidCredentials() {
   const cls = ROSTER[0].classes[0]

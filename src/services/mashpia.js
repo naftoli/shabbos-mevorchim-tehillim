@@ -239,3 +239,7 @@ export const setKidLadder = (ladder) =>
 // row id (the soldier's user_id). Server scopes it to the admin's authority.
 export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
   write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
+
+// Public. No bearer token: page copy only, never a session, serial, or password.
+export const translatePage = (targetLang, content) =>
+  req('/translate', { method: 'POST', body: { targetLang, content } })

@@ -204,6 +204,10 @@ body.wwtc-display footer { display: none; }
 
 .font-heb { font-family: var(--font-heb); direction: rtl; unicode-bidi: isolate; }
 
+/* Translated pages keep the site font and fall through for glyphs it lacks. */
+html[lang="he"] body { font-family: var(--font-sans), "Noto Sans Hebrew", "DejaVu Sans", sans-serif; }
+html[lang="ru"] body { font-family: var(--font-sans), "Noto Sans", "DejaVu Sans", sans-serif; }
+
 /* Dashboard medal: the numbered reverse is always the resting face.
    When motion is allowed, the crest turns away once to reveal it. */
 .medal-flip { position: relative; display: grid; place-items: center; }
