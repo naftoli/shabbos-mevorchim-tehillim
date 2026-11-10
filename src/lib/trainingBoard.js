@@ -1,4 +1,4 @@
-import { quotaFor, GRADE_LABEL } from '@/data/ladders.js'
+import { quotaFor, GRADE_LABEL } from '../data/ladders.js'
 
 export const OCCASIONS = [
   { key: 'Tishrei', heb: 'תשרי' },

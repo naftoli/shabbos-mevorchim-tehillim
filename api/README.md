@@ -142,6 +142,34 @@ server-side only, never shipped to the browser. Optional `WWTC_AI_MODEL`
 SPA uses the scripted helper. Note: this bills per message and is used by
 children — consider adding rate-limiting/abuse protection before heavy use.
 
+## Site translation
+
+`POST /translate` — `{ targetLang, content }` → translations for the visible page.
+
+`targetLang` is one of `he`, `ru`, `it`, `fr` (anything else is **422**).
+`content` is a string or a list of up to 80 page strings. A string comes back as
+`{ targetLang, translation }`. A list comes back as `{ targetLang, translations }`
+in the same order. One code path serves all four languages.
+
+It uses the same Claude call as `POST /chat`: **`WWTC_AI_KEY`**, and the optional
+**`WWTC_AI_MODEL`** (default `claude-haiku-5-5`). There is no separate translation
+key. The key stays on the server and is never returned. Until `WWTC_AI_KEY` is
+set, `/translate` returns **503** and the language buttons leave the page in
+English.
+
+Each translated string is cached on disk (`wwtc-translate-cache`, beside the
+report cache) so the same line is not sent to Claude on the next visit.
+Campaign names stay as written: Tehillim, Shabbos Mevorchim, kapitlach, Kapitel,
+and the month names. The browser sends no bearer token and must not send a
+serial number, date of birth, or password.
+
+Deploy this PHP file with the SPA build (`api/translate.php` and the new route
+in `api/index.php`). The Netlify preview has no PHP, so the buttons there stay
+on English and show a short failure message. Local `npm run dev:api` has no
+Claude key and no Mashpia database; that dev-only router answers `/translate`
+from a built-in stub so the buttons can be tried. Apache never loads
+`dev-router.php`.
+
 ## Your Virtual Commander — realtime phone call
 
 `POST /realtime-session` turns the commander into a real speech-to-speech call

@@ -1473,43 +1473,26 @@ SYS;
 }
 
 /** Call the Claude Messages API. Returns the reply text, or null on any failure. */
-function wwtcGeneralAsk(string $key, string $model, string $system, array $messages): ?string
+function wwtcGeneralAsk(string $key, string $model, string $system, array $messages, int $maxTokens = 300): ?string
 {
-    $payload = json_encode(
-        ['model' => $model, 'max_tokens' => 300, 'system' => $system, 'messages' => $messages],
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-    );
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => ['content-type: application/json', 'anthropic-version: 2023-06-01', 'x-api-key: ' . $key],
-        CURLOPT_CONNECTTIMEOUT => 8,
-        CURLOPT_TIMEOUT => 25,
-    ]);
-    $raw = curl_exec($ch);
-    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if (!is_string($raw) || $status < 200 || $status >= 300) {
-        error_log('WWTC General 613 AI error: status ' . $status . ' ' . $err . ' ' . (is_string($raw) ? mb_substr($raw, 0, 500) : ''));
-        return null;
-    }
-    $data = json_decode($raw, true);
-    $text = '';
-    foreach ((array) ($data['content'] ?? []) as $block) {
-        if (($block['type'] ?? '') === 'text') {
-            $text .= (string) ($block['text'] ?? '');
-        }
-    }
-    $text = trim($text);
-    return $text === '' ? null : $text;
+    require_once __DIR__ . '/translate.php';
+    return wwtcClaudeMessages($key, $model, $system, $messages, $maxTokens);
 }
 
 if ($method === 'POST' && ($path === '/realtime-session' || $path === '/realtime-session.php')) {
     require_once __DIR__ . '/realtime-session.php';
     wwtcHandleRealtimeSession();
+}
+
+// Page copy into Hebrew, Russian, Italian, or French. Same Claude key as /chat.
+// No bearer token: the body is visible page text, never a serial or password.
+if ($method === 'POST' && $path === '/translate') {
+    require_once __DIR__ . '/translate.php';
+    $result = wwtcTranslateRequest(wwtcInput(), wwtcAiKey());
+    if (($result['status'] ?? 500) !== 200) {
+        wwtcError((string) ($result['error'] ?? 'Translation failed.'), (int) ($result['status'] ?? 500));
+    }
+    wwtcJson($result['body']);
 }
 
 if ($method === 'POST' && $path === '/chat') {
@@ -1521,14 +1504,12 @@ if ($method === 'POST' && $path === '/chat') {
     $message = mb_substr($message, 0, 600);
 
     // Server-side only. Set WWTC_AI_KEY in globals.php (gitignored) or the env.
-    $key = defined('WWTC_AI_KEY') ? (string) WWTC_AI_KEY : '';
-    if (strlen($key) < 10) {
-        $key = wwtcEnv('WWTC_AI_KEY');
-    }
-    if (strlen($key) < 10) {
+    require_once __DIR__ . '/translate.php';
+    $key = wwtcAiKey();
+    if ($key === '') {
         wwtcError('Your Virtual Commander’s AI is not configured yet.', 503);
     }
-    $model = wwtcEnv('WWTC_AI_MODEL') ?: 'claude-haiku-5-5';
+    $model = wwtcAiModel();
 
     // The child's own, non-sensitive progress snapshot, as the SPA computed it.
     $ctx = is_array($in['context'] ?? null) ? $in['context'] : [];
