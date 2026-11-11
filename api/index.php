@@ -17,6 +17,7 @@ require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
 require __DIR__ . '/soldierBoard.php';
 require __DIR__ . '/soldierRank.php';
+require __DIR__ . '/notify.php';
 
 function wwtcRoutePath(): string
 {
@@ -29,6 +30,13 @@ function wwtcRoutePath(): string
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = wwtcRoutePath();
+
+// Signed, expiring PDF for one commander or teacher. No login. The token is
+// the secret; a bad or expired token is a 404 with no names in the body.
+if ($method === 'GET' && $path === '/notify-report') {
+    $notifyToken = $_GET['t'] ?? '';
+    wwtcNotifyServeReport(is_string($notifyToken) ? $notifyToken : '');
+}
 
 /** round(done/quota*100), uncapped (can exceed 100); 0 when there is no quota. */
 function wwtcPct($done, $quota): int
@@ -591,9 +599,9 @@ function wwtcKidMissionHistoryByGrade(array $kid): array
         $year = $currentYear - ($currentGrade - $gn);
         $gradeKey = $gn === 0 ? 'pre1a' : (string) $gn;
         foreach (wwtcMonthDatesForYear($year) as $month => $jd) {
-            // The SPA shows one "Adar" occasion; a leap year's two Adars collapse to it.
-            $occ = strpos($month, 'Adar') === 0 ? 'Adar' : $month;
-            $jdMap[(int) $jd] = [$gradeKey, $occ];
+            // Adar I and Adar II stay distinct so a leap year's two marks do not
+            // overwrite each other. A plain year still keys its one month "Adar".
+            $jdMap[(int) $jd] = [$gradeKey, wwtcHistoryOccasion($month)];
         }
         foreach (wwtcHolidayDates($year) as $name => $jds) {
             foreach ($jds as $hjd) {

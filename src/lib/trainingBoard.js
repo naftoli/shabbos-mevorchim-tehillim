@@ -1,21 +1,26 @@
-import { quotaFor, GRADE_LABEL } from '@/data/ladders.js'
+import { quotaFor, GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { campaignMonths } from '@/lib/hebrewYear.js'
 
-export const OCCASIONS = [
-  { key: 'Tishrei', heb: 'תשרי' },
+const HOLIDAY_OCCASIONS = [
   { key: 'Rosh Hashana', heb: 'ר״ה', holiday: true },
   { key: 'Yom Kippur', heb: 'יו״כ', holiday: true },
-  { key: 'Cheshvan', heb: 'חשון' },
-  { key: 'Kislev', heb: 'כסלו' },
-  { key: 'Teves', heb: 'טבת' },
-  { key: 'Shvat', heb: 'שבט' },
-  { key: 'Adar', heb: 'אדר' },
-  { key: 'Nissan', heb: 'ניסן' },
-  { key: 'Iyar', heb: 'אייר' },
-  { key: 'Sivan', heb: 'סיון' },
-  { key: 'Tammuz', heb: 'תמוז' },
-  { key: 'Av', heb: 'אב' },
-  { key: 'Elul', heb: 'אלול' },
 ]
+
+// A plain year (the default when no campaign year is passed). Leap years swap
+// the single Adar for Adar I then Adar II.
+export const OCCASIONS = occasionsForYear(5785, new Set(['Rosh Hashana', 'Yom Kippur']))
+
+function occasionsForYear(year, activeHolidays) {
+  const out = []
+  for (const key of campaignMonths(year == null ? 5785 : year)) {
+    out.push({ key, heb: MONTH_HEB[key] || key })
+    if (key !== 'Tishrei') continue
+    for (const holiday of HOLIDAY_OCCASIONS) {
+      if (activeHolidays.has(holiday.key)) out.push(holiday)
+    }
+  }
+  return out
+}
 
 const GRADE_ORDER = ['pre1a', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
@@ -32,14 +37,26 @@ export function gradesOnLadder(ladder, throughGrade) {
 }
 
 function monthRecord(byMonth, key) {
-  return byMonth[key] || byMonth[key === 'Adar' ? 'Adar I' : key] || null
+  if (byMonth[key]) return byMonth[key]
+  // A leap year that was stored as one "Adar" (before the two months were
+  // split) keeps that mark on Adar II, the Adar a plain year corresponds to.
+  // It is not copied onto Adar I, so one saved report cannot become two.
+  if (key === 'Adar II' && byMonth.Adar && !byMonth['Adar I']) return byMonth.Adar
+  return null
+}
+
+function historyValue(earnedPast, key) {
+  if (!earnedPast) return undefined
+  if (earnedPast[key] != null) return earnedPast[key]
+  if (key === 'Adar II' && earnedPast['Adar I'] == null && earnedPast.Adar != null) return earnedPast.Adar
+  return undefined
 }
 
 /**
  * One cell per mission on this ladder. A check means a record says the quota
  * was met. No record stays blank — it is not shown as a miss.
  */
-export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {} }) {
+export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {}, year = null }) {
   const grades = gradesOnLadder(ladder, grade)
   const byMonth = {}
   for (const month of months || []) {
@@ -49,7 +66,10 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   // sent it in this soldier's months — i.e. it is a boarded occasion this year.
   // Before the enable year (or a year with no holiday missions) it is dropped.
   const activeHolidays = new Set((months || []).filter((m) => m?.holiday && m?.month).map((m) => m.month))
-  const occasions = OCCASIONS.filter((occ) => !occ.holiday || activeHolidays.has(occ.key))
+  const currentGradeNum = gradeNum(grade)
+  // Each grade sat in its own Hebrew year. A leap year on that row shows
+  // Adar I and Adar II; a plain year shows one Adar.
+  const yearFor = (g) => (year == null ? null : Number(year) - (currentGradeNum - gradeNum(g)))
   // The quota shown for a mission should reflect the ladder the soldier was on
   // for that mission, not whatever ladder they sit on now (it may have changed).
   // The current ladder is only a last resort.
@@ -60,7 +80,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   // month records (met, reported-but-under, or nothing). Holidays (Rosh Hashana /
   // Yom Kippur) board off the year's Tishrei quota — handled at quota lookup.
   const resolve = (occ, isCurrent, earnedPast) => {
-    const histVal = earnedPast?.[occ.key]
+    const histVal = historyValue(earnedPast, occ.key)
     const histLadder = typeof histVal === 'number' ? histVal : null
     const rec = isCurrent ? monthRecord(byMonth, occ.key) : null
     const reported = isCurrent ? !!(rec && rec.reported !== false) : (histVal != null && histVal !== false)
@@ -77,6 +97,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   for (const g of grades) {
     const isCurrent = String(g) === String(grade)
     const earnedPast = earnedFor(g)
+    const occasions = occasionsForYear(yearFor(g), activeHolidays)
     const hit = occasions.find((occ) => resolve(occ, isCurrent, earnedPast).met)
     if (hit) { firstDoneLadder = resolve(hit, isCurrent, earnedPast).doneLadder; break }
   }
@@ -88,6 +109,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   const boards = grades.map((g) => {
     const isCurrent = String(g) === String(grade)
     const earnedPast = earnedFor(g)
+    const occasions = occasionsForYear(yearFor(g), activeHolidays)
     const missions = occasions.map((occ) => {
       const occKey = occ.holiday ? 'Tishrei' : occ.key
       const { rec, reported, met, doneLadder } = resolve(occ, isCurrent, earnedPast)
