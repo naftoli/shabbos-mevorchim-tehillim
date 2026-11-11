@@ -66,6 +66,17 @@ test('an older response with only missing is listed under submit', () => {
   assert.equal(view.sections[1].phrase, '1 still needs to submit')
 })
 
+test('finish and submit list classes by grade, with Pre-1A first', () => {
+  const view = notDoneView([
+    { classId: 4, className: 'Bet Bet', grade: '2', size: 4, under: ['Short'], notFilled: ['Zero'] },
+    { classId: 1, className: 'Pre-1A', grade: 'pre1a', size: 2, under: ['Young'], notFilled: [] },
+    { classId: 2, className: '1 Aleph Aleph', grade: '1', size: 3, under: [], notFilled: ['Blank'] },
+    { classId: 3, className: 'כיתה א', grade: '2', size: 4, under: ['Hebrew'], notFilled: [] },
+  ])
+  assert.deepEqual(view.sections[0].classes.map((c) => c.className), ['Pre-1A', 'Bet Bet', 'כיתה א'])
+  assert.deepEqual(view.sections[1].classes.map((c) => c.className), ['Aleph Aleph', 'Bet Bet'])
+})
+
 test('sample cheder shows both groups for the numeric class and the Hebrew class', () => {
   const school = ROSTER.find((s) => s.id === 'sample-cheder')
   const classes = school.classes.map((cls) => {

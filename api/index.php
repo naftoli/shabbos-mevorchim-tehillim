@@ -1229,7 +1229,7 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
             'perfect' => $c['perfect'],
         ];
     }
-    wwtcJson(['month' => $monthLabel, 'school' => $names[$id], 'schoolId' => $id, 'rows' => $rows]);
+    wwtcJson(['month' => $monthLabel, 'school' => $names[$id], 'schoolId' => $id, 'rows' => wwtcSortClasses($rows)]);
 }
 
 /**

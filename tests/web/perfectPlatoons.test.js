@@ -26,7 +26,7 @@ test('grouping keeps every perfect class, including names that differ only by ca
   assert.equal(group.items.length, 4)
   assert.equal(group.schoolClasses, 5)
   assert.equal(`${group.items.length} / ${group.schoolClasses}`, '4 / 5')
-  assert.deepEqual(group.items.map((p) => p.teacher), ['Rabbi Adler', 'Rabbi Berg', 'Rabbi Klein', 'Rabbi Hale'])
+  assert.deepEqual(group.items.map((p) => p.teacher), ['Rabbi Klein', 'Rabbi Berg', 'Rabbi Adler', 'Rabbi Hale'])
   const keys = group.items.map(platoonKey)
   assert.equal(new Set(keys).size, keys.length)
   assert.ok(keys.includes('61-401'))
@@ -44,14 +44,14 @@ test('the report star follows the shared flag instead of recounting completed ==
   assert.equal(classIsPerfect(0, 0), false)
 })
 
-test('the fictional sample cheder has three perfect platoons and the chips do not name soldiers', () => {
+test('the fictional sample cheder keeps its perfect platoons and the chips do not name soldiers', () => {
   const school = ROSTER.find((s) => s.id === 'sample-cheder')
   assert.ok(school)
-  assert.equal(school.classes.length, 5)
+  assert.equal(school.classes.length, 6)
   const perfect = school.classes.filter((cls) => cls.kids.length > 0 && cls.kids.every(metThisMonth))
-  assert.equal(perfect.length, 3)
-  assert.deepEqual(perfect.map((c) => c.name), ['4-boys', '4-Boys', '3-Boys'])
-  assert.deepEqual(perfect.map((c) => c.teacher), ['Rabbi Adler', 'Rabbi Berg', 'Rabbi Klein'])
+  assert.equal(perfect.length, 4)
+  assert.deepEqual(perfect.map((c) => c.name), ['4-boys', '4-Boys', '3-Boys', 'Pre-1A'])
+  assert.deepEqual(perfect.map((c) => c.teacher), ['Rabbi Adler', 'Rabbi Berg', 'Rabbi Klein', 'Rabbi Fried'])
   const notPerfect = school.classes.filter((cls) => !perfect.includes(cls)).map((c) => c.name)
   assert.deepEqual(notPerfect, ['1', 'כיתה א'])
 
@@ -65,8 +65,8 @@ test('the fictional sample cheder has three perfect platoons and the chips do no
     schoolClasses: school.classes.length,
   }))
   const [group] = groupPlatoonsBySchool(rows)
-  assert.equal(group.items.length, 3)
-  assert.equal(group.schoolClasses, 5)
+  assert.equal(group.items.length, 4)
+  assert.equal(group.schoolClasses, 6)
   const payload = JSON.stringify(rows)
   assert.equal(payload.includes('Fictional'), false)
   for (const cls of school.classes) {

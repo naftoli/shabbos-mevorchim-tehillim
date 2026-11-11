@@ -20,6 +20,7 @@ import {
   undoQuotaOverride,
 } from '@/services/api.js'
 import { platoonIsPerfect } from '@/lib/perfectPlatoons.js'
+import { sortClasses } from '@/lib/classOrder.js'
 import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
 import { formatClassName } from '@/lib/formatClassName.js'
 import ClassName from '@/components/ClassName.jsx'
@@ -256,7 +257,7 @@ function ArmyView({ rows, raw, error, loading, reload, sort, setSort, pctGoal, o
 function BaseView({ data, error, loading, reload, onPickClass }) {
   if (error) return <ErrorNote error={error} onRetry={reload} what="this base" />
   if (!data) return loading ? <Pending label="Getting this base" /> : <ErrorNote error="This base has no report for that month." onRetry={reload} what="this base" />
-  const rows = [...(data.rows || [])].sort((a, b) => (b.goal ? b.accomplished / b.goal : 0) - (a.goal ? a.accomplished / a.goal : 0) || b.accomplished - a.accomplished)
+  const rows = sortClasses(data.rows)
   const t = rows.reduce((a, c) => ({ size: a.size + c.size, goal: a.goal + c.goal, accomplished: a.accomplished + c.accomplished, completed: a.completed + c.completed, perfect: a.perfect + (c.perfect ? 1 : 0) }), { size: 0, goal: 0, accomplished: 0, completed: 0, perfect: 0 })
   return (
     <>
