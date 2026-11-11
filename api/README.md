@@ -94,6 +94,17 @@ Writes — the signed-in soldier's own, scoped by the bearer token to their
   and keeps the kapitelach mission mark (`date_tasks_mission_marks`) in sync with
   the quota, exactly as `mark_tehillim2.php` does, in one transaction, then bumps
   `Cache::bumpVersion('shabbos_mevorchim:v')` so the reports refresh.
+  A report past the grade line in `api/over-entry.json` is not written there.
+  The API returns 409 `over_entry` unless the body includes `flagConfirmed: true`,
+  and then it stores a `flagged` row (`api/sql/wwtc_flagged_entries.sql`, run once
+  on mashpia — the API does not run it). **Flagged amounts are excluded from
+  public totals, ranks, Perfect Platoon, and medals until accepted.**
+- `GET /admin/flags` — the review queue for HQ (every base) or that school's
+  base commander. Each row has the soldier, class, amount, threshold, and date.
+- `POST /admin/flags/:id/accept` — the amount counts, like a normal mark.
+- `POST /admin/flags/:id/remove` — the entry is void. The soldier goes back to
+  the value they had before, or to not counted for the month.
+  Every flag, accept, and remove is a row in `wwtc_flag_decisions` (who and when).
 - `PUT /me/ladder` — `{ ladder }` (5..12) → writes `user_tracks.track_id` for the
   Tehillim subject. Ladder ↔ track mapping: `track_id = 15 - ladder` (ladder 12 =
   track 3 … 7 = track 8; only tracks 3..8 exist today).
