@@ -13,7 +13,8 @@ import StreakBar from '@/components/StreakBar.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor, toHebrewNumeral } from '@/data/ladders.js'
+import { cellFor, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
 import { isHebrewLeapYear } from '@/lib/hebrewYear.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -84,20 +85,28 @@ export default function KidDashboard() {
   // that is the DB date_tasks quantity, which can disagree when user_tracks.level
   // is out of sync with the child's grade (e.g. level 10 → 11 kapitlach while
   // Ladder 9 in 6th grade is 73/74).
+  const customLadder = progress?.customLadder || null
   const reached = useMemo(() => {
-    if (!progress?.months || !kid?.ladder) return 0
+    if (!progress?.months || (!kid?.ladder && !progress.customLadder)) return 0
     return progress.months.reduce((mx, m) => {
       if (!m.met) return mx
       // An overridden month counts the kapitlach they actually entered.
-      // Cheshvan would otherwise be repriced from today's ladder.
+      // Otherwise a custom ladder replaces the normal ladder. Cheshvan on a
+      // normal ladder is repriced from today's ladder table.
       const v = m.quotaAdjusted
         ? (Number(m.quota) || 0)
-        : (quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0)
+        : (progress.customLadder
+          ? (cellFor(progress.customLadder, kid.grade, m.month)?.v ?? 0)
+          : (quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0))
       return Math.max(mx, Number(v) || 0)
     }, 0)
   }, [progress, kid])
-  const climbTarget = cur && kid?.ladder
-    ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0)
+  const climbTarget = cur
+    ? (cur.quotaAdjusted
+      ? (Number(cur.quota) || 0)
+      : (customLadder
+        ? (cellFor(customLadder, kid.grade, cur.month)?.v ?? 0)
+        : (kid?.ladder ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0) : 0)))
     : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
@@ -140,7 +149,7 @@ export default function KidDashboard() {
 
   // First login, or no valid ladder yet: graphic welcome + a prompt to choose.
   // (An out-of-range ladder — e.g. a stale value — counts as not chosen.)
-  if (!kid.ladder || !LADDERS.includes(kid.ladder)) {
+  if ((!kid.ladder || !LADDERS.includes(kid.ladder)) && !progress.customLadder) {
     return (
       <>
         <PageHero eyebrow="My Tehillim · this year" title={`Welcome, ${kid.name.split(' ')[0]}!`}>
@@ -393,7 +402,21 @@ export default function KidDashboard() {
               </div>
             )}
             {/* Progress — kapitlach + minutes, laid out like the worldwide card */}
-            <div className="mt-5 space-y-7">
+            {progress.customLadder ? (
+              <p className="mt-5 text-center text-sm font-semibold text-navy">
+                Custom ladder · finish {fmt(progress.customLadder.targetKapitlach)} kapitlach by {progress.customLadder.finishLabel}
+                {!cur.quotaAdjusted ? (
+                  <>
+                    {' '}· this month{' '}
+                    <span className={formatKapitlachQuota(cur.quota).overTehillim ? '' : 'font-heb'}>
+                      {formatKapitlachQuota(cur.quota).label}
+                    </span>
+                    {formatKapitlachQuota(cur.quota).overTehillim ? ` (${fmt(cur.quota)})` : null}
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            <div className={`${progress.customLadder ? 'mt-3' : 'mt-5'} space-y-7`}>
               <div>
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
                   <div>
@@ -517,7 +540,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} quotaGrid={progress.customLadder} />
 
         <MedalBoard
           progress={progress}
@@ -532,15 +555,24 @@ export default function KidDashboard() {
             <div>
               <p className="sh">Your Ladder</p>
               <h3 className="font-display text-xl font-black text-navy">
-                Ladder {kid.ladder}
-                <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+                {progress.customLadder ? (
+                  <>
+                    Custom ladder
+                    <span className="font-normal text-muted"> — finish {fmt(progress.customLadder.targetKapitlach)} kapitlach by {progress.customLadder.finishLabel}</span>
+                  </>
+                ) : (
+                  <>
+                    Ladder {kid.ladder}
+                    <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+                  </>
+                )}
               </h3>
             </div>
             <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
-            <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} />
+            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
@@ -554,11 +586,18 @@ export default function KidDashboard() {
           <ClimbMeter
             reached={reached}
             target={climbTarget}
-            ladder={kid.ladder}
-            finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
+            ladder={progress.customLadder ? null : kid.ladder}
+            total={progress.customLadder?.targetKapitlach}
+            marks={progress.customLadder ? gradesThrough(progress.customLadder.finishGrade, kid.grade).map((g) => {
+              const cell = cellFor(progress.customLadder, g, 'Elul')
+              if (!cell) return null
+              const shown = formatKapitlachQuota(cell.v)
+              return { grade: g, v: cell.v, heb: shown.overTehillim ? shown.short : toHebrewNumeral(cell.v) }
+            }).filter(Boolean) : null}
+            finishGradeLabel={progress.customLadder?.finishLabel || GRADE_LABEL[String(finishGrade(kid.ladder))]}
             gender={kid.gender || progress.gender}
             onOpen={() => {
-              const text = fillClimb(trainByGrade(kid.ladder))
+              const text = fillClimb(progress.customLadder?.finishLabel || trainByGrade(kid.ladder))
               if (text) emitCue(`climb-${kid.id}`, text, { force: true })
             }}
           />

@@ -21,7 +21,7 @@ import {
   searchSite,
 } from '../../src/lib/siteSearch.js'
 
-const SCRIPT_HASH = '2493df5da5620493cacef185ffe8102dc93a9a73559aceab4ad203cd116fbbbf'
+const SCRIPT_HASH = '449789556dcf9ed0632f6000b1f81258255564ad16e7424d3c58b75d142acd5b'
 
 const child = {
   firstName: 'Dovi',
@@ -52,6 +52,7 @@ test('Wednesday commander scripts file is unchanged', () => {
   assert.match(CHOOSING_SCRIPT, /^That's wonderful, soldier!/)
   assert.match(TRACK_SCRIPT, /^This is your Tehillim training track, soldier\./)
   assert.match(fillMission({ name: 'Dovi', ladder: 8, gradeLabel: '8th grade', kapitlach: 18, minutes: 55 }), /18 kapitlach, about 55 minutes/)
+  assert.match(fillMission({ name: 'Dovi', customTarget: 300, customFinish: '8th grade', kapitlach: 40, minutes: 80 }), /custom ladder[\s\S]*300 kapitlach by 8th grade/)
   assert.match(fillStand({ baseRank: 23, baseTotal: 75, platoonRank: 4, platoonTotal: 47, soldierRank: 8, soldierTotal: 581 }), /number 23 out of 75/)
   assert.match(fillStreak({ current: 2, longest: 4 }), /2 missions in a row/)
   assert.match(fillClimb('8th grade'), /by 8th grade/)

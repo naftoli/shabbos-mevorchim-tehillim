@@ -3,8 +3,8 @@ import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
 import { buildTraining } from '@/lib/trainingBoard.js'
 
-export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory, year }) {
-  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory, year })
+export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory, year, quotaGrid = null }) {
+  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory, year, quotaGrid })
   const current = String(grade)
   const [open, setOpen] = useState(() => new Set([current]))
   const rootRef = useRef(null)
@@ -46,7 +46,9 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         <div>
           <p className="sh">My Tehillim Training</p>
           <p className="mt-1 text-[13px] font-semibold text-muted">
-            Ladder {ladder || '—'} · every Shabbos Mevorchim, plus Rosh Hashana and Yom Kippur, through the grade this ladder finishes.
+            {quotaGrid
+              ? `Custom ladder · finish ${quotaGrid.targetKapitlach} kapitlach by ${quotaGrid.finishLabel}.`
+              : `Ladder ${ladder || '—'} · every Shabbos Mevorchim, plus Rosh Hashana and Yom Kippur, through the grade this ladder finishes.`}
           </p>
         </div>
         <div className="text-right">

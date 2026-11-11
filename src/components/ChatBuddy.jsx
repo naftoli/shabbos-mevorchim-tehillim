@@ -369,14 +369,16 @@ export default function ChatBuddy() {
   const chayolName = (kid?.name || '').trim().split(/\s+/)[0] || null
   const storedScripts = readKidScripts(typeof localStorage === 'undefined' ? null : localStorage, kidId, monthKey)
   const streaks = progress ? streakFromMissions(streakMissions(progress)) : null
-  const quota = ctx?.ladder != null && ctx?.grade != null && monthKey
-    ? missionQuota(ctx.grade, monthKey, ctx.ladder)
+  const quota = ctx?.grade != null && monthKey && (ctx?.ladder != null || progress?.customLadder)
+    ? missionQuota(ctx.grade, monthKey, ctx.ladder, progress?.customLadder)
     : { kapitlach: null, minutes: null }
   const facts = standFacts(social)
   const scriptInput = {
     name: chayolName,
     ladder: ctx?.ladder,
-    gradeLabel: ctx?.ladder != null ? trainByGrade(ctx.ladder) : null,
+    gradeLabel: progress?.customLadder?.finishLabel || (ctx?.ladder != null ? trainByGrade(ctx.ladder) : null),
+    customTarget: progress?.customLadder?.targetKapitlach ?? null,
+    customFinish: progress?.customLadder?.finishLabel ?? null,
     month: monthKey,
     cardsOnScreen: pathname === '/ladders',
     training: storedScripts.training,
@@ -408,6 +410,8 @@ export default function ChatBuddy() {
     streaks ? `${streaks.current}|${streaks.best}` : '',
     quota.kapitlach ?? '',
     quota.minutes ?? '',
+    progress?.customLadder?.targetKapitlach ?? '',
+    progress?.customLadder?.finishGrade ?? '',
     trackOpen ? 'track' : '',
     climbOpen ? 'climb' : '',
   ].join('~')

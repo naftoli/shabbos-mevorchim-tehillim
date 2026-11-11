@@ -251,5 +251,14 @@ export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder 
 export const overrideQuota = ({ kidId, year, month, reason }) =>
   write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
 
+export const listCustomLadderSoldiers = (schoolId) =>
+  req(`/admin/custom-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setCustomLadder = ({ kidId, targetKapitlach, finishGrade, reason }) =>
+  write('/admin/custom-ladder', { method: 'POST', body: { kidId, targetKapitlach, finishGrade, reason }, as: 'admin' })
+
+export const removeCustomLadder = ({ kidId }) =>
+  write('/admin/custom-ladder/remove', { method: 'POST', body: { kidId }, as: 'admin' })
+
 export const undoQuotaOverride = ({ kidId, year, month }) =>
   write('/admin/quota-override/undo', { method: 'POST', body: { kidId, year, month }, as: 'admin' })

@@ -1,4 +1,5 @@
 import { quotaFor, GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { cellFor, finishGradeLabel, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
 
 const HOLIDAY_OCCASIONS = [
@@ -56,8 +57,8 @@ function historyValue(earnedPast, key) {
  * One cell per mission on this ladder. A check means a record says the quota
  * was met. No record stays blank — it is not shown as a miss.
  */
-export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {}, year = null }) {
-  const grades = gradesOnLadder(ladder, grade)
+export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {}, year = null, quotaGrid = null }) {
+  const grades = quotaGrid ? gradesThrough(quotaGrid.finishGrade, grade) : gradesOnLadder(ladder, grade)
   const byMonth = {}
   for (const month of months || []) {
     if (month?.month) byMonth[month.month] = month
@@ -137,14 +138,21 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
       // the first completion, the first one; only if nothing was ever done, the
       // current ladder.
       const quotaLadder = met ? doneLadder : (lastDoneLadder ?? firstDoneLadder ?? fallbackLadder)
-      const quota = quotaLadder ? quotaFor(g, occKey, quotaLadder) : null
+      const quota = quotaGrid
+        ? cellFor(quotaGrid, g, occKey)
+        : (quotaLadder ? quotaFor(g, occKey, quotaLadder) : null)
+      const quotaText = quota
+        ? (quotaGrid
+          ? (formatKapitlachQuota(quota.v).overTehillim ? formatKapitlachQuota(quota.v).short : formatKapitlachQuota(quota.v).label)
+          : (quota.k ?? null))
+        : null
       if (met && doneLadder) lastDoneLadder = doneLadder
 
       if (!isCurrent) {
-        return { ...occ, record: reported, met, ladder: doneLadder, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
+        return { ...occ, record: reported, met, ladder: doneLadder, quota: quota?.v ?? null, quotaLabel: quotaText, minutes: quota?.m ?? null }
       }
       if (!reported) {
-        return { ...occ, record: false, met: false, ladder: null, quota: quota?.v ?? null, quotaLabel: quota?.k ?? null, minutes: quota?.m ?? null }
+        return { ...occ, record: false, met: false, ladder: null, quota: quota?.v ?? null, quotaLabel: quotaText, minutes: quota?.m ?? null }
       }
       // A recorded current-month mission: when met, keep the server's exact
       // figures; when not met, show the last-done ladder's quota (computed above).
@@ -154,7 +162,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
         met,
         ladder: doneLadder,
         quota: met ? (rec.quota ?? quota?.v ?? null) : (quota?.v ?? null),
-        quotaLabel: met ? (rec.quotaLabel || quota?.k || null) : (quota?.k ?? null),
+        quotaLabel: met ? (rec.quotaLabel || quotaText) : quotaText,
         minutes: met ? (rec.minutes ?? quota?.m ?? null) : (quota?.m ?? null),
         said: rec.said,
         saidMinutes: rec.saidMinutes,
@@ -162,7 +170,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
     })
     return {
       grade: g,
-      title: g === 'pre1a' ? 'Pre-1A' : `${GRADE_LABEL[g]} Grade`,
+      title: g === 'pre1a' ? 'Pre-1A' : (GRADE_LABEL[g] ? `${GRADE_LABEL[g]} Grade` : finishGradeLabel(g)),
       missions,
       done: missions.filter((m) => m.record && m.met).length,
     }
