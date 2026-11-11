@@ -23,6 +23,7 @@ import { platoonIsPerfect } from '@/lib/perfectPlatoons.js'
 import { sortClasses } from '@/lib/classOrder.js'
 import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
 import { formatClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
 import ClassName from '@/components/ClassName.jsx'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
@@ -274,6 +275,7 @@ function BaseView({ data, error, loading, reload, onPickClass }) {
         <div className="divide-y divide-line">
           {rows.map((c, i) => {
             const pct = c.goal ? Math.round((c.accomplished / c.goal) * 100) : 0
+            const teacher = teacherName(c.teacher)
             return (
               <button key={c.id} type="button" onClick={() => onPickClass(c.id)} className="grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] sm:px-5">
                 <Rank n={i} />
@@ -288,7 +290,7 @@ function BaseView({ data, error, loading, reload, onPickClass }) {
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ${c.perfect ? 'bg-green/15 text-green' : 'bg-track text-navy'}`}>
                       {c.completed} of {c.size} chayolim
                     </span>
-                    {c.perfect ? <span className="inline-flex items-center gap-1 text-[12px] font-bold text-navy"><StarMark className="h-4 w-4" /> Perfect Platoon{c.teacher ? ` · ${c.teacher}` : ''}</span> : null}
+                    {c.perfect ? <span className="inline-flex items-center gap-1 text-[12px] font-bold text-navy"><StarMark className="h-4 w-4" /> Perfect Platoon{teacher ? ` · ${teacher}` : ''}</span> : null}
                   </span>
                 </span>
               </button>

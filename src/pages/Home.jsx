@@ -24,6 +24,7 @@ import { baseRanks } from '@/lib/baseRank.js'
 import { PERFECT_PLATOON_ART } from '@/lib/perfectPlatoonBanner.js'
 import { groupPlatoonsBySchool, platoonKey } from '@/lib/perfectPlatoons.js'
 import { displayClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
 import ClassName from '@/components/ClassName.jsx'
 
 const CAMPAIGN_ICON = CAMPAIGN_MARK === 'target' ? 'design/icon-target.png' : 'design/flag.png'
@@ -344,7 +345,7 @@ export default function Home() {
               {shownGroups.map((g) => {
                 const open = platoonsExpanded || openSchool === g.schoolId
                 const showingTeacher = teacherSchool === g.schoolId
-                const teachers = [...new Set(g.items.map((p) => p.teacher).filter(Boolean))]
+                const teachers = [...new Set(g.items.map((p) => teacherName(p.teacher)).filter(Boolean))]
                 const school = schoolById[g.schoolId] || { name: g.school, color: '#268ecd' }
                 const total = g.schoolClasses || g.items.length
                 return (
@@ -366,18 +367,21 @@ export default function Home() {
                     </button>
                     {open ? (
                       <div className="flex flex-wrap gap-2 px-3 pb-3 pl-16">
-                        {g.items.map((p) => (
-                          <Link
-                            key={platoonKey(p)}
-                            to={`/s/${p.schoolId}`}
-                            className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
-                            title={`${displayClassName(p.className)} · ${p.teacher || p.school} · ${p.size} soldiers`}
-                          >
-                            <StarMark className="h-4 w-4 flex-none" />
-                            <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
-                            {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
-                          </Link>
-                        ))}
+                        {g.items.map((p) => {
+                          const teacher = teacherName(p.teacher)
+                          return (
+                            <Link
+                              key={platoonKey(p)}
+                              to={`/s/${p.schoolId}`}
+                              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
+                              title={`${displayClassName(p.className)} · ${teacher || p.school} · ${p.size} soldiers`}
+                            >
+                              <StarMark className="h-4 w-4 flex-none" />
+                              <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
+                              {teacher ? <span className="text-green">· {teacher}</span> : null}
+                            </Link>
+                          )
+                        })}
                       </div>
                     ) : null}
                   </div>

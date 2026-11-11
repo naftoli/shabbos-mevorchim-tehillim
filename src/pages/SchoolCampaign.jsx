@@ -21,6 +21,7 @@ import {
   CURRENT_MONTH,
 } from '@/services/api.js'
 import { displayClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
 import ClassName from '@/components/ClassName.jsx'
 
 const RACE_FILLS = [
@@ -131,17 +132,20 @@ export default function SchoolCampaign() {
           </p>
           {perfect.length ? (
             <div className="flex flex-wrap gap-2">
-              {perfect.map((c) => (
-                <span
-                  key={c.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
-                  title={`${displayClassName(c.name)}${c.teacher ? ' · ' + c.teacher : ''} · ${c.size} soldiers`}
-                >
-                  <StarMark className="h-4 w-4 flex-none" />
-                  <span className="font-display font-bold text-navy"><ClassName name={c.name} /></span>
-                  {c.teacher ? <span className="text-green">· {c.teacher}</span> : null}
-                </span>
-              ))}
+              {perfect.map((c) => {
+                const teacher = teacherName(c.teacher)
+                return (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
+                    title={`${displayClassName(c.name)}${teacher ? ' · ' + teacher : ''} · ${c.size} soldiers`}
+                  >
+                    <StarMark className="h-4 w-4 flex-none" />
+                    <span className="font-display font-bold text-navy"><ClassName name={c.name} /></span>
+                    {teacher ? <span className="text-green">· {teacher}</span> : null}
+                  </span>
+                )
+              })}
             </div>
           ) : (
             <p className="text-sm font-semibold text-navy">No perfect platoons yet this month — a class turns perfect when every soldier in it completes their quota. Keep going! 💪</p>

@@ -22,6 +22,7 @@ require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/hebrewYear.php';
 require_once __DIR__ . '/quotaOverride.php';
 require_once __DIR__ . '/className.php';
+require_once __DIR__ . '/teacherName.php';
 require_once __DIR__ . '/customLadder.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
@@ -984,7 +985,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null, ?stri
                     'schoolId' => $sid,
                     'grade' => $grade,
                     'sub' => (string) ($row['class_sub'] ?? ''),
-                    'teacher' => (string) ($row['class_teacher'] ?? ''),
+                    'teacher' => wwtcTeacherName($row['class_teacher'] ?? ''),
                 ];
             }
             $studentsBySchool[$sid][] = [
