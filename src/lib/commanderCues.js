@@ -56,8 +56,12 @@ export function cueInviteHarder() {
   return "For three months straight you've done more than your ladder asks. Would you like to move up to a faster ladder? Totally your call — staying put is perfectly fine too."
 }
 
-export function cueInviteGentler() {
-  return 'This has been tough a few months in a row. Want to try an easier ladder for a while? The mission stays the same — Tehillim every Shabbos Mevorchim — and every word still counts.'
+export function cueInviteGentler(ladder) {
+  const n = Number(ladder)
+  if (Number.isFinite(n) && n > 0) {
+    return `The last few months, what you've been saying fits Ladder ${n} really well. Want to try that ladder? It's a gentler step, every kapitel still counts, and staying where you are is perfectly fine.`
+  }
+  return "The last few months, what you've been saying fits an easier ladder really well. Want to try that? It's a gentler step, every kapitel still counts, and staying where you are is perfectly fine."
 }
 
 export function cueMedalInfo(name, threshold) {
