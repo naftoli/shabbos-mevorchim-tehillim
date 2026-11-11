@@ -26,6 +26,7 @@ import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
 import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
 import ClassName from '@/components/ClassName.jsx'
 import { formatClassName } from '@/lib/formatClassName.js'
+import CustomLadderTool from '@/components/CustomLadderTool.jsx'
 
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
@@ -453,6 +454,8 @@ export default function AdminDashboard() {
 
             {/* Set a school / class / child onto a ladder */}
             <LadderSetter schoolId={school.id} classes={base?.rows ?? []} />
+
+            <CustomLadderTool schoolId={school.id} />
 
             {/* Base report */}
             <Card className="overflow-hidden">

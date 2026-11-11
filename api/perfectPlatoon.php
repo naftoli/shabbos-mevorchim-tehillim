@@ -425,7 +425,11 @@ function wwtcCanonicalPlatoonSoldiers(int $date, ?int $year = null): array
     if (isset($memo[$key])) {
         return $memo[$key];
     }
-    $soldiers = wwtcApplyOverridesToPlatoonSoldiers(wwtcPerfectPlatoonSoldiers($date), $date, $year);
+    $soldiers = wwtcPerfectPlatoonSoldiers($date);
+    if (function_exists('wwtcApplyCustomLaddersToPlatoonSoldiers')) {
+        $soldiers = wwtcApplyCustomLaddersToPlatoonSoldiers($soldiers, $date, $year);
+    }
+    $soldiers = wwtcApplyOverridesToPlatoonSoldiers($soldiers, $date, $year);
     return $memo[$key] = wwtcApplyFlagsToPlatoonSoldiers($soldiers, wwtcPlatoonFlagsForDate($date));
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { QUOTA, MONTHS, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
+import { finishGradeLabel, formatKapitlachQuota } from '@/lib/customLadder.js'
 import { asset } from '@/lib/asset.js'
 import { CrownIcon } from '@/components/ui.jsx'
 
@@ -24,7 +25,13 @@ function gradeMarks(ladder) {
     .filter(Boolean)
 }
 
-export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen }) {
+function climbLabel(value, span) {
+  if (value > 150) return formatKapitlachQuota(value).short
+  if (span > 150 && value === span) return formatKapitlachQuota(value).short
+  return toHebrewNumeral(value)
+}
+
+export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen, total, marks }) {
   const rootRef = useRef(null)
   useEffect(() => {
     const node = rootRef.current
@@ -40,10 +47,11 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
-  const r = Math.max(0, Math.min(TOTAL, reached))
-  const t = Math.max(0, Math.min(TOTAL, target))
-  const pct = (n) => (n / TOTAL) * 100
-  const done = r >= TOTAL
+  const span = Number(total) > 0 ? Number(total) : TOTAL
+  const r = Math.max(0, Math.min(span, reached))
+  const t = Math.max(0, Math.min(span, target))
+  const pct = (n) => (n / span) * 100
+  const done = r >= span
   const climbingTo = t > r ? t : null
   // Place each grade-finish mark. High ladders finish the early grades bunched
   // near kapitel 0, so instead of stacking every label below the track we spread
@@ -58,7 +66,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
     const i = rows.findIndex((last) => pos - last >= MIN_GAP)
     return i === -1 ? rows.length : i
   }
-  const placed = (ladder ? gradeMarks(ladder) : []).map((m, idx) => {
+  const placed = (marks || (ladder ? gradeMarks(ladder) : [])).map((m, idx) => {
     const pos = pct(m.v)
     const lb = laneFor(sides.below, pos)
     const la = laneFor(sides.above, pos)
@@ -83,8 +91,8 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
               <>You finished all 150! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>
             ) : r > 0 ? (
               <>
-                Kapitel <span className="font-heb text-green">{toHebrewNumeral(r)}</span>
-                <span className="text-muted"> of 150</span>
+                Kapitel <span className={span > 150 ? 'text-green' : 'font-heb text-green'}>{climbLabel(r, span)}</span>
+                <span className="text-muted"> of {span > 150 ? formatKapitlachQuota(span).label : 150}</span>
               </>
             ) : (
               <>Ready to start climbing!</>
@@ -93,7 +101,11 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
         </div>
         <div className="text-right">
           <div className="font-cond text-3xl leading-none text-green">{Math.round(pct(r))}%</div>
-          {finishGradeLabel ? <div className="text-xs text-muted">finish training by {finishGradeLabel} grade</div> : null}
+          {finishGradeLabel ? (
+            <div className="text-xs text-muted">
+              finish training by {/grade|after|Pre-1A/i.test(finishGradeLabel) ? finishGradeLabel : `${finishGradeLabel} grade`}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -118,12 +130,12 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
             kapitel + grade. Marks sit above or below the track so the bunched
             early grades don't pile up on one side. */}
         {placed.map((m) => {
-          const finish = m.v >= TOTAL
+          const finish = m.v >= span
           const left = `${m.pos}%`
           const heb = (
             <span className={`font-heb text-[12px] font-bold ${finish ? '' : 'text-navy'}`}>{finish ? <CrownIcon className="h-4 w-auto" /> : m.heb}</span>
           )
-          const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade]}</span>
+          const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade] || finishGradeLabel(m.grade)}</span>
           if (m.side === 'above') {
             return (
               <span key={m.grade}>
@@ -162,7 +174,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
         ) : climbingTo ? (
           <>
             Say your kapitlach this Shabbos Mevorchim to climb to{' '}
-            <span className="font-heb font-semibold text-navy">{toHebrewNumeral(t)}</span>.
+            <span className={t > 150 ? 'font-semibold text-navy' : 'font-heb font-semibold text-navy'}>{climbLabel(t, span)}</span>.
           </>
         ) : (
           <>You’re right on pace — keep climbing!</>

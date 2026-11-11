@@ -1,15 +1,22 @@
 import { MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
 import { campaignMonths, currentHebrewYear, quotaMonth } from '@/lib/hebrewYear.js'
+import { finishGradeLabel, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
 import { CrownIcon } from '@/components/ui.jsx'
 
 // The month-by-month plan for a ladder, every grade from Pre-1A to its finish
 // grade. Each cell = the cumulative kapitel (Aleph-Beis) + minutes; 👑 = the
 // whole Tehillim. Optionally ring the soldier's current grade+month cell.
+// Pass `grid` (a generated custom ladder) to draw that plan instead.
 // In a leap year the columns include Adar I and Adar II; both read the Adar quota.
-export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth, year }) {
+export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth, year, grid }) {
   const months = campaignMonths(year ?? currentHebrewYear())
-  const grades = ['pre1a']
-  for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
+  const grades = grid
+    ? gradesThrough(grid.finishGrade, highlightGrade)
+    : (() => {
+        const list = ['pre1a']
+        for (let g = 1; g <= finishGrade(ladder); g++) list.push(String(g))
+        return list
+      })()
   const hg = highlightGrade != null ? String(highlightGrade) : null
 
   return (
@@ -33,11 +40,12 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
           return (
             <tr key={g}>
               <td className={`sticky left-0 z-10 bg-paper px-2 py-1.5 text-left font-semibold ${rowHit ? 'text-green' : 'text-navy'}`}>
-                {GRADE_LABEL[g]}
+                {GRADE_LABEL[g] || finishGradeLabel(g)}
               </td>
               {months.map((m) => {
-                const cell = QUOTA[g]?.[quotaMonth(m)]?.[ladder]
-                const finish = cell && cell.v >= 150
+                const cell = grid?.cells?.[g]?.[quotaMonth(m)] || (!grid ? QUOTA[g]?.[quotaMonth(m)]?.[ladder] : null)
+                const shown = cell ? formatKapitlachQuota(cell.v) : null
+                const finish = !!shown?.crown
                 const here = rowHit && m === highlightMonth
                 return (
                   <td
@@ -48,7 +56,10 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
                   >
                     {cell ? (
                       <>
-                        <div className="font-heb text-[15px] text-navy">{finish ? <CrownIcon className="mx-auto h-4 w-auto" /> : toHebrewNumeral(cell.v)}</div>
+                        <div className={`text-navy ${shown.overTehillim ? 'text-[11px] font-semibold leading-tight' : 'font-heb text-[15px]'}`}>
+                          {finish ? <CrownIcon className="mx-auto h-4 w-auto" /> : shown.overTehillim ? shown.label : toHebrewNumeral(cell.v)}
+                        </div>
+                        {shown.overTehillim ? <div className="text-[10px] font-semibold text-navy">{shown.plain}</div> : null}
                         <div className="text-[10px] text-muted">{cell.m}m</div>
                       </>
                     ) : (
