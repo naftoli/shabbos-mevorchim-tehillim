@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { Card, Button, SchoolLogo, ErrorNote } from '@/components/ui.jsx'
+import { Card, Button, SchoolLogo, ErrorNote, Textarea } from '@/components/ui.jsx'
 import { CheckMark, IconImg, Meter, Pending, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -16,7 +16,10 @@ import {
   getBaseReport,
   getCampaignCalendar,
   getPlatoonReport,
+  overrideQuota,
+  undoQuotaOverride,
 } from '@/services/api.js'
+import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
@@ -59,7 +62,7 @@ function Rank({ n }) {
 }
 
 export default function Reports() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, admin } = useAuth()
   const [params, setParams] = useSearchParams()
   const [sort, setSort] = useState('finished')
   const yearParam = params.get('y')
@@ -167,7 +170,7 @@ export default function Reports() {
         </div>
 
         {classId ? (
-          <PlatoonView data={platoon.data} error={platoon.error} loading={platoon.loading} reload={platoon.reload} />
+          <PlatoonView data={platoon.data} error={platoon.error} loading={platoon.loading} reload={platoon.reload} admin={admin} year={year} />
         ) : schoolId ? (
           <BaseView data={base.data} error={base.error} loading={base.loading} reload={base.reload} onPickClass={(id) => write({ class: id })} />
         ) : (
@@ -293,13 +296,45 @@ function BaseView({ data, error, loading, reload, onPickClass }) {
   )
 }
 
-function PlatoonView({ data, error, loading, reload }) {
+function PlatoonView({ data, error, loading, reload, admin, year }) {
+  const [pending, setPending] = useState(null)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
   if (error) return <ErrorNote error={error} onRetry={reload} what="this platoon" />
   if (!data) return loading ? <Pending label="Getting this platoon" /> : <ErrorNote error="This platoon has no soldiers on the report for that month." onRetry={reload} what="this platoon" />
   const perfect = data.size > 0 && data.completed === data.size
   // Paint names only when the server (or the demo gate) set roll. A response
   // that still contains rows without that flag — an older API — stays hidden.
   const showRoll = data.roll === true && Array.isArray(data.rows)
+  const canOverride = showRoll && overrideAccessStatus(admin, data.schoolId) === 200
+
+  function openOverride(row) {
+    setReason('')
+    setNote('')
+    setPending({ mode: 'override', row })
+  }
+  function openUndo(row) {
+    setNote('')
+    setPending({ mode: 'undo', row })
+  }
+  async function confirm() {
+    if (!pending) return
+    setBusy(true)
+    setNote('')
+    try {
+      const body = { kidId: pending.row.id, year, month: data.month }
+      if (pending.mode === 'undo') await undoQuotaOverride(body)
+      else await overrideQuota({ ...body, reason })
+      setPending(null)
+      reload()
+    } catch (err) {
+      setNote(err?.message || 'Could not save the override.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
@@ -314,15 +349,60 @@ function PlatoonView({ data, error, loading, reload }) {
       </div>
       {showRoll ? (
         <ul className="divide-y divide-line">
-          {data.rows.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
-              <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
-              <span className="min-w-0 flex-1 font-semibold text-navy">{r.name}</span>
-              <span className="text-sm text-navy"><span className="font-heb">{r.goalLabel}</span> <span className="text-muted">· said {fmt(r.said)} of {fmt(r.goal)}</span></span>
-              {r.ladder ? <span className="rounded-full bg-track px-2 py-1 text-[11px] font-bold text-navy">L{r.ladder}</span> : null}
-            </li>
-          ))}
+          {data.rows.map((r) => {
+            const under = !r.met && Number(r.said) > 0 && Number(r.said) < Number(r.goal)
+            return (
+              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5">
+                <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
+                <span className="min-w-0 flex-1 basis-[calc(100%-3rem)] font-semibold text-navy sm:basis-auto">{r.name}</span>
+                <span className="text-sm text-navy">
+                  {r.quotaAdjusted ? null : <span className="font-heb">{r.goalLabel}</span>}
+                  <span className="text-muted">{r.quotaAdjusted ? '' : ' · '}said {fmt(r.said)} of {fmt(r.goal)}</span>
+                </span>
+                {r.ladder ? <span className="rounded-full bg-track px-2 py-1 text-[11px] font-bold text-navy">L{r.ladder}</span> : null}
+                {canOverride && under ? (
+                  <button type="button" className="btn btn-o !min-h-11 !px-3 !py-1.5 !text-[13px]" onClick={() => openOverride(r)}>Override</button>
+                ) : null}
+                {canOverride && r.quotaAdjusted ? (
+                  <button type="button" className="btn btn-ghost !min-h-11 !px-3 !py-1.5 !text-[13px]" onClick={() => openUndo(r)}>Undo override</button>
+                ) : null}
+                {r.quotaAdjusted ? (
+                  <span className="basis-full pl-11 text-[11px] font-semibold leading-snug text-navy/70">{QUOTA_ADJUSTED_LABEL}{r.originalGoal != null ? ` · was ${fmt(r.originalGoal)}` : ''}</span>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
+      ) : null}
+      {note && !pending ? <p className="px-5 py-3 text-sm text-navy">{note}</p> : null}
+      {pending ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-navy/75 p-4" role="dialog" aria-modal="true" aria-labelledby="override-title">
+          <div className="w-full max-w-md rounded-3xl bg-card p-5 shadow-card sm:p-6">
+            <h3 id="override-title" className="font-display text-xl font-black text-navy">
+              {pending.mode === 'undo' ? 'Undo this override?' : 'Override this month’s quota?'}
+            </h3>
+            {pending.mode === 'undo' ? (
+              <p className="mt-2 text-sm text-navy">
+                Put {pending.row.name}’s {data.month} quota back to {fmt(pending.row.originalGoal)}. This month only. Their ladder stays the same.
+              </p>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-navy">
+                  {pending.row.name} entered {fmt(pending.row.said)} of {fmt(pending.row.goal)} for {data.month}. This month’s quota becomes {fmt(pending.row.said)}, so they count as having met it. Next month and their ladder stay the same.
+                </p>
+                <label className="mt-4 block text-sm font-semibold text-navy">
+                  Reason <span className="font-normal text-muted">(optional)</span>
+                  <Textarea className="mt-1" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this month’s quota should match what they entered" />
+                </label>
+              </>
+            )}
+            {note ? <p className="mt-3 text-sm text-navy">{note}</p> : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="navy" disabled={busy} onClick={confirm}>{busy ? 'Saving…' : pending.mode === 'undo' ? 'Undo override' : 'Override'}</Button>
+              <Button variant="ghost" disabled={busy} onClick={() => { setPending(null); setNote('') }}>Cancel</Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </Card>
   )

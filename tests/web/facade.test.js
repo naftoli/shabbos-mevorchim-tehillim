@@ -300,3 +300,35 @@ test('setArmyDedication PUTs scope=army as admin', async () => {
   assert.match(lastCall().headers.Authorization, /^Bearer atok6$/)
   api.endSession('admin')
 })
+
+test('overrideQuota posts the soldier, month, and reason as admin', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok7', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
+    'POST /admin/quota-override': { body: { ok: true, quota: 5, met: true, quotaAdjusted: true } },
+  })
+  await api.verifyAdmin('base', 'pw')
+  const saved = await api.overrideQuota({ kidId: 42, year: 5787, month: 'Cheshvan', reason: 'short entry' })
+  assert.equal(saved.quota, 5)
+  assert.equal(lastCall().method, 'POST')
+  assert.equal(lastCall().apiPath, '/admin/quota-override')
+  assert.deepEqual(lastCall().body, { kidId: 42, year: 5787, month: 'Cheshvan', reason: 'short entry' })
+  assert.match(lastCall().headers.Authorization, /^Bearer atok7$/)
+  api.endSession('admin')
+})
+
+test('undoQuotaOverride posts to the undo route as admin', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok8', expiresIn: 43200, admin: { kind: 'super' } } },
+    'POST /admin/quota-override/undo': { body: { ok: true, quotaAdjusted: false } },
+  })
+  await api.verifyAdmin('hq', 'pw')
+  const saved = await api.undoQuotaOverride({ kidId: 42, year: 5787, month: 'Cheshvan' })
+  assert.equal(saved.quotaAdjusted, false)
+  assert.equal(lastCall().apiPath, '/admin/quota-override/undo')
+  assert.deepEqual(lastCall().body, { kidId: 42, year: 5787, month: 'Cheshvan' })
+  api.endSession('admin')
+})

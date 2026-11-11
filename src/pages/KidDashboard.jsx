@@ -86,10 +86,14 @@ export default function KidDashboard() {
     if (!progress?.months || !kid?.ladder) return 0
     return progress.months.reduce((mx, m) => {
       if (!m.met) return mx
-      const v = quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0
+      // An overridden month counts the kapitlach they actually entered.
+      // Cheshvan would otherwise be repriced from today's ladder.
+      const v = m.quotaAdjusted
+        ? (Number(m.quota) || 0)
+        : (quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0)
       return Math.max(mx, Number(v) || 0)
     }, 0)
-  }, [progress, kid?.grade, kid?.ladder])
+  }, [progress, kid])
   const climbTarget = cur && kid?.ladder
     ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0)
     : 0

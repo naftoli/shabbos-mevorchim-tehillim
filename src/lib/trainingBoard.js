@@ -114,6 +114,25 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
       const occKey = occ.holiday ? 'Tishrei' : occ.key
       const { rec, reported, met, doneLadder } = resolve(occ, isCurrent, earnedPast)
 
+      // A base-commander override fixes this month's quota. It wins over the
+      // ladder chart, including Cheshvan, which is otherwise repriced from
+      // today's ladder when the mission is not yet met.
+      if (isCurrent && rec?.quotaAdjusted) {
+        const metOverride = !!rec.met
+        if (metOverride && doneLadder) lastDoneLadder = doneLadder
+        return {
+          ...occ,
+          record: true,
+          met: metOverride,
+          ladder: metOverride ? doneLadder : null,
+          quota: rec.quota ?? null,
+          quotaLabel: rec.quotaLabel || (rec.quota != null ? String(rec.quota) : null),
+          minutes: rec.minutes ?? null,
+          said: rec.said,
+          saidMinutes: rec.saidMinutes,
+        }
+      }
+
       // Done → its own ladder. Blank → the last ladder actually completed; before
       // the first completion, the first one; only if nothing was ever done, the
       // current ladder.

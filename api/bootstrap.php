@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/hebrewYear.php';
+require_once __DIR__ . '/quotaOverride.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
@@ -264,7 +265,7 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
-    return wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
+    $raw = wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
         $sm = wwtcReport($date, $year);
         $sm->setArmyResults();
         $sm->setASR($date);
@@ -278,6 +279,12 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
             'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
         ];
     });
+    // index.php defines this once the school report is available. Overrides are
+    // applied on the way out so the file cache stays the engine's own totals.
+    if (function_exists('wwtcAdjustArmyAggregates')) {
+        return wwtcAdjustArmyAggregates($raw, $date, $year);
+    }
+    return $raw;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -870,7 +877,7 @@ function wwtcHolidayDates(int $year): array
  * which also drives perfect platoons — self-consistent across the holiday board.
  * Returns engine-shaped arrays so wwtcSchoolRow() etc. can be reused unchanged.
  */
-function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): array
+function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null, ?string $monthName = null): array
 {
     global $MASHPIA_DB;
     $year = $year ?: wwtcYear();
@@ -879,7 +886,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
     // Holiday quota is the SM-Tishrei quota, priced on the ladder each soldier was on
     // for Tishrei (as of Tishrei's own Shabbos Mevorchim), not their current ladder.
     $asofBoundary = wwtcAsOfBoundary($quotaJd);
-    return wwtcCached($key, static function () use ($doneJds, $quotaJd, $asofBoundary, $MASHPIA_DB) {
+    $board = wwtcCached($key, static function () use ($doneJds, $quotaJd, $asofBoundary, $MASHPIA_DB) {
         $kap = WWTC_GRID_KAPITELACH;
         $min = WWTC_GRID_MINUTES;
 
@@ -1024,6 +1031,10 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
             ],
         ];
     });
+    if ($monthName !== null && $monthName !== '') {
+        return wwtcOverlayHolidayBoard($board, $year, (string) $monthName);
+    }
+    return $board;
 }
 
 /** One soldier's MAX(done_qty) across a holiday's day(s) for a grid. [said, reported]. */
@@ -1232,15 +1243,13 @@ function wwtcEligibleSchools(): array
  *   [ 'metBySchool' => [sid=>n], 'sizeBySchool' => [sid=>n],
  *     'metByClass' => [sid=>[cid=>n]], 'sizeByClass' => [sid=>[cid=>n]] ]
  */
-function wwtcCompletionCounts(int $date): array
+function wwtcCompletionCounts(int $date, ?int $year = null): array
 {
     global $MASHPIA_DB;
+    $year = $year ?: wwtcYear();
     static $cache = [];
-    if (isset($cache[$date])) {
-        return $cache[$date];
-    }
-
-    return $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
+    if (!isset($cache[$date])) {
+        $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
     $met = $MASHPIA_DB->prepare(
         'SELECT u.school_id, u.class_id, COUNT(*) n
            FROM date_tasks_mission_marks mm
@@ -1276,5 +1285,7 @@ function wwtcCompletionCounts(int $date): array
         $out['sizeBySchool'][$sid] = ($out['sizeBySchool'][$sid] ?? 0) + $n;
     }
     return $out;
-    });
+        });
+    }
+    return wwtcOverlayCompletionCountsForDate($cache[$date], $date, $year);
 }
