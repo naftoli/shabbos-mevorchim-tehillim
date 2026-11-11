@@ -11,6 +11,7 @@ import { asset } from '@/lib/asset.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { raceMetric, rankByRace } from '@/lib/schoolRace.js'
+import { sortClasses } from '@/lib/classOrder.js'
 import { baseRanks } from '@/lib/baseRank.js'
 import {
   getSchool,
@@ -77,7 +78,7 @@ export default function SchoolCampaign() {
     )
   }
 
-  const perfect = classes.filter((c) => c.perfect)
+  const perfect = sortClasses(classes.filter((c) => c.perfect))
 
   return (
     <>

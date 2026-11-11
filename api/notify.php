@@ -37,6 +37,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/className.php';
+require_once __DIR__ . '/classOrder.php';
 
 function wwtcNotifyAllowedPhoneColumns(): array
 {
@@ -341,9 +342,13 @@ function wwtcNotCompletedClasses(array $students, array $classes): array
         $id = (int) ($c['id'] ?? 0);
         if (isset($byClass[$id])) {
             $byClass[$id]['size'] = (int) ($c['size'] ?? 0);
+            $grade = trim((string) ($c['grade'] ?? ''));
+            if ($grade !== '') {
+                $byClass[$id]['grade'] = $grade;
+            }
         }
     }
-    return array_values($byClass);
+    return wwtcSortClasses(array_values($byClass));
 }
 
 function wwtcNotifyClassLine(string $name, int $filled, int $total): string
@@ -453,6 +458,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         }
         $prepared[] = [
             'name' => $className,
+            'grade' => (string) ($class['grade'] ?? ''),
             'filled' => $classFilled,
             'total' => $classTotal,
             'under' => $classUnder,
@@ -461,9 +467,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             'students' => $students,
         ];
     }
-    usort($prepared, function ($a, $b) {
-        return strcmp($a['name'], $b['name']);
-    });
+    usort($prepared, 'wwtcCmpClassRows');
     $classLines = [];
     foreach ($prepared as $class) {
         if ($class['total'] <= 0) {

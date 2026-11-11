@@ -3,6 +3,7 @@
 // anything in between reported something and is still short.
 
 import { formatClassName } from './formatClassName.js'
+import { sortClasses } from './classOrder.js'
 
 export const FINISH_TITLE = 'Who still needs to finish'
 export const SUBMIT_TITLE = 'Who still needs to submit'
@@ -58,6 +59,7 @@ export function notDoneView(classes) {
       finishClasses.push({
         classId: row.classId,
         className: formatClassName(row.className),
+        grade: row.grade,
         size: row.size,
         phrase: stillNeedPhrase(under.length, 'finish'),
         names: under,
@@ -67,6 +69,7 @@ export function notDoneView(classes) {
       submitClasses.push({
         classId: row.classId,
         className: formatClassName(row.className),
+        grade: row.grade,
         size: row.size,
         phrase: stillNeedPhrase(notFilled.length, 'submit'),
         names: notFilled,
@@ -84,12 +87,12 @@ export function notDoneView(classes) {
       {
         title: FINISH_TITLE,
         phrase: stillNeedPhrase(finishCount, 'finish'),
-        classes: finishClasses,
+        classes: sortClasses(finishClasses),
       },
       {
         title: SUBMIT_TITLE,
         phrase: stillNeedPhrase(submitCount, 'submit'),
-        classes: submitClasses,
+        classes: sortClasses(submitClasses),
       },
     ],
   }

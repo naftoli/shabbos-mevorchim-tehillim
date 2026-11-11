@@ -197,19 +197,27 @@ $split = wwtcNotCompletedClasses([
     ['id' => 4, 'size' => 2],
 ]);
 check('full soldiers are left out of not-completed', count($split) === 3);
+$splitByName = [];
+foreach ($split as $class) {
+    $splitByName[$class['className']] = $class;
+}
+$splitNames = [];
+foreach ($split as $class) {
+    $splitNames[] = $class['className'];
+}
+check('incomplete classes are in grade order', $splitNames === ['1', 'Open', 'כיתה א']);
 check(
     'a numeric class keeps missing in roster order and splits the two groups',
-    $split[0]['className'] === '1'
-    && $split[0]['size'] === 8
-    && $split[0]['missing'] === ['Short Kid', 'Zero Kid']
-    && $split[0]['under'] === ['Short Kid']
-    && $split[0]['notFilled'] === ['Zero Kid']
+    $splitByName['1']['size'] === 8
+    && $splitByName['1']['missing'] === ['Short Kid', 'Zero Kid']
+    && $splitByName['1']['under'] === ['Short Kid']
+    && $splitByName['1']['notFilled'] === ['Zero Kid']
 );
 check(
     'a zero mark is not filled out',
-    $split[1]['className'] === 'כיתה א' && $split[1]['under'] === [] && $split[1]['notFilled'] === ['No Mark'] && $split[1]['size'] === 25
+    $splitByName['כיתה א']['under'] === [] && $splitByName['כיתה א']['notFilled'] === ['No Mark'] && $splitByName['כיתה א']['size'] === 25
 );
-check('a mark with no quota is under, not full', $split[2]['under'] === ['Reported Anyway'] && $split[2]['notFilled'] === []);
+check('a mark with no quota is under, not full', $splitByName['Open']['under'] === ['Reported Anyway'] && $splitByName['Open']['notFilled'] === []);
 check('one still needs, many still need', wwtcNotifyStillNeed(1, 'finish') === '1 still needs to finish' && wwtcNotifyStillNeed(2, 'submit') === '2 still need to submit');
 
 // ---- messages --------------------------------------------------------------

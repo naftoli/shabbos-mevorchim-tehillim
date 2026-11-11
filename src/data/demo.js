@@ -413,6 +413,10 @@ function sampleCheder() {
       sampleClass(`${SAMPLE_CHEDER_ID}-3-Boys`, '3', '3-Boys', 'Rabbi Klein', full('3', 4)),
       sampleClass(`${SAMPLE_CHEDER_ID}-1`, '1', '1', 'Rabbi Dale', ones),
       sampleClass(`${SAMPLE_CHEDER_ID}-aleph`, '2', 'כיתה א', 'Rabbi Engel', aleph),
+      // Last in the source list on purpose. Class reports sort by grade, so
+      // Pre-1A still shows before 1st grade. Both soldiers finished, so the
+      // unfinished list stays the numeric class and the Hebrew class.
+      sampleClass(`${SAMPLE_CHEDER_ID}-pre1a`, 'pre1a', 'Pre-1A', 'Rabbi Fried', full('pre1a', 2)),
     ],
   }
 }

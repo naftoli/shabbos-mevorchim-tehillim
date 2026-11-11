@@ -20,6 +20,7 @@ import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { splitIncompleteNames } from '@/lib/notCompleted.js'
+import { sortClasses, sortPlatoons } from '@/lib/classOrder.js'
 import { formatClassName } from '@/lib/formatClassName.js'
 import * as mashpia from './mashpia.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
@@ -265,8 +266,10 @@ export function topSchoolsByQuota(n = 5) {
     .slice(0, n)
 }
 export async function getPerfectPlatoons(period) {
-  if (!IS_DEMO) return mashpia.getPerfectPlatoons(period)
-  return demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
+  const rows = !IS_DEMO
+    ? await mashpia.getPerfectPlatoons(period)
+    : demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
+  return sortPlatoons(rows)
 }
 
 function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
@@ -741,7 +744,7 @@ function demoSchool(id) {
       perfect: classIsPerfect(met, size),
     }
   })
-  return { ...agg, classes, dedication: schoolDedication(id) }
+  return { ...agg, classes: sortClasses(classes), dedication: schoolDedication(id) }
 }
 
 // n omitted returns the whole board. The page shows ten at a time; ranking
@@ -832,8 +835,13 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
 }
 
 // Base report: one row per class in a school.
+function withClassOrder(data) {
+  if (!data || !Array.isArray(data.rows)) return data
+  return { ...data, rows: sortClasses(data.rows) }
+}
+
 export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, period = null) {
-  if (!IS_DEMO) return mashpia.getBaseReport(schoolId, monthIdx, period)
+  if (!IS_DEMO) return withClassOrder(await mashpia.getBaseReport(schoolId, monthIdx, period))
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return null
   const month = period?.month || monthName(monthIdx)
@@ -843,7 +851,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
     month,
     school: school.name,
     schoolId,
-    rows: school.classes.map((cls) => {
+    rows: sortClasses(school.classes.map((cls) => {
       let goal = 0
       let accomplished = 0
       let completed = 0
@@ -854,7 +862,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
         if (snap.met) completed += 1
       }
       return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: classIsPerfect(completed, cls.kids.length) }
-    }),
+    })),
   }
 }
 
@@ -1083,7 +1091,7 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)
-  return school.classes
+  const rows = school.classes
     .map((cls) => {
       const kids = cls.kids.map((k) => {
         const snap = kapSnapshot(k, month, CAMPAIGN_YEAR)
@@ -1092,11 +1100,13 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
       return {
         classId: cls.id,
         className: formatClassName(cls.name),
+        grade: cls.grade,
         size: cls.kids.length,
         ...splitIncompleteNames(kids),
       }
     })
     .filter((c) => c.missing.length > 0)
+  return sortClasses(rows)
 }
 
 // First demo soldier's working credentials, for the login-screen hint.
