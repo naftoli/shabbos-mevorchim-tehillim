@@ -26,6 +26,21 @@ export function normalizeFirstMonth(month) {
   return PLAIN_MONTHS.includes(name) ? name : DEFAULT_FIRST_MONTH
 }
 
+/**
+ * First month for one school. No settings row — null, a missing field, or a
+ * blank month — is Tishrei, the same year every school has until an admin
+ * saves another month.
+ */
+export function firstMonthFromRow(row) {
+  if (row == null || row === '') return DEFAULT_FIRST_MONTH
+  if (typeof row === 'object') {
+    const stored = row.firstMonth ?? row.first_month ?? row.yearStart
+    if (stored == null || stored === '') return DEFAULT_FIRST_MONTH
+    return normalizeFirstMonth(stored)
+  }
+  return normalizeFirstMonth(row)
+}
+
 /** Adar I and Adar II occupy Adar's one slot. Anything else is unchanged. */
 export function plainMonthName(month) {
   if (month === 'Adar I' || month === 'Adar II') return 'Adar'

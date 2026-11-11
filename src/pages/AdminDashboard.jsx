@@ -7,7 +7,7 @@ import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
-import { gradeEndMonth } from '@/lib/schoolYear.js'
+import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
 import {
   getSchools,
   getSchool,
@@ -72,10 +72,11 @@ function HqTools() {
 // and the grade ends in Teves. HQ and that school's admin only — this page
 // is already limited to them.
 function SchoolYearSetting({ school, onSaved }) {
-  const [month, setMonth] = useState(school.yearStart || 'Tishrei')
+  // Nothing saved (no yearStart on the school) is Tishrei, already selected.
+  const saved = firstMonthFromRow(school)
+  const [month, setMonth] = useState(saved)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
-  const saved = school.yearStart || 'Tishrei'
   async function save() {
     setBusy(true)
     setNote('')

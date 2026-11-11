@@ -5,7 +5,7 @@
 
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
-import { normalizeFirstMonth } from '@/lib/schoolYear.js'
+import { firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 import { applySoldierReport, planReport } from '@/lib/overEntry.js'
 
@@ -462,7 +462,9 @@ function loadYearStarts() {
 }
 export function schoolYearStart(schoolId) {
   const store = loadYearStarts()
-  return normalizeFirstMonth(store[schoolId] || 'Tishrei')
+  // No saved entry for this school is a missing row: Tishrei.
+  if (!Object.prototype.hasOwnProperty.call(store, schoolId)) return firstMonthFromRow(null)
+  return firstMonthFromRow(store[schoolId])
 }
 export function setSchoolYearStartStore(schoolId, firstMonth) {
   try {

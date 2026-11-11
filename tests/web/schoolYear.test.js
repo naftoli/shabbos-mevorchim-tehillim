@@ -8,6 +8,7 @@ import {
   elapsedSchoolYearSlots,
   gradeEndMonth,
   gradeEndSheetMonth,
+  firstMonthFromRow,
   quotaForSchool,
   quotaSheetMonth,
   schoolYearMonthNames,
@@ -31,6 +32,19 @@ test('Tishrei is the default and leaves the campaign months unchanged', () => {
   assert.equal(quotaSheetMonth('Adar I', 'Tishrei'), 'Adar')
   assert.equal(quotaSheetMonth('Adar II', 'Tishrei'), 'Adar')
   assert.deepEqual(quotaForSchool('3', 'Adar I', 8, 'Tishrei'), quotaFor('3', 'Adar', 8))
+})
+
+test('a school with no settings row starts in Tishrei', () => {
+  for (const missing of [null, undefined, '', {}, { first_month: null }, { firstMonth: '' }, { yearStart: undefined }]) {
+    assert.equal(firstMonthFromRow(missing), 'Tishrei')
+  }
+  const month = firstMonthFromRow(null)
+  assert.deepEqual(schoolYearMonthNames(month, 5785, 'Cheshvan'), campaignMonths(5785))
+  assert.deepEqual(schoolYearSlots(month, 5787).map((slot) => slot.month), campaignMonths(5787))
+  assert.equal(gradeEndMonth(month), 'Elul')
+  assert.equal(quotaSheetMonth('Cheshvan', month), 'Cheshvan')
+  assert.equal(firstMonthFromRow({ first_month: 'Shvat' }), 'Shvat')
+  assert.equal(firstMonthFromRow({ yearStart: 'Nissan' }), 'Nissan')
 })
 
 test('a Tishrei school year stays inside one Hebrew year, including a leap year', () => {

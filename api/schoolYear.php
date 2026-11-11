@@ -32,6 +32,36 @@ function wwtcNormalizeFirstMonth(string $month): string
     return in_array($name, wwtcPlainMonthNames(), true) ? $name : WWTC_DEFAULT_FIRST_MONTH;
 }
 
+/**
+ * First month for one school. No settings row — null, false, a missing
+ * field, or a blank month — is Tishrei. Every school stays on Tishrei until
+ * an admin saves another month.
+ *
+ * @param array<string,mixed>|string|null|false $row
+ */
+function wwtcFirstMonthFromRow($row): string
+{
+    if ($row === null || $row === false || $row === '') {
+        return WWTC_DEFAULT_FIRST_MONTH;
+    }
+    if (is_array($row)) {
+        if (array_key_exists('first_month', $row)) {
+            $stored = $row['first_month'];
+        } elseif (array_key_exists('firstMonth', $row)) {
+            $stored = $row['firstMonth'];
+        } elseif (array_key_exists('yearStart', $row)) {
+            $stored = $row['yearStart'];
+        } else {
+            $stored = null;
+        }
+        if ($stored === null || $stored === '') {
+            return WWTC_DEFAULT_FIRST_MONTH;
+        }
+        return wwtcNormalizeFirstMonth((string) $stored);
+    }
+    return wwtcNormalizeFirstMonth((string) $row);
+}
+
 function wwtcIsDefaultSchoolYear(string $month): bool
 {
     return wwtcNormalizeFirstMonth($month) === WWTC_DEFAULT_FIRST_MONTH;

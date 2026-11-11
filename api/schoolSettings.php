@@ -32,7 +32,7 @@ function wwtcAllSchoolFirstMonths(): array
     try {
         $rows = $MASHPIA_DB->query('SELECT school_id, first_month FROM wwtc_school_settings')->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
-            $cache[(int) $row['school_id']] = wwtcNormalizeFirstMonth((string) $row['first_month']);
+            $cache[(int) $row['school_id']] = wwtcFirstMonthFromRow($row);
         }
     } catch (Throwable $e) {
         error_log('WWTC school-year settings read failed: ' . $e->getMessage());
@@ -47,7 +47,8 @@ function wwtcSchoolFirstMonth(int $schoolId): string
         return WWTC_DEFAULT_FIRST_MONTH;
     }
     $all = wwtcAllSchoolFirstMonths();
-    return $all[$schoolId] ?? WWTC_DEFAULT_FIRST_MONTH;
+    // No row for this school (and no table at all) is Tishrei.
+    return wwtcFirstMonthFromRow($all[$schoolId] ?? null);
 }
 
 /** @return array<int,string> schools whose year does not start in Tishrei */

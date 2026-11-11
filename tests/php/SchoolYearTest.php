@@ -28,6 +28,24 @@ check('Tishrei is the default', wwtcNormalizeFirstMonth('') === 'Tishrei');
 check('an unknown month stays Tishrei', wwtcNormalizeFirstMonth('Foo') === 'Tishrei');
 check('Shvat is kept', wwtcNormalizeFirstMonth('Shvat') === 'Shvat');
 
+$sql = (string) file_get_contents(__DIR__ . '/../../api/sql/wwtc_school_settings.sql');
+check(
+    'first_month is NOT NULL DEFAULT Tishrei',
+    strpos($sql, "first_month VARCHAR(32) NOT NULL DEFAULT 'Tishrei'") !== false
+);
+check('no settings row is Tishrei', wwtcFirstMonthFromRow(null) === 'Tishrei' && wwtcFirstMonthFromRow(false) === 'Tishrei');
+check('a row with no month is Tishrei', wwtcFirstMonthFromRow([]) === 'Tishrei' && wwtcFirstMonthFromRow(['first_month' => '']) === 'Tishrei');
+check('a blank yearStart is Tishrei', wwtcFirstMonthFromRow(['yearStart' => null]) === 'Tishrei');
+$none = wwtcFirstMonthFromRow(null);
+check(
+    'a school with no row keeps today\'s Tishrei year',
+    $none === 'Tishrei'
+    && array_column(wwtcSchoolYearSlots($none, 5785), 'month') === wwtcCampaignMonthNames(5785)
+    && array_column(wwtcSchoolYearSlots($none, 5787), 'month') === wwtcCampaignMonthNames(5787)
+    && wwtcGradeEndMonth($none) === 'Elul'
+);
+check('a saved Shvat row is not the default', wwtcFirstMonthFromRow(['first_month' => 'Shvat']) === 'Shvat');
+
 $tishreiPlain = array_column(wwtcSchoolYearSlots('Tishrei', 5785), 'month');
 $tishreiLeap = array_column(wwtcSchoolYearSlots('Tishrei', 5787), 'month');
 check('Tishrei plain year matches campaign months', $tishreiPlain === wwtcCampaignMonthNames(5785));
