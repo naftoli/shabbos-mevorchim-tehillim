@@ -6,6 +6,13 @@
 import { quotaFor, availableLadders } from '@/data/ladders.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
 import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
+import {
+  applySoldierReport,
+  kapitlachInTotals,
+  minutesInTotals,
+  OVER_ENTRY_CONFIRM,
+  reviewSoldier,
+} from '@/lib/overEntry.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
@@ -43,14 +50,18 @@ const demoDataMonth = (month) => (isHolidayMonth(month) ? 'Tishrei' : month)
 
 function saidOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] ?? 0
-  return kid.reports?.[month] ?? 0
+  return kapitlachInTotals(kid, month)
 }
 function minutesOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearMinutes?.[month] ?? 0
-  return kid.minutesByMonth?.[month] ?? 0
+  return minutesInTotals(kid, month)
 }
 function reportedOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] != null
+  const flag = kid.flag
+  if (flag && flag.month === month && flag.status === 'flagged' && flag.counts === false) {
+    return !!flag.priorReported
+  }
   return Object.prototype.hasOwnProperty.call(kid.reports || {}, month)
 }
 
@@ -82,6 +93,7 @@ function activeOverride(kidId, year, month) {
 }
 // Demo quotas come from the soldier's current ladder, which is how Cheshvan
 // is repriced from today's ladder. An override replaces that one month.
+// saidOf already withholds a flagged amount that does not count yet.
 function engineKap(kid, month) {
   return quotaFor(kid.grade, demoDataMonth(month), kid.ladder)?.v ?? 0
 }
@@ -107,8 +119,8 @@ function missionBonus(kid) {
 }
 
 const kidMonthQuota = (kid, month, year = CAMPAIGN_YEAR) => kapSnapshot(kid, month, year).quota
-const kidMonthSaid = (kid, month) => kid.reports[month] ?? 0
-const kidMonthMinutes = (kid, month) => kid.minutesByMonth?.[month] ?? 0
+const kidMonthSaid = (kid, month) => kapitlachInTotals(kid, month)
+const kidMonthMinutes = (kid, month) => minutesInTotals(kid, month)
 const metQuota = (kid, month) => kapSnapshot(kid, month, CAMPAIGN_YEAR).met
 const metAt = (kid, month, year) => kapSnapshot(kid, month, year).met
 const kidSaidYear = (kid) => ELAPSED_MONTHS.reduce((a, mo) => a + kidMonthSaid(kid, mo), 0)
@@ -439,7 +451,21 @@ function demoKidProgress(id) {
     medal,
     rank: rankForMedals(medal.earnedCount),
     current: months.find((m) => m.isCurrent) ?? null,
+    flagged: kid.flag?.status === 'flagged' ? { ...kid.flag, counts: false } : null,
   }
+}
+
+function engineMet(kid, month, year = CAMPAIGN_YEAR) {
+  return metKap(engineKap(kid, month), saidOf(kid, month, year), reportedOf(kid, month, year))
+}
+function recomputeDemoMissions(kid) {
+  let met = 0
+  // Stored mission count stays on the ladder quota. An override is added when
+  // the progress is read, so a flagged amount that does not count is not a mission.
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
+  kid.metThisYear = met
+  kid.missionsTotal = (kid.priorMissions || 0) + met
+  kid.minutes = Object.values(kid.minutesByMonth || {}).reduce((a, m) => a + (Number(m) || 0), 0)
 }
 
 // Record a month's completion. Live: POST /me/report (current Shabbos Mevorchim,
@@ -452,21 +478,82 @@ export async function recordMonth(id, month, kapitlach, minutes, extra = {}) {
   }
   const found = locate(id)
   if (!found) return null
-  const { kid } = found
-  const prevMet = metQuota(kid, month)
-  kid.reports[month] = Number(kapitlach) || 0
-  const nowMet = metQuota(kid, month)
-  if (nowMet && !prevMet) { kid.metThisYear += 1; kid.missionsTotal += 1 }
-  if (!nowMet && prevMet) { kid.metThisYear -= 1; kid.missionsTotal -= 1 }
-  // Per-month reported minutes (replace, not accumulate); keep the total in sync.
-  kid.minutesByMonth = kid.minutesByMonth || {}
-  kid.minutesByMonth[month] = Number(minutes) || 0
-  kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
+  const { kid, school, cls } = found
+  const q = quotaFor(kid.grade, month, kid.ladder)
+  const result = applySoldierReport(kid, {
+    month,
+    kapitlach: Number(kapitlach) || 0,
+    minutes: Number(minutes) || 0,
+    quotaKap: q?.v ?? 0,
+    quotaMin: q?.m ?? 0,
+    grade: kid.grade,
+    flagConfirmed: !!extra.flagConfirmed,
+    kidName: kid.name,
+    className: cls.name,
+    schoolId: school.id,
+    schoolName: school.name,
+    year: CAMPAIGN_YEAR,
+  })
+  if (result.error === 'over_entry') {
+    const err = new Error(OVER_ENTRY_CONFIRM)
+    err.code = 'over_entry'
+    err.threshold = result.plan.line
+    throw err
+  }
+  recomputeDemoMissions(kid)
   saveKidProgress(kid)
   invalidate()
   const progress = demoKidProgress(id)
-  if (extra?.exceptionalConfirmed) progress.exceptional = { emailed: false, reason: 'demo' }
+  if (result.plan.action === 'save' && extra?.exceptionalConfirmed) progress.exceptional = { emailed: false, reason: 'demo' }
   return progress
+}
+
+export async function getFlagQueue({ schoolId = null, all = false } = {}) {
+  if (!IS_DEMO) return mashpia.getFlagQueue()
+  const pending = []
+  const recent = []
+  for (const school of ROSTER) {
+    if (!all && school.id !== schoolId) continue
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        if (!kid.flag) continue
+        const row = {
+          ...kid.flag,
+          kidName: kid.flag.kidName || kid.name,
+          className: kid.flag.className || cls.name,
+          schoolName: kid.flag.schoolName || school.name,
+          schoolId: kid.flag.schoolId ?? school.id,
+        }
+        if (kid.flag.status === 'flagged') pending.push(row)
+        else if (kid.flag.decisions?.length) recent.push(row)
+      }
+    }
+  }
+  const lastAt = (row) => {
+    const list = row.decisions || []
+    return list.length ? list[list.length - 1].at : ''
+  }
+  pending.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+  recent.sort((a, b) => String(lastAt(b)).localeCompare(String(lastAt(a))))
+  return { ready: true, pending, recent }
+}
+
+export async function reviewFlag(id, action, actorName) {
+  if (!IS_DEMO) return mashpia.reviewFlag(id, action)
+  for (const school of ROSTER) {
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        if (!kid.flag || String(kid.flag.id) !== String(id)) continue
+        const result = reviewSoldier(kid, action, { type: 'admin', name: actorName || 'Admin' })
+        if (!result.ok) throw new Error(result.error)
+        recomputeDemoMissions(kid)
+        saveKidProgress(kid)
+        invalidate()
+        return { ok: true, entry: kid.flag }
+      }
+    }
+  }
+  throw new Error('Flagged entry not found.')
 }
 
 // Switch a soldier's ladder. Live: PUT /me/ladder (writes user_tracks.track_id,
@@ -487,7 +574,7 @@ export async function setKidLadder(id, ladder) {
   if (kid.ladder === next) return demoKidProgress(id)
   kid.ladder = next
   let met = 0
-  for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
   kid.metThisYear = met
   kid.missionsTotal = kid.priorMissions + met
   saveKidProgress(kid)
@@ -520,7 +607,7 @@ export async function adminSetLadder({ schoolId, classId = null, kidId = null, l
     if (kid.ladder === next) continue
     kid.ladder = next
     let met = 0
-    for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+    for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
     kid.metThisYear = met
     kid.missionsTotal = kid.priorMissions + met
     saveKidProgress(kid)

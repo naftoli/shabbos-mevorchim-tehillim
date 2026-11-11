@@ -7,6 +7,7 @@ declare(strict_types=1);
 // Run: php tests/php/QuotaOverrideTest.php
 
 require __DIR__ . '/../../api/quotaOverride.php';
+require __DIR__ . '/../../api/overEntry.php';
 
 $failures = 0;
 $tests = 0;
@@ -168,6 +169,26 @@ $undo = wwtcPerformUndo($db, $hq, $kid, [], [
 check('undo succeeds', $undo['status'] === 200 && $undo['body']['quotaAdjusted'] === false);
 check('undo sets undone_at', ran($db, 'SET undone_at', ':at', '2026-11-11 10:00:00'));
 check('undo audit names who and when', ran($db, 'INSERT INTO wwtc_audit_log', ':action', 'quota_override_undo') && ran($db, 'INSERT INTO wwtc_audit_log', ':actor', 1) && ran($db, 'INSERT INTO wwtc_audit_log', ':at', '2026-11-11 10:00:00'));
+
+$counted = wwtcCountedKapitlach(5, 200, 'flagged');
+$nothing = wwtcCountedKapitlach(0, 200, 'flagged');
+check('a flagged 200 does not count; the prior 5 does', $counted === 5);
+check('a flag with no prior mark counts as nothing entered', $nothing === 0);
+$flaggedStudent = wwtcApplyOverrideToStudent(
+    ['id' => 2, 'quota' => 10, 'said' => $counted],
+    ['original_quota' => 10, 'overridden_quota' => $counted, 'undone_at' => null]
+);
+check('override adopts the counted 5, not the flagged 200', $flaggedStudent['quota'] === 5 && $flaggedStudent['met'] === true);
+check('the flagged amount does not meet the original quota', wwtcMissionEarned(5, 10, 200, 'flagged') === false);
+check('the counted 5 meets the overridden quota', wwtcMissionEarned(5, 5, 200, 'flagged') === true);
+check('perfect platoon uses the overridden quota and ignores the withheld flag', wwtcPlatoonIsPerfect([
+    ['counted' => 5, 'flagged' => 200, 'status' => 'flagged', 'quota' => 5],
+    ['counted' => 8, 'flagged' => 0, 'status' => null, 'quota' => 8],
+]) === true);
+check('without the override that platoon is not perfect', wwtcPlatoonIsPerfect([
+    ['counted' => 5, 'flagged' => 200, 'status' => 'flagged', 'quota' => 10],
+    ['counted' => 8, 'flagged' => 0, 'status' => null, 'quota' => 8],
+]) === false);
 
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);

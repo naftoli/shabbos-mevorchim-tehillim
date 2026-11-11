@@ -96,7 +96,11 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
   if (response.status === 401 && as) endSession(as)
   const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
-    throw new Error(payload?.error || `Request failed (${response.status}).`)
+    const error = new Error(payload?.error || `Request failed (${response.status}).`)
+    error.status = response.status
+    error.code = payload?.code
+    error.threshold = payload?.threshold
+    throw error
   }
   // A 2xx with an unparseable (e.g. empty) body means the server died after its
   // headers went out; surface it as a clear error rather than returning null and
@@ -224,9 +228,13 @@ export const recordMonth = (kapitlach, minutes, extra = {}) =>
       kapitlach,
       minutes,
       ...(extra?.exceptionalConfirmed ? { exceptionalConfirmed: true } : {}),
+      ...(extra?.flagConfirmed ? { flagConfirmed: true } : {}),
     },
     as: 'kid',
   })
+export const getFlagQueue = () => req('/admin/flags', { as: 'admin' })
+export const reviewFlag = (id, action) =>
+  write(`/admin/flags/${id}/${action}`, { method: 'POST', as: 'admin' })
 export const setDedication = async ({ scope, schoolId, text, year, month }) => {
   const data = await write('/dedication', { method: 'PUT', body: { scope, schoolId, text, year, month }, as: 'admin' })
   return data?.dedication ?? null

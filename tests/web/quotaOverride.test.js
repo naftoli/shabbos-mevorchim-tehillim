@@ -1,12 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { medalState } from '../../src/lib/medals.js'
+import { kapitlachInTotals } from '../../src/lib/overEntry.js'
 import { rankForMedals } from '../../src/lib/decisions.js'
 import { streakFromMissions } from '../../src/lib/streaks.js'
 import {
   QUOTA_ADJUSTED_LABEL,
   adjustClassTotals,
   applyOverridesToMonths,
+  effectiveKapQuota,
+  metKap,
   overrideAccessStatus,
   quotaForMonth,
 } from '../../src/lib/quotaOverride.js'
@@ -86,4 +89,31 @@ test('class totals, perfect platoon, streak, medal, and rank follow the override
   assert.equal(rankForMedals(before.earnedCount), 'Soldier')
   assert.equal(rankForMedals(after.earnedCount), 'Sergeant')
   assert.equal(QUOTA_ADJUSTED_LABEL, 'quota adjusted by base commander')
+})
+
+test('a flagged amount that does not count is not the quota the override adopts', () => {
+  const soldier = {
+    reports: { Kislev: 5 },
+    flag: {
+      month: 'Kislev',
+      status: 'flagged',
+      counts: false,
+      priorReported: true,
+      priorKapitlach: 5,
+      kapitlach: 200,
+    },
+  }
+  const said = kapitlachInTotals(soldier, 'Kislev')
+  assert.equal(said, 5)
+  const eff = effectiveKapQuota(10, { originalQuota: 10, overriddenQuota: said, undoneAt: null })
+  assert.equal(eff.quota, 5)
+  assert.equal(metKap(eff.quota, said, true), true)
+  assert.notEqual(eff.quota, 200)
+
+  const onlyFlagged = kapitlachInTotals({
+    reports: {},
+    flag: { month: 'Kislev', status: 'flagged', counts: false, priorReported: false, kapitlach: 200 },
+  }, 'Kislev')
+  assert.equal(onlyFlagged, 0)
+  assert.equal(metKap(10, onlyFlagged, false), false)
 })
