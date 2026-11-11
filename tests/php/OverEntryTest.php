@@ -115,5 +115,34 @@ check('remove with no prior value leaves the month not counted', $cleared['apply
 $again = wwtcPlanReview(['status' => 'accepted', 'kapitlach' => 150], 'accept', $actor, $at);
 check('a reviewed entry cannot be accepted twice', $again['ok'] === false);
 
+$accepted = $entry;
+$accepted['status'] = 'accepted';
+$undo = wwtcPlanReview($accepted, 'remove', $actor, $at);
+check('an accepted entry can be removed', $undo['ok'] === true && $undo['status'] === 'removed' && $undo['applyKapitlach'] === 4 && $undo['applyMinutes'] === 10);
+check('removing an accepted entry restores the prior mark and is logged', $undo['counts'] === false && $undo['notCounted'] === false && $undo['decision']['action'] === 'removed' && $undo['decision']['actor_name'] === 'HQ Command');
+
+$removed = $entry;
+$removed['status'] = 'removed';
+$redo = wwtcPlanReview($removed, 'accept', $actor, $at);
+check('a removed entry can be accepted', $redo['ok'] === true && $redo['status'] === 'accepted' && $redo['applyKapitlach'] === 150 && $redo['applyMinutes'] === 25);
+check('accepting a removed entry counts the flagged numbers and is logged', $redo['counts'] === true && $redo['publicKapitlach'] === 150 && $redo['decision']['action'] === 'accepted' && $redo['decision']['created_at'] === $at);
+
+$removedTwice = wwtcPlanReview($removed, 'remove', $actor, $at);
+check('a removed entry cannot be removed twice', $removedTwice['ok'] === false);
+
+$blankAccepted = $blank;
+$blankAccepted['status'] = 'accepted';
+$clearAccepted = wwtcPlanReview($blankAccepted, 'remove', $actor, $at);
+check('removing an accepted entry with no prior value clears the month', $clearAccepted['ok'] === true && $clearAccepted['applyKapitlach'] === 0 && $clearAccepted['notCounted'] === true);
+
+$flags = file_get_contents(__DIR__ . '/../../api/flags.php');
+check('stored review re-plans inside the transaction', is_string($flags) && strpos($flags, 'wwtcPlanReview($fresh') !== false);
+check('stored review no longer refuses every non-flagged row', is_string($flags) && strpos($flags, "['status'] !== 'flagged'") === false);
+check('stored review still applies the mark, logs the decision, and bumps the cache', is_string($flags) && strpos($flags, 'wwtcApplyMark') !== false && strpos($flags, 'wwtcInsertFlagDecision') !== false && strpos($flags, "Cache::bumpVersion('shabbos_mevorchim:v')") !== false);
+
+$route = file_get_contents(__DIR__ . '/../../api/index.php');
+check('the flag route still accepts and removes, including a reversal', is_string($route) && strpos($route, '#^/admin/flags/(\d+)/(accept|remove)$#') !== false);
+check('top base rank keys are pctMet first, then the existing tie-breakers', is_string($route) && strpos($route, "return ['pctMet', 'saidMonth', 'pct', 'minutesPct'];") !== false && strpos($route, 'wwtcBaseRankKeys()') !== false);
+
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);

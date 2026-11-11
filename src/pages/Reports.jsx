@@ -22,9 +22,11 @@ import {
 import { platoonIsPerfect } from '@/lib/perfectPlatoons.js'
 import { sortClasses } from '@/lib/classOrder.js'
 import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
-import { formatClassName } from '@/lib/formatClassName.js'
+import { formatClassName, hebrewClassLabel } from '@/lib/formatClassName.js'
 import { teacherName } from '@/lib/teacherName.js'
-import ClassName from '@/components/ClassName.jsx'
+import ClassName, { HebrewClassName } from '@/components/ClassName.jsx'
+
+const ROW_STRIPE = 'odd:bg-white even:bg-gray-100'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
@@ -59,6 +61,12 @@ function StatTile({ icon, value, label, sub }) {
       </div>
     </Card>
   )
+}
+
+function hebrewMark(row) {
+  const label = hebrewClassLabel(row.name, row.grade)
+  if (/^[\u0590-\u05FF]{1,4}$/.test(label)) return label
+  return GRADE_LABEL[row.grade] || formatClassName(row.grade)
 }
 
 function Rank({ n }) {
@@ -276,13 +284,15 @@ function BaseView({ data, error, loading, reload, onPickClass }) {
           {rows.map((c, i) => {
             const pct = c.goal ? Math.round((c.accomplished / c.goal) * 100) : 0
             const teacher = teacherName(c.teacher)
+            const mark = hebrewMark(c)
+            const markHebrew = /^[\u0590-\u05FF]+$/.test(mark)
             return (
-              <button key={c.id} type="button" onClick={() => onPickClass(c.id)} className="grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] sm:px-5">
+              <button key={c.id} type="button" onClick={() => onPickClass(c.id)} className={`${ROW_STRIPE} grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] sm:px-5`}>
                 <Rank n={i} />
-                <span className="grid h-11 w-11 place-items-center rounded-xl bg-navy font-cond text-sm text-gold">{GRADE_LABEL[c.grade] || formatClassName(c.grade)}</span>
+                <span className={`grid h-11 w-11 place-items-center rounded-xl bg-navy text-gold ${markHebrew ? 'font-heb text-lg' : 'font-cond text-sm'}`} dir={markHebrew ? 'rtl' : undefined}>{mark}</span>
                 <span className="min-w-0">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate font-display text-[17px] font-bold text-navy"><ClassName name={c.name} /></span>
+                    <span className="truncate text-[17px] font-bold text-navy"><HebrewClassName name={c.name} grade={c.grade} /></span>
                     <span className="text-sm text-muted"><b className="text-green">{fmt(c.accomplished)}</b> / {fmt(c.goal)}</span>
                   </span>
                   <span className="mt-1.5 block"><Meter pct={pct} color={c.perfect ? 'var(--color-green-mid)' : COLORS[i % COLORS.length]} /></span>
@@ -358,7 +368,7 @@ function PlatoonView({ data, error, loading, reload, admin, year }) {
           {data.rows.map((r) => {
             const under = !r.met && Number(r.said) > 0 && Number(r.said) < Number(r.goal)
             return (
-              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5">
+              <li key={r.id} className={`${ROW_STRIPE} flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5`}>
                 <span className={`grid h-8 w-8 place-items-center rounded-full text-sm ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
                 <span className="min-w-0 flex-1 basis-[calc(100%-3rem)] font-semibold text-navy sm:basis-auto">{r.name}</span>
                 <span className="text-sm text-navy">

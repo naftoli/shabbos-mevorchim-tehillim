@@ -87,16 +87,28 @@ function wwtcSchoolRow(int $id, string $name, array $kapGoal, array $kapDone, ar
 }
 
 /**
- * Home "The Race" default order: % soldiers who met, then % kapitlach, % minutes,
- * raw kapitlach, name. Personal-page schoolRank must use this same order.
+ * Top Base / schoolRank keys. Same order as src/lib/baseRank.js baseRankScore:
+ * % of soldiers who finished, then kapitlach said, then % of the kapitlach
+ * quota, then % of minutes. Name orders a list and does not split a tie.
+ */
+function wwtcBaseRankKeys(): array
+{
+    return ['pctMet', 'saidMonth', 'pct', 'minutesPct'];
+}
+
+/**
+ * Nationwide school order for The Race list and Top Base. pctMet first, then
+ * the same tie-breakers as wwtcBaseRankKeys, then the school name.
  */
 function wwtcCmpSchoolRace(array $a, array $b): int
 {
-    return $b['pctMet'] <=> $a['pctMet']
-        ?: $b['saidMonth'] <=> $a['saidMonth']
-        ?: $b['pct'] <=> $a['pct']
-        ?: $b['minutesPct'] <=> $a['minutesPct']
-        ?: strcmp($a['name'], $b['name']);
+    foreach (wwtcBaseRankKeys() as $key) {
+        $cmp = ((float) ($b[$key] ?? 0)) <=> ((float) ($a[$key] ?? 0));
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+    }
+    return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
 }
 
 /** True when two already-sorted rows share every ranking metric (not the name). */
@@ -1624,7 +1636,7 @@ if ($method === 'GET' && $path === '/me/social') {
     $ranked = wwtcNationwideSchools();
     $schoolRank = wwtcCompetitionRank($ranked, $schoolId, static function ($row) {
         return (int) $row['id'];
-    }, ['pctMet', 'saidMonth', 'pct', 'minutesPct']);
+    }, wwtcBaseRankKeys());
 
     // How many more classmates finishing would pass the class ahead (pctMet).
     $needToPass = 0;
@@ -2632,6 +2644,10 @@ if ($method === 'GET' && $path === '/admin/flags') {
     wwtcJson(wwtcListFlags(wwtcFlagReviewSchools($actor)));
 }
 
+// Accept and remove also reverse each other. An accepted row can be removed
+// (prior mark, or a cleared month) and a removed row can be accepted (the
+// flagged kapitlach and minutes). wwtcReviewStoredFlag applies that in one
+// transaction, writes the decision, and bumps the cache.
 if ($method === 'POST' && preg_match('#^/admin/flags/(\d+)/(accept|remove)$#', $path, $m)) {
     $actor = wwtcRequireActor(['admin']);
     if (!wwtcFlagsReady()) {

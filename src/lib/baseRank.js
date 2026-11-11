@@ -26,6 +26,24 @@ export function baseRanks(schools) {
   return map
 }
 
+/**
+ * Home "Bases in action" order. Rank 1 is first. Schools that share a rank
+ * (a real tie) fall through to the name. A school with no rank goes last.
+ */
+export function compareBasesInAction(a, b, ranks) {
+  const rankOf = (school) => {
+    if (school?.id == null || school.id === '') return null
+    const rank = ranks?.get?.(String(school.id))
+    return Number.isInteger(rank) && rank > 0 ? rank : null
+  }
+  const left = rankOf(a)
+  const right = rankOf(b)
+  if (left != null && right != null && left !== right) return left - right
+  if (left != null && right == null) return -1
+  if (left == null && right != null) return 1
+  return String(a?.name || '').localeCompare(String(b?.name || ''))
+}
+
 export const TOP_BASE_ART_WIDTH = 247
 export const TOP_BASE_ART_HEIGHT = 320
 

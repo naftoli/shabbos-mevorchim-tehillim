@@ -29,8 +29,10 @@ import {
 } from '@/services/api.js'
 import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
 import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
-import ClassName from '@/components/ClassName.jsx'
+import ClassName, { HebrewClassName } from '@/components/ClassName.jsx'
 import { formatClassName } from '@/lib/formatClassName.js'
+
+const ROW_STRIPE = 'odd:bg-white even:bg-gray-100'
 import CustomLadderTool from '@/components/CustomLadderTool.jsx'
 
 function HqTools() {
@@ -419,21 +421,142 @@ function FlagQueue({ schoolId, all, actorName }) {
       {recent.length > 0 ? (
         <div className="mt-5">
           <p className="text-sm font-semibold text-navy">Recent decisions</p>
-          <ul className="mt-2 space-y-1 text-sm text-muted">
+          <ul className="mt-2 space-y-2 text-sm text-muted">
             {recent.slice(0, 8).map((row) => {
               const last = row.decisions?.[row.decisions.length - 1]
-              const verb = last?.action === 'accepted' ? 'Accepted' : 'Removed'
+              const accepted = row.status === 'accepted'
+              const verb = accepted ? 'Accepted' : 'Removed'
+              const flip = accepted ? 'remove' : 'accept'
+              const label = accepted ? 'Remove instead' : 'Accept instead'
               return (
-                <li key={`${row.id}-${last?.at || 'decision'}`}>
-                  {verb} {row.kidName}
-                  {last?.actorName ? ` · ${last.actorName}` : ''}
-                  {last?.at ? ` · ${formatFlagWhen(last.at, true)}` : ''}
+                <li key={`${row.id}-${last?.at || 'decision'}`} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {verb} {row.kidName}
+                    {last?.actorName ? ` · ${last.actorName}` : ''}
+                    {last?.at ? ` · ${formatFlagWhen(last.at, true)}` : ''}
+                  </span>
+                  {row.status === 'accepted' || row.status === 'removed' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="!min-h-11 !px-3 !py-1 !text-sm"
+                      disabled={busy != null}
+                      onClick={() => decide(row.id, flip)}
+                    >
+                      {busy === `${row.id}:${flip}` ? 'Saving…' : label}
+                    </Button>
+                  ) : null}
                 </li>
               )
             })}
           </ul>
         </div>
       ) : null}
+      </div>
+    </Card>
+  )
+}
+
+// Soldier names come only from the staff platoon roll. A public response
+// has roll:false and no rows, so this list stays empty for anyone else.
+function ClassKids({ classId }) {
+  const { data, loading, error, reload } = useLiveData(() => getPlatoonReport(classId), [classId])
+  const showRoll = data?.roll === true && Array.isArray(data.rows)
+  if (error) {
+    return (
+      <p className="border-t border-line px-4 py-2 text-sm text-navy">
+        Couldn’t load soldiers. <button type="button" className="underline" onClick={reload}>Try again</button>
+      </p>
+    )
+  }
+  if (!data && loading) return <p className="border-t border-line px-4 py-2 text-sm text-muted">Getting soldiers…</p>
+  if (!showRoll) return <p className="border-t border-line px-4 py-2 text-sm text-muted">Soldier names are shown only to staff.</p>
+  if (!data.rows.length) return <p className="border-t border-line px-4 py-2 text-sm text-muted">No soldiers in this class.</p>
+  return (
+    <ul className="border-t border-line">
+      {data.rows.map((r) => (
+        <li key={r.id} className={`${ROW_STRIPE} flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm`}>
+          <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${r.met ? 'bg-green text-white' : 'bg-track text-muted'}`}>{r.met ? '✓' : '·'}</span>
+          <span className="min-w-0 flex-1 font-semibold text-navy">{r.name}</span>
+          <span className="text-navy">said {fmt(r.said)} of {fmt(r.goal)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ClassReport({ rows }) {
+  const [open, setOpen] = useState(() => new Set())
+  function toggle(id) {
+    const key = String(id)
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  const list = rows ?? []
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-line px-5 py-3"><h3 className="font-display font-black text-navy">Class Report · {CURRENT_MONTH}</h3></div>
+      <ul className="sm:hidden">
+        {list.map((c) => {
+          const isOpen = open.has(String(c.id))
+          return (
+            <li key={c.id} className={`${ROW_STRIPE} border-t border-line`}>
+              <button type="button" className="w-full px-4 py-3 text-left" aria-expanded={isOpen} onClick={() => toggle(c.id)}>
+                <p className="font-semibold text-navy">
+                  <HebrewClassName name={c.name} grade={c.grade} /> {c.perfect ? '★' : ''}
+                </p>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                  <div><dt className="text-xs uppercase text-muted">Soldiers</dt><dd className="tabular-nums text-navy">{c.size}</dd></div>
+                  <div><dt className="text-xs uppercase text-muted">Goal</dt><dd className="tabular-nums text-navy">{fmt(c.goal)}</dd></div>
+                  <div><dt className="text-xs uppercase text-muted">Said</dt><dd className="font-bold tabular-nums text-green">{fmt(c.accomplished)}</dd></div>
+                  <div><dt className="text-xs uppercase text-muted">Completed</dt><dd className="tabular-nums text-navy">{c.completed}/{c.size}</dd></div>
+                </dl>
+                <p className="mt-2 text-xs font-semibold text-navy">{isOpen ? 'Hide soldiers' : 'Show soldiers'}</p>
+              </button>
+              {isOpen ? <ClassKids classId={c.id} /> : null}
+            </li>
+          )
+        })}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[520px] text-left text-sm">
+          <thead><tr className="bg-track/60 text-muted">
+            <th className="px-4 py-2 font-cond uppercase">Class</th>
+            <th className="px-4 py-2 text-right font-cond uppercase">Soldiers</th>
+            <th className="px-4 py-2 text-right font-cond uppercase">Goal</th>
+            <th className="px-4 py-2 text-right font-cond uppercase">Said</th>
+            <th className="px-4 py-2 text-right font-cond uppercase">Completed</th>
+          </tr></thead>
+          {list.map((c, i) => {
+            const isOpen = open.has(String(c.id))
+            const stripe = i % 2 === 0 ? 'bg-white' : 'bg-gray-100'
+            return (
+              <tbody key={c.id} className={stripe}>
+                <tr className="border-t border-line">
+                  <td className="px-4 py-2 font-semibold text-navy">
+                    <button type="button" className="text-left" aria-expanded={isOpen} onClick={() => toggle(c.id)}>
+                      <HebrewClassName name={c.name} grade={c.grade} /> {c.perfect ? '★' : ''}
+                      <span className="mt-0.5 block text-xs font-semibold text-muted">{isOpen ? 'Hide soldiers' : 'Show soldiers'}</span>
+                    </button>
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums">{c.size}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{fmt(c.goal)}</td>
+                  <td className="px-4 py-2 text-right font-bold tabular-nums text-green">{fmt(c.accomplished)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{c.completed}/{c.size}</td>
+                </tr>
+                {isOpen ? (
+                  <tr>
+                    <td colSpan={5} className="p-0"><ClassKids classId={c.id} /></td>
+                  </tr>
+                ) : null}
+              </tbody>
+            )
+          })}
+        </table>
       </div>
     </Card>
   )
@@ -582,45 +705,7 @@ export default function AdminDashboard() {
 
             <CustomLadderTool schoolId={school.id} />
 
-            {/* Base report */}
-            <Card className="overflow-hidden">
-              <div className="border-b border-line px-5 py-3"><h3 className="font-display font-black text-navy">Class Report · {CURRENT_MONTH}</h3></div>
-              <ul className="divide-y divide-line sm:hidden">
-                {(base?.rows ?? []).map((c) => (
-                  <li key={c.id} className="px-4 py-3">
-                    <p className="font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</p>
-                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                      <div><dt className="text-xs uppercase text-muted">Soldiers</dt><dd className="tabular-nums text-navy">{c.size}</dd></div>
-                      <div><dt className="text-xs uppercase text-muted">Goal</dt><dd className="tabular-nums text-navy">{fmt(c.goal)}</dd></div>
-                      <div><dt className="text-xs uppercase text-muted">Said</dt><dd className="font-bold tabular-nums text-green">{fmt(c.accomplished)}</dd></div>
-                      <div><dt className="text-xs uppercase text-muted">Completed</dt><dd className="tabular-nums text-navy">{c.completed}/{c.size}</dd></div>
-                    </dl>
-                  </li>
-                ))}
-              </ul>
-              <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[520px] text-left text-sm">
-                <thead><tr className="bg-track/60 text-muted">
-                  <th className="px-4 py-2 font-cond uppercase">Class</th>
-                  <th className="px-4 py-2 text-right font-cond uppercase">Soldiers</th>
-                  <th className="px-4 py-2 text-right font-cond uppercase">Goal</th>
-                  <th className="px-4 py-2 text-right font-cond uppercase">Said</th>
-                  <th className="px-4 py-2 text-right font-cond uppercase">Completed</th>
-                </tr></thead>
-                <tbody>
-                  {(base?.rows ?? []).map((c) => (
-                    <tr key={c.id} className="border-t border-line">
-                      <td className="px-4 py-2 font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{c.size}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{fmt(c.goal)}</td>
-                      <td className="px-4 py-2 text-right font-bold tabular-nums text-green">{fmt(c.accomplished)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{c.completed}/{c.size}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-            </Card>
+            <ClassReport rows={base?.rows} />
 
             {/* Teacher deadline email */}
             <Card className="p-5 sm:p-6">
