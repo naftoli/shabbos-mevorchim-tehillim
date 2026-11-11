@@ -4,6 +4,7 @@
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
+import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
 import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
 import { cellFor, formatKapitlachQuota, generateCustomLadder } from '@/lib/customLadder.js'
@@ -39,6 +40,8 @@ import {
   ARMY_DEDICATION,
   schoolDedication,
   setSchoolDedicationStore,
+  schoolYearStart,
+  setSchoolYearStartStore,
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
@@ -110,28 +113,29 @@ function activeCustomLadder(kidId) {
 // soldier's current ladder (Cheshvan is repriced from today's ladder).
 // A one-month override replaces the kapitel number only.
 // saidOf already withholds a flagged amount that does not count yet.
-function ladderCell(kid, month) {
+function ladderCell(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  const named = quotaSheetMonth(demoDataMonth(month), firstMonth)
   const custom = activeCustomLadder(kid.id)
   if (custom?.grid) {
-    const cell = cellFor(custom.grid, kid.grade, demoDataMonth(month))
+    const cell = cellFor(custom.grid, kid.grade, named)
     if (cell) return cell
   }
-  return quotaFor(kid.grade, demoDataMonth(month), kid.ladder)
+  return quotaFor(kid.grade, named, kid.ladder)
 }
-function quotaLabelFor(kid, month, quota, adjusted) {
+function quotaLabelFor(kid, month, quota, adjusted, firstMonth = DEFAULT_FIRST_MONTH) {
   if (adjusted) return String(quota)
-  const cell = ladderCell(kid, month)
+  const cell = ladderCell(kid, month, firstMonth)
   if (activeCustomLadder(kid.id)) return formatKapitlachQuota(cell?.v).label || '—'
   return cell?.k || '—'
 }
-function engineKap(kid, month) {
-  return ladderCell(kid, month)?.v ?? 0
+function engineKap(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  return ladderCell(kid, month, firstMonth)?.v ?? 0
 }
-function engineMin(kid, month) {
-  return ladderCell(kid, month)?.m ?? 0
+function engineMin(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  return ladderCell(kid, month, firstMonth)?.m ?? 0
 }
-function kapSnapshot(kid, month, year = CAMPAIGN_YEAR) {
-  const engine = engineKap(kid, month)
+function kapSnapshot(kid, month, year = CAMPAIGN_YEAR, firstMonth = DEFAULT_FIRST_MONTH) {
+  const engine = engineKap(kid, month, firstMonth)
   const eff = effectiveKapQuota(engine, activeOverride(kid.id, year, month))
   const said = saidOf(kid, month, year)
   const reported = reportedOf(kid, month, year)
@@ -151,16 +155,18 @@ function missionBonus(kid) {
   return extra
 }
 
-const kidMonthQuota = (kid, month, year = CAMPAIGN_YEAR) => kapSnapshot(kid, month, year).quota
+const kidMonthQuota = (kid, month, year = CAMPAIGN_YEAR, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, year, firstMonth).quota
 const kidMonthSaid = (kid, month) => kapitlachInTotals(kid, month)
 const kidMonthMinutes = (kid, month) => minutesInTotals(kid, month)
-const metQuota = (kid, month) => kapSnapshot(kid, month, CAMPAIGN_YEAR).met
-const metAt = (kid, month, year) => kapSnapshot(kid, month, year).met
+const metQuota = (kid, month, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, CAMPAIGN_YEAR, firstMonth).met
+const metAt = (kid, month, year, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, year, firstMonth).met
 const kidSaidYear = (kid) => ELAPSED_MONTHS.reduce((a, mo) => a + kidMonthSaid(kid, mo), 0)
 
 // ---- school aggregates -----------------------------------------------------
 
 function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
+  const first = schoolYearStart(school.id)
+  const yearSlots = elapsedSchoolYearSlots(first, Number(year) || Number(CAMPAIGN_YEAR), month)
   let kids = 0
   let saidMonth = 0
   let quotaMonth = 0
@@ -174,12 +180,12 @@ function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
       kids += 1
       const said = saidOf(kid, month, year)
       saidMonth += said
-      quotaMonth += kidMonthQuota(kid, month, year)
+      quotaMonth += kidMonthQuota(kid, month, year, first)
       minutesSaidMonth += minutesOf(kid, month, year)
-      minutesQuotaMonth += engineMin(kid, month)
-      if (metAt(kid, month, year)) metMonth += 1
+      minutesQuotaMonth += engineMin(kid, month, first)
+      if (metAt(kid, month, year, first)) metMonth += 1
       if (reportedOf(kid, month, year) && said > 0) participatedMonth += 1
-      saidYear += kidSaidYear(kid)
+      saidYear += yearSlots.reduce((sum, slot) => sum + saidOf(kid, slot.month, slot.year), 0)
     }
   }
   const pct = quotaMonth > 0 ? Math.round((saidMonth / quotaMonth) * 100) : 0
@@ -368,6 +374,7 @@ function safeKid(kid, school, cls) {
     schoolId: school.id,
     schoolName: school.name,
     className: cls.name,
+    yearStart: schoolYearStart(school.id),
   }
 }
 
@@ -431,42 +438,34 @@ export async function getKidProgress(id) {
   return demoKidProgress(id)
 }
 
+function monthRow(kid, slot, first, current) {
+  const snap = kapSnapshot(kid, slot.month, slot.year, first)
+  return {
+    month: slot.month,
+    year: slot.year,
+    quota: snap.quota,
+    originalQuota: snap.originalQuota,
+    quotaAdjusted: snap.quotaAdjusted,
+    quotaLabel: quotaLabelFor(kid, slot.month, snap.quota, snap.quotaAdjusted, first),
+    said: snap.said,
+    minutes: engineMin(kid, slot.month, first),
+    saidMinutes: slot.year === Number(CAMPAIGN_YEAR) ? kidMonthMinutes(kid, slot.month) : (kid.priorYearMinutes?.[slot.month] ?? 0),
+    met: snap.met,
+    reported: snap.reported,
+    isCurrent: current && slot.month === CURRENT_MONTH && slot.year === Number(CAMPAIGN_YEAR),
+  }
+}
+
 function demoKidProgress(id) {
   const found = locate(id)
   if (!found) return null
   const { kid } = found
-  const months = ELAPSED_MONTHS.map((mo) => {
-    const snap = kapSnapshot(kid, mo, CAMPAIGN_YEAR)
-    return {
-      month: mo,
-      quota: snap.quota,
-      originalQuota: snap.originalQuota,
-      quotaAdjusted: snap.quotaAdjusted,
-      quotaLabel: quotaLabelFor(kid, mo, snap.quota, snap.quotaAdjusted),
-      said: snap.said,
-      minutes: engineMin(kid, mo), // the quota's target minutes
-      saidMinutes: kidMonthMinutes(kid, mo), // minutes the soldier reported
-      met: snap.met,
-      isCurrent: mo === CURRENT_MONTH,
-    }
-  })
-  const historyMonths = campaignMonths(PRIOR_CAMPAIGN_YEAR).map((mo) => {
-    const snap = kapSnapshot(kid, mo, PRIOR_CAMPAIGN_YEAR)
-    return {
-      month: mo,
-      year: PRIOR_CAMPAIGN_YEAR,
-      quota: snap.quota,
-      originalQuota: snap.originalQuota,
-      quotaAdjusted: snap.quotaAdjusted,
-      quotaLabel: quotaLabelFor(kid, mo, snap.quota, snap.quotaAdjusted),
-      minutes: engineMin(kid, mo),
-      said: snap.said,
-      saidMinutes: kid.priorYearMinutes?.[mo] ?? 0,
-      met: snap.met,
-      reported: snap.reported,
-      isCurrent: false,
-    }
-  })
+  const first = schoolYearStart(found.school.id)
+  const anchorYear = Number(CAMPAIGN_YEAR)
+  const currentSlots = elapsedSchoolYearSlots(first, anchorYear, CURRENT_MONTH)
+  const priorOrigin = schoolYearStartYear(first, anchorYear, CURRENT_MONTH) - 1
+  const months = currentSlots.map((slot) => monthRow(kid, slot, first, true))
+  const historyMonths = schoolYearSlots(first, priorOrigin).map((slot) => monthRow(kid, slot, first, false))
   // The demo roster only holds one prior year, so stand in a mission history for
   // it under the prior grade — enough for the training board to draw real checks
   // locally. Live builds the full multi-year history from DB marks (index.php).
@@ -518,7 +517,7 @@ export async function recordMonth(id, month, kapitlach, minutes, extra = {}) {
   const found = locate(id)
   if (!found) return null
   const { kid, school, cls } = found
-  const q = ladderCell(kid, month)
+  const q = ladderCell(kid, month, schoolYearStart(school.id))
   const result = applySoldierReport(kid, {
     month,
     kapitlach: Number(kapitlach) || 0,
@@ -736,6 +735,7 @@ export async function getSchool(id) {
 function demoSchool(id) {
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return null
+  const first = schoolYearStart(id)
   const agg = schoolAgg(school)
   const classes = school.classes.map((cls) => {
     let said = 0
@@ -747,10 +747,10 @@ function demoSchool(id) {
     for (const kid of cls.kids) {
       const kidSaid = kidMonthSaid(kid, CURRENT_MONTH)
       said += kidSaid
-      quota += kidMonthQuota(kid, CURRENT_MONTH)
+      quota += kidMonthQuota(kid, CURRENT_MONTH, CAMPAIGN_YEAR, first)
       minsSaid += kidMonthMinutes(kid, CURRENT_MONTH)
-      minsQuota += engineMin(kid, CURRENT_MONTH)
-      if (metQuota(kid, CURRENT_MONTH)) met += 1
+      minsQuota += engineMin(kid, CURRENT_MONTH, first)
+      if (metQuota(kid, CURRENT_MONTH, first)) met += 1
       if (reportedOf(kid, CURRENT_MONTH, CAMPAIGN_YEAR) && kidSaid > 0) participated += 1
     }
     const size = cls.kids.length
@@ -772,7 +772,7 @@ function demoSchool(id) {
       perfect: classIsPerfect(met, size),
     }
   })
-  return { ...agg, classes: sortClasses(classes), dedication: schoolDedication(id) }
+  return { ...agg, classes: sortClasses(classes), dedication: schoolDedication(id), yearStart: schoolYearStart(id) }
 }
 
 // n omitted returns the whole board. The page shows ten at a time; ranking
@@ -822,6 +822,7 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
     year,
     holiday: isHolidayMonth(month),
     rows: ROSTER.map((school) => {
+      const first = schoolYearStart(school.id)
       let registered = 0
       let goal = 0
       let accomplished = 0
@@ -832,9 +833,9 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
       for (const cls of school.classes) {
         for (const kid of cls.kids) {
           registered += 1
-          const snap = kapSnapshot(kid, dataMonth, year)
+          const snap = kapSnapshot(kid, dataMonth, year, first)
           goal += snap.quota
-          minutesGoal += engineMin(kid, dataMonth)
+          minutesGoal += engineMin(kid, dataMonth, first)
           accomplished += snap.said
           minutes += minutesOf(kid, dataMonth, year)
           if (snap.reported && snap.said > 0) participated += 1
@@ -871,6 +872,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
   if (!IS_DEMO) return withClassOrder(await mashpia.getBaseReport(schoolId, monthIdx, period))
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return null
+  const first = schoolYearStart(school.id)
   const month = period?.month || monthName(monthIdx)
   const year = period?.year || CAMPAIGN_YEAR
   const dataMonth = demoDataMonth(month)
@@ -883,7 +885,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
       let accomplished = 0
       let completed = 0
       for (const kid of cls.kids) {
-        const snap = kapSnapshot(kid, dataMonth, year)
+        const snap = kapSnapshot(kid, dataMonth, year, first)
         goal += snap.quota
         accomplished += snap.said
         if (snap.met) completed += 1
@@ -920,9 +922,10 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
   for (const school of ROSTER) {
     const cls = school.classes.find((c) => c.id === classId)
     if (!cls) continue
+    const first = schoolYearStart(school.id)
     let completed = 0
     for (const kid of cls.kids) {
-      if (metAt(kid, dataMonth, year)) completed += 1
+      if (metAt(kid, dataMonth, year, first)) completed += 1
     }
     const summary = {
       month,
@@ -936,14 +939,14 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
     }
     if (!canSeeClassRoll(readDemoStaff(), { classId: cls.id, schoolId: school.id })) return summary
     const rows = cls.kids.map((kid) => {
-      const snap = kapSnapshot(kid, dataMonth, year)
+      const snap = kapSnapshot(kid, dataMonth, year, first)
       return {
         id: kid.id,
         name: kid.name,
         ladder: kid.ladder,
         goal: snap.quota,
         originalGoal: snap.originalQuota,
-        goalLabel: quotaLabelFor(kid, dataMonth, snap.quota, snap.quotaAdjusted),
+        goalLabel: quotaLabelFor(kid, dataMonth, snap.quota, snap.quotaAdjusted, first),
         said: snap.said,
         met: snap.met,
         quotaAdjusted: snap.quotaAdjusted,
@@ -1006,6 +1009,13 @@ export async function setSchoolDedication(schoolId, text) {
   invalidate()
   return schoolDedication(schoolId)
 }
+export async function setSchoolYearStart(schoolId, firstMonth) {
+  if (!IS_DEMO) return mashpia.setSchoolYearStart({ schoolId, firstMonth })
+  setSchoolYearStartStore(schoolId, firstMonth)
+  invalidate()
+  return { ok: true, schoolId, firstMonth: schoolYearStart(schoolId), gradeEnds: null }
+}
+
 export function removeSchoolDedication(schoolId) {
   setSchoolDedicationStore(schoolId, null)
   invalidate()
@@ -1238,10 +1248,11 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)
+  const first = schoolYearStart(school.id)
   const rows = school.classes
     .map((cls) => {
       const kids = cls.kids.map((k) => {
-        const snap = kapSnapshot(k, month, CAMPAIGN_YEAR)
+        const snap = kapSnapshot(k, month, CAMPAIGN_YEAR, first)
         return { name: k.name, said: snap.said, quota: snap.quota }
       })
       return {

@@ -1819,6 +1819,8 @@ function wwtcNotifyCli(array $argv): int
     $schools = [];
     foreach (array_keys($needed) as $schoolId) {
         try {
+            // Quotas follow that school's year (wwtcSchoolData). The month in
+            // the message stays the calendar Shabbos Mevorchim everyone shares.
             $data = wwtcSchoolData((int) $schoolId, $jd, $year);
             $schools[(int) $schoolId] = wwtcNotifySchoolFromReport($data, (string) ($names[$schoolId] ?? ''));
         } catch (Throwable $e) {

@@ -13,8 +13,9 @@ import StreakBar from '@/components/StreakBar.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor, toHebrewNumeral } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
 import { cellFor, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
+import { DEFAULT_FIRST_MONTH, quotaForSchool, quotaSheetMonth } from '@/lib/schoolYear.js'
 import { isHebrewLeapYear } from '@/lib/hebrewYear.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -79,6 +80,7 @@ export default function KidDashboard() {
   )
 
   const cur = progress?.current
+  const yearStart = progress?.yearStart || kid?.yearStart || DEFAULT_FIRST_MONTH
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
   // Climb position comes from the same ladder table as "Your Ladder" (grade +
   // month + ladder → cumulative kapitel). Do not use progress.months[].quota —
@@ -96,17 +98,17 @@ export default function KidDashboard() {
       const v = m.quotaAdjusted
         ? (Number(m.quota) || 0)
         : (progress.customLadder
-          ? (cellFor(progress.customLadder, kid.grade, m.month)?.v ?? 0)
-          : (quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0))
+          ? (cellFor(progress.customLadder, kid.grade, quotaSheetMonth(m.month, yearStart))?.v ?? 0)
+          : (quotaForSchool(kid.grade, m.month, kid.ladder, yearStart)?.v ?? 0))
       return Math.max(mx, Number(v) || 0)
     }, 0)
-  }, [progress, kid])
+  }, [progress, kid, yearStart])
   const climbTarget = cur
     ? (cur.quotaAdjusted
       ? (Number(cur.quota) || 0)
       : (customLadder
-        ? (cellFor(customLadder, kid.grade, cur.month)?.v ?? 0)
-        : (kid?.ladder ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0) : 0)))
+        ? (cellFor(customLadder, kid.grade, quotaSheetMonth(cur.month, yearStart))?.v ?? 0)
+        : (kid?.ladder ? (quotaForSchool(kid.grade, cur.month, kid.ladder, yearStart)?.v ?? 0) : 0)))
     : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
@@ -177,7 +179,7 @@ export default function KidDashboard() {
   }
 
   const streaks = streakFromMissions(streakMissions(progress))
-  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR))
+  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR), yearStart)
   let earnedOn = null
   {
     const medal = progress.medal?.current
@@ -199,6 +201,7 @@ export default function KidDashboard() {
     missionsTotal: progress.missionsTotal,
     declined,
     openFlag: progress.flagged,
+    firstMonth: yearStart,
   })
   const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
   if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
@@ -451,7 +454,7 @@ export default function KidDashboard() {
               <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {LADDERS.map((L) => {
-                  const cell = quotaFor(kid.grade, cur.month, L)
+                  const cell = quotaForSchool(kid.grade, cur.month, L, yearStart)
                   const allowed = cell != null
                   const mine = Number(kid.ladder) === L
                   return (
@@ -540,7 +543,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} quotaGrid={progress.customLadder} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
 
         <MedalBoard
           progress={progress}
@@ -572,7 +575,7 @@ export default function KidDashboard() {
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
-            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} />
+            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} firstMonth={yearStart} anchorMonth={cur.month} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
@@ -596,6 +599,7 @@ export default function KidDashboard() {
             }).filter(Boolean) : null}
             finishGradeLabel={progress.customLadder?.finishLabel || GRADE_LABEL[String(finishGrade(kid.ladder))]}
             gender={kid.gender || progress.gender}
+            yearStart={yearStart}
             onOpen={() => {
               const text = fillClimb(progress.customLadder?.finishLabel || trainByGrade(kid.ladder))
               if (text) emitCue(`climb-${kid.id}`, text, { force: true })

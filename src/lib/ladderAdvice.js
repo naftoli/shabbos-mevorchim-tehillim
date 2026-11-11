@@ -1,10 +1,11 @@
-import { availableLadders, quotaFor } from '@/data/ladders.js'
+import { availableLadders } from '@/data/ladders.js'
+import { DEFAULT_FIRST_MONTH, quotaForSchool } from '@/lib/schoolYear.js'
 import { countsInPublicTotals } from './overEntry.js'
 import { metKap } from './quotaOverride.js'
 import { GENTLER_LADDER_MISSES, LADDER_INVITE_MONTHS, LADDER_REENGAGE_MISSIONS } from './decisions.js'
 
-function ladderQuota(grade, month, ladder) {
-  const cell = quotaFor(grade, month, ladder)
+function ladderQuota(grade, month, ladder, firstMonth = DEFAULT_FIRST_MONTH) {
+  const cell = quotaForSchool(grade, month, ladder, firstMonth)
   return cell ? Number(cell.v) : null
 }
 
@@ -44,9 +45,9 @@ function consider(months, openFlag) {
 }
 
 /** Chart quota, unless a base-commander override replaced this month. */
-function quotaNow(month, grade, ladder) {
+function quotaNow(month, grade, ladder, firstMonth) {
   if (month.quotaAdjusted) return Number(month.quota) || 0
-  const chart = ladderQuota(grade, month.month, ladder)
+  const chart = ladderQuota(grade, month.month, ladder, firstMonth)
   if (chart != null) return chart
   return Number(month.quota) || 0
 }
@@ -56,7 +57,7 @@ function quotaNow(month, grade, ladder) {
  * `harder` is one ladder up (a lower ladder number). `gentler` is one down.
  * A month is only one of those, so the two invitations never fire together.
  */
-export function ladderAdvice({ grade, ladder, months, missionsTotal = 0, declined, openFlag = null }) {
+export function ladderAdvice({ grade, ladder, months, missionsTotal = 0, declined, openFlag = null, firstMonth = DEFAULT_FIRST_MONTH }) {
   const list = consider(months, openFlag)
   const current = Number(ladder)
   const options = availableLadders(grade)
@@ -70,18 +71,18 @@ export function ladderAdvice({ grade, ladder, months, missionsTotal = 0, decline
     const month = list[i]
     const said = Number(month.said) || 0
     const fromEnd = list.length - 1 - i
-    const harderQuota = harderLadder ? ladderQuota(grade, month.month, harderLadder) : null
+    const harderQuota = harderLadder ? ladderQuota(grade, month.month, harderLadder, firstMonth) : null
     const atHarder = harderQuota != null && said >= harderQuota
     if (atHarder && upRun === fromEnd) upRun += 1
 
     // An override counts as met (the quota is the kapitlach they entered).
     // A short month suggests one step down only when that ladder's quota is
     // closer to what they said than the ladder they are on.
-    const met = metKap(quotaNow(month, grade, current), said, true)
+    const met = metKap(quotaNow(month, grade, current, firstMonth), said, true)
     let atGentler = false
     if (!atHarder && !met && gentlerLadder) {
-      const here = ladderQuota(grade, month.month, current)
-      const there = ladderQuota(grade, month.month, gentlerLadder)
+      const here = ladderQuota(grade, month.month, current, firstMonth)
+      const there = ladderQuota(grade, month.month, gentlerLadder, firstMonth)
       if (here != null && there != null && Math.abs(said - there) < Math.abs(said - here)) {
         atGentler = true
       }
