@@ -274,3 +274,221 @@ the nationwide/aggregate numbers may lag up to the TTL.
   rebuild for the first request of each key. `scripts/warm-cache.sh` pre-warms
   the public endpoints; run it from cron if that first hit matters, e.g.
   `*/5 * * * * WWTC_BASE_URL=https://mashpia.com/shabbos-mevorchim-tehillim/api /path/to/scripts/warm-cache.sh`.
+
+## Monthly follow-up (WhatsApp, then SMS)
+
+Once a month, every base commander gets a full-base report and every teacher
+gets their own class. The job is `api/notify-wednesday.php`. It does not use a
+teacher login, `/my-class`, or `/reports`.
+
+### When it sends
+
+The crontab fires every Wednesday at 08:00 America/New_York. The script exits
+immediately unless that calendar day is the first Wednesday after the latest
+Shabbos Mevorchim. Dates come from `wwtcMonthDatesForYear()` / `calculateSM()`,
+the same list the reports use. A leap year (5784, 5787, …) keeps Adar I and
+Adar II as two Shabbosim, so each has its own Wednesday. A plain year has one
+Adar.
+
+Both the crontab and the script use `America/New_York`, so 08:00 stays 08:00
+local time when daylight saving starts or ends. Do not schedule this in UTC.
+
+```cron
+CRON_TZ=America/New_York
+0 8 * * 3 cd /path/to/shabbos-mevorchim-tehillim && TZ=America/New_York php api/notify-wednesday.php >> /path/outside/web/wwtc-notify.log 2>&1
+```
+
+One successful send per recipient per campaign month is recorded in
+`wwtc_notify_sends`. Running the script again the same day does not send a
+second copy. `--force` runs on a day that is not that Wednesday (still
+idempotent). `--only=123` limits the run to admin id 123. `--dry-run` prints
+who would get what and does not send, write a PDF, or insert a log row.
+
+```bash
+php api/notify-wednesday.php --dry-run
+php api/notify-wednesday.php --dry-run --only=123
+php api/notify-wednesday.php --force --only=123
+```
+
+"Filled out" means a kapitlach mark greater than zero for that Shabbos
+Mevorchim (the same participation signal as the reports). A mark of zero and a
+missing mark both count as not filled out. Quota totals in the PDF use each
+soldier's own quota from `wwtcSchoolData()`.
+
+### Who is texted, and which columns
+
+Certain, already used by this API:
+
+- Base commander: `admin_auths.auth = 'school'` and `admin_auths.id = school_id`.
+- Teacher: `admin_auths.auth = 'class'` and `admin_auths.id = class_id`
+  (`WWTC_CLASS_AUTH` in `api/platoonRoll.php`).
+- `admin_auths` has no email and no phone. `role_id = 1` with `auth = 'user'`
+  is a parent. Those rows are not recipients.
+- Names: `admins.first`, `admins.last`.
+- Class label: `classes.class_grade` and `classes.class_sub`.
+  `classes.class_teacher` is the name printed on the platoon chip, not an
+  account and not a phone.
+- School: `schools.school_id`, `schools.school_name`, and the usual eligible-
+  school roster (chayolei, not a test school).
+- Soldier names in the PDF come from the report engine (`users.first`,
+  `users.last` via `wwtcSchoolData()`). This job never messages a soldier and
+  does not read a phone or email from `users`.
+
+**GUESS for Naftoli.** These columns are not named anywhere else in this repo.
+Confirm them on the live `admins` table before relying on the first real send.
+The job prints the columns it actually found. It uses the first phone column
+that exists and is non-empty, in this order:
+
+1. `admins.admin_phone_mobile` (preferred: WhatsApp and SMS need a cell)
+2. `admins.admin_phone_home`
+3. `admins.admin_phone_work`
+4. `admins.admin_email` is stored on the log row only. Nothing is emailed.
+
+A school office number (`schools.school_phone` / `school_email`, if those
+columns exist) is not used. Phones are normalized to E.164 with the US as the
+default country. A number that cannot be normalized is skipped and logged as
+`skipped_invalid_phone`.
+
+`wwtc_notify_opt_outs.phone_e164` is the opt-out flag. Insert `+17185550100`
+(the E.164 form) and that number is skipped. The SMS body ends with
+`Reply STOP to opt out.` Twilio's own STOP handling is separate; when a STOP
+arrives, add the number to this table too.
+
+### The short message
+
+Teacher, WhatsApp template body (four variables: filled, total, missing, link):
+
+```text
+{{1}} out of {{2}} kids in your class filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. See the full report here: {{4}}. Please follow up with them today and see why they didn't.
+```
+
+Example: `2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…. Please follow up with them today and see why they didn't.`
+
+Base commander, WhatsApp template body (the same four variables). The per-class
+lines are not a fifth variable: a template cannot grow with the number of
+classes, and the body cap is about 1024 characters. Those lines are in the PDF
+and in the SMS. The class sentence stays on this template only, after the
+report link, because the bubble itself does not list classes. SMS already
+prints each class, so it does not repeat the sentence.
+
+```text
+{{1}} out of {{2}} kids in your base filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. See the full report here: {{4}}. Each class is in the attached report. Please follow up with them today and see why they didn't.
+```
+
+`{{4}}` is that recipient's signed PDF, the same file as the Document header.
+It is not the page where a soldier enters Tehillim. Sample values for Meta:
+`25`, `30`, `5`, and an `https://` URL on your domain.
+
+SMS uses the same counts and the same report link, then a separate fill-out
+line. The fill-out URL is the public soldier sign-in page,
+`{WWTC_PUBLIC_BASE}/login`. There is no per-class public fill-out page.
+Teacher:
+
+```text
+2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
+See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
+Link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/login
+Please follow up with them today and see why they didn't.
+Reply STOP to opt out.
+```
+
+Base commander:
+
+```text
+4 out of 5 kids in your base filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
+Class 5-B: 2 of 3
+Class 6-A: 2 of 2
+See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
+Link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/login
+Please follow up with them today and see why they didn't.
+Reply STOP to opt out.
+```
+
+Soldier names are not in either body. They are only in that recipient's PDF:
+a teacher sees their class, a base commander sees every class in their base.
+The PDF groups soldiers into "Did full quota", "Filled it out but under quota
+(X of Y kapitlach)", and "Didn't fill it out", with the totals at the top and
+a `Class X: filled of total` line per class. The site has no public deep link
+to one soldier (only `/me` after a serial-number sign-in, or a two-minute
+parent handoff). Each soldier who didn't fill it out is given the public
+sign-in URL `{WWTC_PUBLIC_BASE}/login`. That is not a teacher login and it is
+not `/reports`.
+
+### The PDF
+
+The file is written outside the web root (`WWTC_NOTIFY_DIR`, or
+`MASHPIA_LOG_DIR/wwtc-notify`, otherwise the system temp directory). Set
+`WWTC_NOTIFY_DIR` to a directory that both the cron user and the web PHP user
+can read, and that is not under the site document root. The public URL is
+`GET /api/notify-report?t=<hmac>`. The token expires after
+`WWTC_NOTIFY_LINK_DAYS` (default 30, max 180). A bad or expired token is a 404
+with no names. WhatsApp sends the same URL as a DOCUMENT header on the
+template and again as `{{4}}`. SMS has no attachment, so the same URL is the
+link in the text.
+
+A row left at outcome `pending` means a run stopped mid-send. Delete that row
+before a rerun if you know the message did not go out. Outcome `sent` is final
+for that recipient and campaign month.
+
+### WhatsApp: Sholem's Business app number
+
+Use Sholem's existing WhatsApp Business app number through Meta coexistence,
+onboarded by a Solution Partner / Tech Provider. A brand-new WhatsApp Business
+number on the Cloud API also works. Do not use a personal WhatsApp account.
+
+This job has two senders, chosen with `WHATSAPP_PROVIDER`:
+
+- `meta` (default): WhatsApp Cloud API. `POST https://graph.facebook.com/{version}/{WHATSAPP_PHONE_NUMBER_ID}/messages` with `Authorization: Bearer WHATSAPP_TOKEN`.
+- `360dialog`: `POST https://waba-v2.360dialog.io/messages` with header `D360-API-KEY`. Telnyx or YCloud can be used with the `meta` adapter when they give you Cloud API credentials. Only 360dialog has its own adapter here.
+
+Coexistence limits and onboarding:
+
+1. The number must already be on the WhatsApp Business app (the green business app), version **2.24.17 or newer**. Check the app version before starting. A personal WhatsApp app cannot be connected this way.
+2. In the partner hub (360dialog, or Telnyx / YCloud if you use the Cloud API adapter), start Embedded Signup and choose the existing WhatsApp Business app number (coexistence), not only a fresh API-only number.
+3. On the phone, open the WhatsApp Business app and scan the QR code the partner shows. Finish until the number shows as connected. The Business app keeps working, and the Cloud API is turned on for the same number.
+4. Create two **Utility** templates, language `en`, each with a **Document** header (the PDF is supplied at send time, not stored in the template) and the body text above. Names: `wwtc_class_followup` and `wwtc_base_followup`, or whatever you set in the env vars. Wait until Meta approves them. A template error does not fall back to SMS, so a rejected template will not text the whole army.
+5. Coexistence throughput is **20 messages per second**. The sender defaults to 10 and will not go above 19 (`WHATSAPP_MAX_PER_SECOND`).
+6. If WhatsApp is not configured, or the Cloud API returns error **131026** (message undeliverable because that number is not on WhatsApp; the older on-premises code **1013** is treated the same), the job sends the SMS instead. Any other WhatsApp error is logged as `failed` and is not turned into a text.
+
+### Env vars
+
+Put these in the PHP environment (or `mashpia.com/includes/globals.php` via
+`putenv`). No secrets belong in git.
+
+```bash
+WHATSAPP_PROVIDER=meta          # or 360dialog
+WHATSAPP_TOKEN=                 # Cloud API bearer token
+WHATSAPP_PHONE_NUMBER_ID=       # Cloud API only
+WHATSAPP_360_API_KEY=           # 360dialog only (falls back to WHATSAPP_TOKEN)
+WHATSAPP_TEMPLATE_CLASS=wwtc_class_followup
+WHATSAPP_TEMPLATE_BASE=wwtc_base_followup
+WHATSAPP_TEMPLATE_LANG=en
+WHATSAPP_GRAPH_VERSION=v21.0
+WHATSAPP_MAX_PER_SECOND=10
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM=                    # Twilio number, E.164. TWILIO_SID and TWILIO_TOKEN are accepted aliases.
+WWTC_NOTIFY_SIGNING_SECRET=     # falls back to WWTC_TOKEN_SECRET
+WWTC_NOTIFY_DIR=                # outside the web root, shared by cron and Apache
+WWTC_NOTIFY_LINK_DAYS=30
+WWTC_PUBLIC_BASE=https://mashpia.com/shabbos-mevorchim-tehillim
+```
+
+### What Naftoli does on mashpia.com
+
+1. Run `api/sql/wwtc_notify.sql` once. The job will not send until
+   `wwtc_notify_sends` and `wwtc_notify_opt_outs` exist.
+2. Confirm the `admins` phone and email columns above. If the live names
+   differ, say so before the first Wednesday: the job only selects
+   `admin_phone_mobile`, `admin_phone_home`, `admin_phone_work`, and
+   `admin_email`.
+3. Connect Sholem's WhatsApp Business app number (2.24.17+) through the
+   partner, or register a new Business number. Submit the two Document
+   templates and wait for approval.
+4. Open the SMS account (Twilio by default) and set the env vars. Leave the
+   WhatsApp vars empty to send only SMS until the templates are approved.
+5. Set `WWTC_NOTIFY_SIGNING_SECRET` and `WWTC_NOTIFY_DIR`.
+6. Dry-run, then install the crontab above.
+7. Deploy `api/notify.php`, `api/notify-wednesday.php`, and the `api/index.php`
+   route that serves `GET /api/notify-report`. Meta's servers must be able to
+   fetch that URL when the document header is sent.
