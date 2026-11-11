@@ -19,6 +19,8 @@ import {
   schoolClassLeaderboard,
   CURRENT_MONTH,
 } from '@/services/api.js'
+import { displayClassName } from '@/lib/formatClassName.js'
+import ClassName from '@/components/ClassName.jsx'
 
 const RACE_FILLS = [
   'linear-gradient(90deg, #86a8db 0%, var(--color-race-blue) 55%, #1f4f9e 100%)',
@@ -132,10 +134,10 @@ export default function SchoolCampaign() {
                 <span
                   key={c.id}
                   className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
-                  title={`${c.name}${c.teacher ? ' · ' + c.teacher : ''} · ${c.size} soldiers`}
+                  title={`${displayClassName(c.name)}${c.teacher ? ' · ' + c.teacher : ''} · ${c.size} soldiers`}
                 >
                   <StarMark className="h-4 w-4 flex-none" />
-                  <span className="font-display font-bold text-navy">{c.name}</span>
+                  <span className="font-display font-bold text-navy"><ClassName name={c.name} /></span>
                   {c.teacher ? <span className="text-green">· {c.teacher}</span> : null}
                 </span>
               ))}
@@ -177,7 +179,7 @@ export default function SchoolCampaign() {
                         </span>
                         <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-navy font-cond text-sm font-bold text-gold sm:h-11 sm:w-11">{classMono(c)}</span>
                         <span className="min-w-0 whitespace-normal font-display text-[15px] font-semibold leading-tight text-navy sm:w-40 sm:flex-none sm:truncate sm:text-[18px]">
-                          {c.name} {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
+                          <ClassName name={c.name} /> {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
                         </span>
                         <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-bar-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
                           <span

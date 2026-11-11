@@ -36,6 +36,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/compat.php';
+require_once __DIR__ . '/className.php';
 
 function wwtcNotifyAllowedPhoneColumns(): array
 {
@@ -169,7 +170,7 @@ function wwtcNotifyRecipientsFromRows(array $rows, array $eligibleSchoolIds): ar
             $schoolId,
             (string) ($row['class_school_name'] ?? ''),
             $classId,
-            $grade . ($sub !== '' ? '-' . $sub : ''),
+            wwtcFormatClassName($grade . ($sub !== '' ? '-' . $sub : '')),
             $phone,
             $email
         );
@@ -321,7 +322,7 @@ function wwtcNotCompletedClasses(array $students, array $classes): array
         if (!isset($byClass[$cid])) {
             $byClass[$cid] = [
                 'classId' => $cid,
-                'className' => (string) ($s['className'] ?? ''),
+                'className' => wwtcFormatClassName((string) ($s['className'] ?? '')),
                 'size' => 0,
                 'missing' => [],
                 'under' => [],
@@ -379,6 +380,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         if ($className === '') {
             $className = 'Class';
         }
+        $className = wwtcDisplayClassName($className);
         $students = [];
         $classFilled = 0;
         $classTotal = 0;
@@ -1341,7 +1343,7 @@ function wwtcNotifyExecute(array $job, array $deps = []): array
             . ' admin=' . (int) $recipient['adminId']
             . ' school=' . (int) $recipient['schoolId'];
         if (($recipient['role'] ?? '') === 'class') {
-            $line .= ' class=' . (int) $recipient['classId'] . ' ' . (string) ($recipient['className'] ?? '');
+            $line .= ' class=' . (int) $recipient['classId'] . ' ' . wwtcFormatClassName((string) ($recipient['className'] ?? ''));
         } else {
             $line .= ' ' . (string) ($recipient['schoolName'] ?? $report['schoolName']);
         }
