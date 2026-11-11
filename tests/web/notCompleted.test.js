@@ -50,6 +50,15 @@ test('the divided list puts finish before submit and keeps the class name separa
   assert.equal(view.sections[1].classes[1].size, 25)
 })
 
+test('finish and submit groups show the class as letters only', () => {
+  const view = notDoneView([
+    { classId: 9, className: '1 Aleph Bet', size: 4, missing: ['Short', 'Zero'], under: ['Short'], notFilled: ['Zero'] },
+    { classId: 10, className: '2 Bet Bet', size: 3, missing: ['None'], under: [], notFilled: ['None'] },
+  ])
+  assert.equal(view.sections[0].classes[0].className, 'Aleph Bet')
+  assert.deepEqual(view.sections[1].classes.map((c) => c.className), ['Aleph Bet', 'Bet Bet'])
+})
+
 test('an older response with only missing is listed under submit', () => {
   const view = notDoneView([{ classId: 1, className: '5A', size: 10, missing: ['Dovid'] }])
   assert.equal(view.sections[0].classes.length, 0)

@@ -9,6 +9,7 @@ import { IS_DEMO } from '@/lib/liveMode.js'
 import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
 import { defaultChatReply } from '@/lib/defaultChat.js'
 import { NO_MATCH_REPLY } from '@/lib/siteSearch.js'
@@ -63,7 +64,7 @@ function aiContext(ctx) {
       : null,
     missionsTotal: ctx.progress?.missionsTotal ?? 0,
     medal: medal ? { current: medal.current?.name ?? null, next: medal.next?.name ?? null, missionsToNext: medal.missionsToNext ?? null } : null,
-    rank: s ? { className: s.className, classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
+    rank: s ? { className: formatClassName(s.className), classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
     streak: ctx.streakInfo ?? null,
     scripts: scriptPayload(ctx.commanderScripts),
     scriptNow: Array.isArray(ctx.scriptNow) ? ctx.scriptNow : [],
@@ -181,7 +182,7 @@ function buildReply(text, ctx) {
   if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard', 'winning', 'first place', 'who is ahead', 'who won', 'am i first')) {
     if (!social) return `Every time you say your Tehillim, you lift your whole class and school up! 🏆`
     const tail = social.classRank === 1 ? `Your class is in first place — amazing!` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every child counts — keep saying your Tehillim!`
-    return `Your class ${social.className} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
+    return `Your class ${formatClassName(social.className)} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
   }
   // --- perfect platoon ---
   if (has('perfect platoon', 'platoon')) {

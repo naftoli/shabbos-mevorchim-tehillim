@@ -24,6 +24,8 @@ import {
 } from '@/services/api.js'
 import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
 import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
+import ClassName from '@/components/ClassName.jsx'
+import { formatClassName } from '@/lib/formatClassName.js'
 
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
@@ -164,7 +166,7 @@ function LadderSetter({ schoolId, classes }) {
             className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
           >
             <option value="">Whole school</option>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {classes.map((c) => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
           </select>
         </label>
 
@@ -243,7 +245,7 @@ function FlagQueue({ schoolId, all, actorName }) {
             {pending.map((row) => (
               <li key={row.id} className="rounded-xl border border-line p-3">
                 <p className="font-semibold text-navy">{row.kidName}</p>
-                <p className="text-sm text-muted">{row.className}{all ? ` · ${row.schoolName}` : ''}</p>
+                <p className="text-sm text-muted"><ClassName name={row.className} />{all ? ` · ${row.schoolName}` : ''}</p>
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
                   <div><dt className="text-xs uppercase text-muted">Amount</dt><dd className="font-semibold text-navy">{amountLabel(row)}</dd></div>
                   <div><dt className="text-xs uppercase text-muted">Threshold</dt><dd className="text-navy">above {thresholdLabel(row)}</dd></div>
@@ -273,7 +275,7 @@ function FlagQueue({ schoolId, all, actorName }) {
                 {pending.map((row) => (
                   <tr key={row.id} className="border-t border-line">
                     <td className="px-3 py-2 font-semibold text-navy">{row.kidName}</td>
-                    <td className="px-3 py-2">{row.className}</td>
+                    <td className="px-3 py-2"><ClassName name={row.className} /></td>
                     {all ? <td className="px-3 py-2">{row.schoolName}</td> : null}
                     <td className="px-3 py-2">{amountLabel(row)}</td>
                     <td className="px-3 py-2">above {thresholdLabel(row)}</td>
@@ -335,7 +337,7 @@ function NotDoneList({ classes }) {
                 <div key={cls.classId} className="rounded-lg bg-white px-3 py-2">
                   <p className="text-navy">
                     <span className="text-sm font-normal text-muted">Class: </span>
-                    <bdi dir="auto" className="font-bold">{cls.className}</bdi>
+                    <bdi dir="auto" className="font-bold">{formatClassName(cls.className)}</bdi>
                   </p>
                   {cls.size > 0 ? <p className="mt-1 text-sm text-muted">{cls.size} soldiers</p> : null}
                   <p className="mt-1 text-sm text-navy">{cls.phrase}</p>
@@ -458,7 +460,7 @@ export default function AdminDashboard() {
               <ul className="divide-y divide-line sm:hidden">
                 {(base?.rows ?? []).map((c) => (
                   <li key={c.id} className="px-4 py-3">
-                    <p className="font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</p>
+                    <p className="font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</p>
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                       <div><dt className="text-xs uppercase text-muted">Soldiers</dt><dd className="tabular-nums text-navy">{c.size}</dd></div>
                       <div><dt className="text-xs uppercase text-muted">Goal</dt><dd className="tabular-nums text-navy">{fmt(c.goal)}</dd></div>
@@ -480,7 +482,7 @@ export default function AdminDashboard() {
                 <tbody>
                   {(base?.rows ?? []).map((c) => (
                     <tr key={c.id} className="border-t border-line">
-                      <td className="px-4 py-2 font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</td>
+                      <td className="px-4 py-2 font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{c.size}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{fmt(c.goal)}</td>
                       <td className="px-4 py-2 text-right font-bold tabular-nums text-green">{fmt(c.accomplished)}</td>

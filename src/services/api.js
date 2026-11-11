@@ -20,6 +20,7 @@ import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { splitIncompleteNames } from '@/lib/notCompleted.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import * as mashpia from './mashpia.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
 import {
@@ -1090,7 +1091,7 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
       })
       return {
         classId: cls.id,
-        className: cls.name,
+        className: formatClassName(cls.name),
         size: cls.kids.length,
         ...splitIncompleteNames(kids),
       }

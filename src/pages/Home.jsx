@@ -23,6 +23,8 @@ import { CAMPAIGN_MARK, MONTH_CHOOSER } from '@/lib/decisions.js'
 import { baseRanks } from '@/lib/baseRank.js'
 import { PERFECT_PLATOON_ART } from '@/lib/perfectPlatoonBanner.js'
 import { groupPlatoonsBySchool, platoonKey } from '@/lib/perfectPlatoons.js'
+import { displayClassName } from '@/lib/formatClassName.js'
+import ClassName from '@/components/ClassName.jsx'
 
 const CAMPAIGN_ICON = CAMPAIGN_MARK === 'target' ? 'design/icon-target.png' : 'design/flag.png'
 
@@ -369,10 +371,10 @@ export default function Home() {
                             key={platoonKey(p)}
                             to={`/s/${p.schoolId}`}
                             className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
-                            title={`${p.className} · ${p.teacher || p.school} · ${p.size} soldiers`}
+                            title={`${displayClassName(p.className)} · ${p.teacher || p.school} · ${p.size} soldiers`}
                           >
                             <StarMark className="h-4 w-4 flex-none" />
-                            <span className="font-display font-bold text-navy">{p.className}</span>
+                            <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
                             {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
                           </Link>
                         ))}

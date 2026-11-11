@@ -21,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/hebrewYear.php';
 require_once __DIR__ . '/quotaOverride.php';
+require_once __DIR__ . '/className.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
@@ -1141,7 +1142,7 @@ function wwtcSafeKid(array $u): array
         'ladder' => isset($u['track_id']) && $u['track_id'] !== null ? wwtcLadderFromTrack($u['track_id']) : null,
         'schoolId' => isset($u['school_id']) ? (int) $u['school_id'] : null,
         'schoolName' => $u['school_name'] ?? null,
-        'className' => trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? '')),
+        'className' => wwtcFormatClassName(trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? ''))),
         'gender' => wwtcGender($u['gender'] ?? null),
         'photoUrl' => wwtcPhotoUrl($u['wwtc_photo'] ?? null),
     ];
