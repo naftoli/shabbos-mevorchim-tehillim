@@ -183,11 +183,40 @@ check('mobile wins over the home phone', $byKey['admin:9:base:89']['phone'] === 
 check('home is used when mobile is empty', $byKey['admin:4:class:555']['phone'] === '(718) 555-0101');
 check('the guess text names the columns and says they are a guess', strpos(wwtcNotifyColumnGuessText(), 'GUESS for Naftoli') !== false && strpos(wwtcNotifyColumnGuessText(), 'admin_phone_mobile') !== false);
 
+$split = wwtcNotCompletedClasses([
+    ['classId' => 1, 'className' => '1', 'name' => 'Full Kid', 'said' => 10, 'quota' => 10],
+    ['classId' => 1, 'className' => '1', 'name' => 'Short Kid', 'said' => 4, 'quota' => 10],
+    ['classId' => 1, 'className' => '1', 'name' => 'Zero Kid', 'said' => 0, 'quota' => 10],
+    ['classId' => 2, 'className' => 'כיתה א', 'name' => 'No Mark', 'said' => 0, 'quota' => 8],
+    ['classId' => 3, 'className' => 'Done', 'name' => 'Done Kid', 'said' => 8, 'quota' => 8],
+    ['classId' => 4, 'className' => 'Open', 'name' => 'Reported Anyway', 'said' => 5, 'quota' => 0],
+], [
+    ['id' => 1, 'size' => 8],
+    ['id' => 2, 'size' => 25],
+    ['id' => 3, 'size' => 1],
+    ['id' => 4, 'size' => 2],
+]);
+check('full soldiers are left out of not-completed', count($split) === 3);
+check(
+    'a numeric class keeps missing in roster order and splits the two groups',
+    $split[0]['className'] === '1'
+    && $split[0]['size'] === 8
+    && $split[0]['missing'] === ['Short Kid', 'Zero Kid']
+    && $split[0]['under'] === ['Short Kid']
+    && $split[0]['notFilled'] === ['Zero Kid']
+);
+check(
+    'a zero mark is not filled out',
+    $split[1]['className'] === 'כיתה א' && $split[1]['under'] === [] && $split[1]['notFilled'] === ['No Mark'] && $split[1]['size'] === 25
+);
+check('a mark with no quota is under, not full', $split[2]['under'] === ['Reported Anyway'] && $split[2]['notFilled'] === []);
+check('one still needs, many still need', wwtcNotifyStillNeed(1, 'finish') === '1 still needs to finish' && wwtcNotifyStillNeed(2, 'submit') === '2 still need to submit');
+
 // ---- messages --------------------------------------------------------------
 
 $link = 'https://mashpia.test/api/notify-report?t=abc';
 $fill = 'https://mashpia.test/login';
-$teacherBody = wwtcNotifyBodies('class', 25, 30, 5, $link, [], $fill);
+$teacherBody = wwtcNotifyBodies('class', 25, 30, 5, $link, [], $fill, 3);
 check(
     'teacher WhatsApp text is the approved sentence',
     $teacherBody['whatsapp'] === "25 out of 30 kids in your class filled out their Shabbos Mevorchim Tehillim, but 5 didn't. See the full report here: $link. Please follow up with them today and see why they didn't."
@@ -201,8 +230,10 @@ check(
     && strpos($teacherBody['sms'], '/reports') === false
     && strpos($teacherBody['sms'], '/my-class') === false
 );
-$baseBody = wwtcNotifyBodies('base', 25, 30, 5, $link, ['Class 5-B: 10 of 12', 'Class 6-A: 15 of 18'], $fill);
+check('teacher SMS counts both incomplete groups', strpos($teacherBody['sms'], '3 still need to finish, 5 still need to submit') !== false);
+$baseBody = wwtcNotifyBodies('base', 25, 30, 5, $link, ['Class 5-B: 10 of 12', 'Class 6-A: 15 of 18'], $fill, 3, ['Class: 5-B', '3 still need to finish, 2 still need to submit']);
 check('base SMS lists each class and both links', strpos($baseBody['sms'], "Class 5-B: 10 of 12\nClass 6-A: 15 of 18") !== false && strpos($baseBody['sms'], "Link to fill it out: $fill") !== false && strpos($baseBody['sms'], 'attached report') === false);
+check('base SMS gives the two incomplete counts their own lines', strpos($baseBody['sms'], "Class: 5-B\n3 still need to finish, 2 still need to submit") !== false);
 check(
     'base WhatsApp points at the report and keeps the class note only there',
     $baseBody['whatsapp'] === "25 out of 30 kids in your base filled out their Shabbos Mevorchim Tehillim, but 5 didn't. See the full report here: $link. Each class is in the attached report. Please follow up with them today and see why they didn't."
@@ -406,7 +437,9 @@ check(
     ], 'test-secret-test-secret-test-secret')) . ". Please follow up with them today and see why they didn't."
 );
 check('teacher SMS includes STOP and the sign-in line', strpos($byAdmin[4]['bodySms'], 'Reply STOP to opt out.') !== false && strpos($byAdmin[4]['bodySms'], 'Link to fill it out: https://mashpia.test/login') !== false && strpos($byAdmin[4]['bodySms'], 'See the full report here:') !== false);
+check('teacher SMS splits the incomplete kids', strpos($byAdmin[4]['bodySms'], '1 still needs to finish, 1 still needs to submit') !== false && strpos($byAdmin[4]['bodySms'], "Class: 5-B\n1 still needs to finish, 1 still needs to submit") !== false);
 check('base SMS lists both of that base\'s classes', strpos($byAdmin[9]['bodySms'], 'Class 5-B: 2 of 3') !== false && strpos($byAdmin[9]['bodySms'], 'Class 6-A: 2 of 2') !== false);
+check('base SMS counts both incomplete groups and skips a finished class', strpos($byAdmin[9]['bodySms'], '1 still needs to finish, 1 still needs to submit') !== false && strpos($byAdmin[9]['bodySms'], "Class: 5-B\n1 still needs to finish, 1 still needs to submit") !== false && strpos($byAdmin[9]['bodySms'], 'Class: 6-A') === false);
 check('base WhatsApp does not put the class lines in the template body', strpos($byAdmin[9]['bodyWhatsapp'], 'Class 5-B') === false && strpos($byAdmin[9]['bodyWhatsapp'], '4 out of 5 kids in your base') !== false);
 
 check('teacher 4 PDF has their own soldiers', strpos($byAdmin[4]['pdf'], 'Ahrele Benshimon') !== false && strpos($byAdmin[4]['pdf'], 'Yossi Levi') !== false && strpos($byAdmin[4]['pdf'], 'Dovid') !== false);
@@ -416,7 +449,11 @@ check('teacher 8 PDF is only class 6-A', strpos($byAdmin[8]['pdf'], 'Mushka Rose
 check('base 89 PDF has every class in the base and not the other base', strpos($byAdmin[9]['pdf'], 'Ahrele Benshimon') !== false && strpos($byAdmin[9]['pdf'], 'Mushka Rosen') !== false && strpos($byAdmin[9]['pdf'], 'Yossi Levi') !== false && strpos($byAdmin[9]['pdf'], 'Zalman') === false);
 check('base 90 PDF has only that base', strpos($byAdmin[10]['pdf'], 'Zalman Ploni') !== false && strpos($byAdmin[10]['pdf'], 'Ahrele') === false && strpos($byAdmin[10]['pdf'], 'Mushka') === false);
 check('each recipient gets a distinct file', count($written) === 4);
-check('statuses are grouped', strpos($byAdmin[4]['pdf'], 'Did full quota') !== false && strpos($byAdmin[4]['pdf'], 'Filled it out but under quota') !== false && strpos($byAdmin[4]['pdf'], "Didn't fill it out") !== false);
+$finishAt = strpos($byAdmin[4]['pdf'], 'Who still needs to finish');
+$submitAt = strpos($byAdmin[4]['pdf'], 'Who still needs to submit');
+check('statuses are grouped with finish before submit', strpos($byAdmin[4]['pdf'], 'Did full quota') !== false && $finishAt !== false && $submitAt !== false && $finishAt < $submitAt);
+check('the PDF drops the old incomplete headings', strpos($byAdmin[4]['pdf'], 'Filled it out but under quota') === false && strpos($byAdmin[4]['pdf'], "Didn't fill it out") === false);
+check('the PDF counts both incomplete groups for that class', strpos($byAdmin[4]['pdf'], '1 still needs to finish') !== false && strpos($byAdmin[4]['pdf'], '1 still needs to submit') !== false && strpos($byAdmin[4]['pdf'], 'Class: 5-B') !== false);
 
 $waCalls2 = 0;
 $again = runJob(['sent' => $store], [

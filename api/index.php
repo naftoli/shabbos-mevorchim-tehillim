@@ -1374,22 +1374,10 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/not-completed$#', $path, $
         wwtcError('School not found.', 404);
     }
     $data = wwtcSchoolData($id, wwtcDateForMonthIdx($_GET['monthIdx'] ?? null));
-    $byClass = [];
-    foreach ($data['students'] as $s) {
-        if (!$s['met']) {
-            $cid = (int) $s['classId'];
-            if (!isset($byClass[$cid])) {
-                $byClass[$cid] = ['classId' => $cid, 'className' => $s['className'], 'size' => 0, 'missing' => []];
-            }
-            $byClass[$cid]['missing'][] = $s['name'];
-        }
-    }
-    foreach ($data['classes'] as $c) {
-        if (isset($byClass[$c['id']])) {
-            $byClass[$c['id']]['size'] = $c['size'];
-        }
-    }
-    wwtcJson(['schoolId' => $id, 'classes' => array_values($byClass)]);
+    wwtcJson([
+        'schoolId' => $id,
+        'classes' => wwtcNotCompletedClasses($data['students'] ?? [], $data['classes'] ?? []),
+    ]);
 }
 
 // ---- the signed-in soldier --------------------------------------------------

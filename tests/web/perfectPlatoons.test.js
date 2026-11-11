@@ -53,7 +53,7 @@ test('the fictional sample cheder has three perfect platoons and the chips do no
   assert.deepEqual(perfect.map((c) => c.name), ['4-boys', '4-Boys', '3-Boys'])
   assert.deepEqual(perfect.map((c) => c.teacher), ['Rabbi Adler', 'Rabbi Berg', 'Rabbi Klein'])
   const notPerfect = school.classes.filter((cls) => !perfect.includes(cls)).map((c) => c.name)
-  assert.deepEqual(notPerfect, ['1-Boys', '2-Boys'])
+  assert.deepEqual(notPerfect, ['1', 'כיתה א'])
 
   const rows = perfect.map((cls) => ({
     schoolId: school.id,

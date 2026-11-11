@@ -260,7 +260,9 @@ function buildRoster() {
 
   // A fixed school with three perfect platoons under three teachers, plus two
   // that are not. Class names keep their case ("4-boys" and "4-Boys" are two
-  // classes). Fictional soldiers only — the public platoon chips never show them.
+  // classes). The two that are not are named "1" and "כיתה א" so the admin
+  // list can show a numeric name and a Hebrew name on their own lines.
+  // Fictional soldiers only — the public platoon chips never show them.
   schools.push(sampleCheder())
 
   return schools
@@ -356,10 +358,31 @@ function sampleClass(id, grade, name, teacher, soldiers) {
   return { id, grade, name, teacher, kids: soldiers }
 }
 
+// Pin this month's kapitlach so a class can show both incomplete groups:
+// a number above zero that is still short, and a zero (nothing reported).
+function withCurrentSaid(kid, said) {
+  const q = quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)
+  const before = Number(kid.reports[CURRENT_MONTH] ?? 0)
+  const was = !!(q && q.v > 0 && before >= q.v)
+  kid.reports[CURRENT_MONTH] = said
+  if (q) {
+    kid.minutesByMonth[CURRENT_MONTH] = said > 0 && q.v > 0 ? Math.max(1, Math.round(q.m * (said / q.v))) : 0
+  }
+  const now = !!(q && q.v > 0 && said >= q.v)
+  if (was && !now) kid.metThisYear = Math.max(0, (kid.metThisYear || 0) - 1)
+  kid.missionsTotal = (kid.priorMissions || 0) + kid.metThisYear
+  kid.minutes = Object.values(kid.minutesByMonth || {}).reduce((a, m) => a + (m || 0), 0)
+  return kid
+}
+
 function sampleCheder() {
   let n = 0
   const next = (grade, meet) => sampleSoldier(++n, grade, 8, meet)
   const full = (grade, count) => Array.from({ length: count }, () => next(grade, true))
+  const ones = [...full('1', 3), next('1', false)]
+  withCurrentSaid(ones[0], 0)
+  const aleph = [...full('2', 2), next('2', false), next('2', false)]
+  withCurrentSaid(aleph[2], 0)
   return {
     id: SAMPLE_CHEDER_ID,
     name: 'Sample Cheder',
@@ -369,15 +392,8 @@ function sampleCheder() {
       sampleClass(`${SAMPLE_CHEDER_ID}-4-boys`, '4', '4-boys', 'Rabbi Adler', full('4', 4)),
       sampleClass(`${SAMPLE_CHEDER_ID}-4-Boys`, '4', '4-Boys', 'Rabbi Berg', full('4', 4)),
       sampleClass(`${SAMPLE_CHEDER_ID}-3-Boys`, '3', '3-Boys', 'Rabbi Klein', full('3', 4)),
-      sampleClass(`${SAMPLE_CHEDER_ID}-1-Boys`, '1', '1-Boys', 'Rabbi Dale', [
-        ...full('1', 3),
-        next('1', false),
-      ]),
-      sampleClass(`${SAMPLE_CHEDER_ID}-2-Boys`, '2', '2-Boys', 'Rabbi Engel', [
-        ...full('2', 2),
-        next('2', false),
-        next('2', false),
-      ]),
+      sampleClass(`${SAMPLE_CHEDER_ID}-1`, '1', '1', 'Rabbi Dale', ones),
+      sampleClass(`${SAMPLE_CHEDER_ID}-aleph`, '2', 'כיתה א', 'Rabbi Engel', aleph),
     ],
   }
 }

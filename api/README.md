@@ -349,8 +349,11 @@ php api/notify-wednesday.php --force --only=123
 
 "Filled out" means a kapitlach mark greater than zero for that Shabbos
 Mevorchim (the same participation signal as the reports). A mark of zero and a
-missing mark both count as not filled out. Quota totals in the PDF use each
-soldier's own quota from `wwtcSchoolData()`.
+missing mark both count as not submitted ("Who still needs to submit"). A mark
+above zero that is still short of that soldier's quota is "Who still needs to
+finish". The same rule is `wwtcNotifyKidStatus`: said <= 0 is submit, said >=
+quota is done, otherwise finish. Quota totals in the PDF use each soldier's
+own quota from `wwtcSchoolData()`.
 
 ### Who is texted, and which columns
 
@@ -393,13 +396,27 @@ arrives, add the number to this table too.
 
 ### The short message
 
-Teacher, WhatsApp template body (four variables: filled, total, missing, link):
+Teacher, WhatsApp template body (four variables: filled, total, submit count, link).
+`{{3}}` is only the kids who still need to submit (said <= 0). It is not the
+kids who reported something and are still short. The approved wording still
+says "but {{3}} didn't." A template wording change is needed before the
+WhatsApp bubble itself can say both counts. The variable count stays four
+either way — do not add a fifth variable. Until Meta approves new wording,
+the sender keeps passing a number in `{{3}}` so the approved sentence stays
+grammatical. Suggested replacement, still four variables, with `{{3}}` set to
+the phrase `1 still needs to finish, 1 still needs to submit`:
+
+```text
+{{1}} out of {{2}} kids in your class filled out their Shabbos Mevorchim Tehillim. {{3}}. See the full report here: {{4}}. Please follow up with them today and see why they didn't.
+```
+
+What is sent today, against the already approved template:
 
 ```text
 {{1}} out of {{2}} kids in your class filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. See the full report here: {{4}}. Please follow up with them today and see why they didn't.
 ```
 
-Example: `2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…. Please follow up with them today and see why they didn't.`
+Example of what WhatsApp shows until that wording is approved: `2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…. Please follow up with them today and see why they didn't.`
 
 Base commander, WhatsApp template body (the same four variables). The per-class
 lines are not a fifth variable: a template cannot grow with the number of
@@ -416,23 +433,28 @@ prints each class, so it does not repeat the sentence.
 It is not the page where a soldier enters Tehillim. Sample values for Meta:
 `25`, `30`, `5`, and an `https://` URL on your domain.
 
-SMS uses the same counts and the same report link, then a separate fill-out
-line. The fill-out URL is the public soldier sign-in page,
-`{WWTC_PUBLIC_BASE}/login`. There is no per-class public fill-out page.
+SMS is free text, so it already uses both counts. Nothing is emailed;
+`admins.admin_email` is stored on the log row only. The fill-out URL is the
+public soldier sign-in page, `{WWTC_PUBLIC_BASE}/login`. There is no per-class
+public fill-out page.
 Teacher:
 
 ```text
-2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
+2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim. 1 still needs to finish, 1 still needs to submit.
+Class: 5-B
+1 still needs to finish, 1 still needs to submit
 See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
 Link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/login
 Please follow up with them today and see why they didn't.
 Reply STOP to opt out.
 ```
 
-Base commander:
+Base commander (a class where everyone finished is left off the incomplete lines):
 
 ```text
-4 out of 5 kids in your base filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
+4 out of 5 kids in your base filled out their Shabbos Mevorchim Tehillim. 1 still needs to finish, 1 still needs to submit.
+Class: 5-B
+1 still needs to finish, 1 still needs to submit
 Class 5-B: 2 of 3
 Class 6-A: 2 of 2
 See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
@@ -443,13 +465,18 @@ Reply STOP to opt out.
 
 Soldier names are not in either body. They are only in that recipient's PDF:
 a teacher sees their class, a base commander sees every class in their base.
-The PDF groups soldiers into "Did full quota", "Filled it out but under quota
-(X of Y kapitlach)", and "Didn't fill it out", with the totals at the top and
-a `Class X: filled of total` line per class. The site has no public deep link
-to one soldier (only `/me` after a serial-number sign-in, or a two-minute
-parent handoff). Each soldier who didn't fill it out is given the public
-sign-in URL `{WWTC_PUBLIC_BASE}/login`. That is not a teacher login and it is
-not `/reports`.
+The PDF groups soldiers into "Did full quota", then "Who still needs to
+finish", then "Who still needs to submit". Each incomplete class is labeled
+`Class: {name}` on its own line, with `N still need to finish` or `N still
+need to submit` before the names. A child who reported something short of
+quota also gets `X of Y kapitlach`. Totals at the top use the same two
+phrases. The by-class participation lines stay `Class X: filled of total`.
+The site has no public deep link to one soldier (only `/me` after a
+serial-number sign-in, or a two-minute parent handoff). Each soldier who
+still needs to submit is given the public sign-in URL
+`{WWTC_PUBLIC_BASE}/login`. That is not a teacher login and it is not
+`/reports`. The same two sections, in that order, are what the admin
+dashboard shows under "Not done yet".
 
 ### The PDF
 

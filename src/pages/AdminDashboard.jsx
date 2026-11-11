@@ -23,6 +23,7 @@ import {
   CURRENT_MONTH,
 } from '@/services/api.js'
 import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
+import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
 
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
@@ -314,6 +315,47 @@ function FlagQueue({ schoolId, all, actorName }) {
   )
 }
 
+function NotDoneList({ classes }) {
+  const view = notDoneView(classes)
+  if (view.empty) {
+    return <p className="mt-4 font-semibold text-green">Every soldier has completed this month — all Perfect Platoons! 🎉</p>
+  }
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-sm font-semibold text-navy">{view.summary}</p>
+      {view.sections.map((section) => (
+        <section key={section.title} className="rounded-xl bg-track/40 p-3">
+          <h4 className="font-display text-lg font-black text-navy">{section.title}</h4>
+          <p className="text-sm font-semibold text-navy">{section.phrase}</p>
+          {section.classes.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">None</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {section.classes.map((cls) => (
+                <div key={cls.classId} className="rounded-lg bg-white px-3 py-2">
+                  <p className="text-navy">
+                    <span className="text-sm font-normal text-muted">Class: </span>
+                    <bdi dir="auto" className="font-bold">{cls.className}</bdi>
+                  </p>
+                  {cls.size > 0 ? <p className="mt-1 text-sm text-muted">{cls.size} soldiers</p> : null}
+                  <p className="mt-1 text-sm text-navy">{cls.phrase}</p>
+                  <ul className="mt-1 space-y-0.5 text-sm text-muted">
+                    {cls.names.map((name, i) => (
+                      <li key={`${cls.classId}-${i}`}>
+                        <bdi dir="auto">{name}</bdi>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
   const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools() : Promise.resolve([])), [isSuper])
@@ -452,25 +494,16 @@ export default function AdminDashboard() {
 
             {/* Teacher deadline email */}
             <Card className="p-5 sm:p-6">
+              <div id="not-done-yet">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="sh">Teacher Deadline Email</p>
-                  <h3 className="font-display text-xl font-black text-navy">Who still needs to finish — {CURRENT_MONTH}</h3>
+                  <h3 className="font-display text-xl font-black text-navy">{notDoneHeading(CURRENT_MONTH)}</h3>
                 </div>
                 <Button variant="gold">✉ Send to teachers</Button>
               </div>
-              {missing.length === 0 ? (
-                <p className="mt-4 font-semibold text-green">Every soldier has completed this month — all Perfect Platoons! 🎉</p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {missing.map((c) => (
-                    <div key={c.classId} className="rounded-xl bg-track/40 p-3">
-                      <p className="font-semibold text-navy">{c.className} <span className="font-normal text-muted">— {c.missing.length} of {c.size} not done</span></p>
-                      <p className="mt-1 text-sm text-muted">{c.missing.join(', ')}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <NotDoneList classes={missing} />
+              </div>
             </Card>
           </>
         )}
