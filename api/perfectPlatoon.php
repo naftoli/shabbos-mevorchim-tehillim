@@ -43,6 +43,8 @@ declare(strict_types=1);
  * wwtcPerfectPlatoonRows().
  */
 
+require_once __DIR__ . '/teacherName.php';
+
 function wwtcSoldierMetQuota(int $quota, int $said): bool
 {
     return $quota > 0 && $said >= $quota;
@@ -87,7 +89,7 @@ function wwtcPlatoonRoster(array $soldiers): array
                 'grade' => $grade,
                 'sub' => $sub,
                 'className' => wwtcPlatoonClassName($grade, $sub),
-                'teacher' => (string) ($s['teacher'] ?? ''),
+                'teacher' => wwtcTeacherName($s['teacher'] ?? ''),
                 'size' => 0,
                 'met' => 0,
                 'said' => 0,
@@ -149,7 +151,7 @@ function wwtcPerfectPlatoonsFromSoldiers(array $soldiers): array
             'school' => $c['school'],
             'classId' => $c['classId'],
             'className' => $c['className'],
-            'teacher' => $c['teacher'],
+            'teacher' => wwtcTeacherName($c['teacher']),
             'grade' => $c['grade'],
             'size' => $c['size'],
             'schoolClasses' => $classesBySchool[$c['schoolId']] ?? 0,
@@ -345,7 +347,7 @@ function wwtcLoadPerfectPlatoonSoldiers(int $date): array
             'classId' => (int) $row['class_id'],
             'grade' => (string) ($row['class_grade'] ?? ''),
             'sub' => (string) ($row['class_sub'] ?? ''),
-            'teacher' => (string) ($row['class_teacher'] ?? ''),
+            'teacher' => wwtcTeacherName($row['class_teacher'] ?? ''),
             'userId' => (int) $row['user_id'],
             'quota' => (int) ($row['quota'] ?? 0),
             'said' => $doneByUser[(int) $row['user_id']] ?? 0,
@@ -454,7 +456,7 @@ function wwtcBoardPlatoonSoldiers(array $board): array
                 'classId' => $cid,
                 'grade' => (string) ($meta['grade'] ?? ''),
                 'sub' => (string) ($meta['sub'] ?? ''),
-                'teacher' => (string) ($meta['teacher'] ?? ''),
+                'teacher' => wwtcTeacherName($meta['teacher'] ?? ''),
                 'quota' => (int) ($s['quota'] ?? 0),
                 'said' => (int) ($s['said'] ?? 0),
                 'userId' => (int) ($s['id'] ?? 0),
@@ -489,14 +491,18 @@ function wwtcAlignSchoolClasses(array $classes, array $roster, int $schoolId): a
         $seen[$cid] = true;
         if (!isset($index[$cid])) {
             $class['perfect'] = false;
+            $class['teacher'] = wwtcTeacherName($class['teacher'] ?? '');
             $out[] = $class;
             continue;
         }
         $c = $index[$cid];
         $class['name'] = $c['className'];
         $class['grade'] = $c['grade'];
-        if ($c['teacher'] !== '') {
-            $class['teacher'] = $c['teacher'];
+        $rosterTeacher = wwtcTeacherName($c['teacher'] ?? '');
+        if ($rosterTeacher !== '') {
+            $class['teacher'] = $rosterTeacher;
+        } else {
+            $class['teacher'] = wwtcTeacherName($class['teacher'] ?? '');
         }
         $class['size'] = $c['size'];
         $class['met'] = $c['met'];
@@ -511,7 +517,7 @@ function wwtcAlignSchoolClasses(array $classes, array $roster, int $schoolId): a
         $out[] = [
             'id' => $cid,
             'name' => $c['className'],
-            'teacher' => $c['teacher'],
+            'teacher' => wwtcTeacherName($c['teacher'] ?? ''),
             'grade' => $c['grade'],
             'size' => $c['size'],
             'said' => $c['said'],

@@ -274,7 +274,7 @@ function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null):
         $classes[] = [
             'id' => (int) $classId,
             'name' => (string) $m['grade'],
-            'teacher' => (string) $m['teacher'],
+            'teacher' => wwtcTeacherName($m['teacher'] ?? ''),
             'grade' => (string) $m['grade'],
             'size' => $size,
             'said' => $said,
@@ -455,7 +455,7 @@ function wwtcHolidaySchoolData(array $board, int $schoolId): array
         $classes[] = [
             'id' => (int) $cid,
             'name' => (string) $meta['grade'],
-            'teacher' => (string) $meta['teacher'],
+            'teacher' => wwtcTeacherName($meta['teacher'] ?? ''),
             'grade' => (string) $meta['grade'],
             'size' => $g['size'],
             'said' => $g['said'],
