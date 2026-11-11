@@ -391,26 +391,8 @@ export default function KidDashboard() {
                 </p>
               </div>
             )}
-            <div className="mt-5">
-              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {LADDERS.map((L) => {
-                  const cell = quotaFor(kid.grade, cur.month, L)
-                  const allowed = cell != null
-                  const mine = Number(kid.ladder) === L
-                  return (
-                    <div key={L} className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center leading-tight ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
-                      <div className="text-[11px] font-bold sm:text-xs">Ladder {L}</div>
-                      <div className="font-heb text-[13px] sm:text-sm">{cell?.k || '—'}</div>
-                      <div className="text-[11px] sm:text-xs">{cell ? `${cell.m} Min` : 'not for your grade'}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
             {/* Progress — kapitlach + minutes, laid out like the worldwide card */}
-            <div className="mt-8 space-y-7">
+            <div className="mt-5 space-y-7">
               <div>
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
                   <div>
@@ -438,6 +420,24 @@ export default function KidDashboard() {
                   <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.minutes > 0 ? Math.round((cur.saidMinutes / cur.minutes) * 100) : 0}%</p>
                 </div>
                 <GoalBar percent={cur.minutes > 0 ? (cur.saidMinutes / cur.minutes) * 100 : 0} iconSrc={asset('design/icon-clock.png')} className="mt-4" />
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {LADDERS.map((L) => {
+                  const cell = quotaFor(kid.grade, cur.month, L)
+                  const allowed = cell != null
+                  const mine = Number(kid.ladder) === L
+                  return (
+                    <div key={L} className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center leading-tight ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
+                      <div className="text-[11px] font-bold sm:text-xs">Ladder {L}</div>
+                      <div className="font-heb text-[13px] sm:text-sm">{cell?.k || '—'}</div>
+                      <div className="text-[11px] sm:text-xs">{cell ? `${cell.m} Min` : 'not for your grade'}</div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
