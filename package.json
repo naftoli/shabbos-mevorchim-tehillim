@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "test": "npm run test:web && npm run test:php",
     "test:web": "node --import ./tests/web/register.mjs --test 'tests/web/*.test.js'",
-    "test:php": "php tests/php/ClassNameTest.php && php tests/php/TeacherNameTest.php && php tests/php/MarkingTest.php && php tests/php/SchoolLogoTest.php && php tests/php/CommanderPromptTest.php && php tests/php/PlatoonRollTest.php && php tests/php/SoldierBoardTest.php && php tests/php/SoldierRankTest.php && php tests/php/LeapYearTest.php && php tests/php/NotifyTest.php && php tests/php/OverEntryTest.php && php tests/php/PerfectPlatoonTest.php && php tests/php/ClassOrderTest.php && php tests/php/QuotaOverrideTest.php && php tests/php/CustomLadderTest.php"
+    "test:php": "php tests/php/ClassNameTest.php && php tests/php/TeacherNameTest.php && php tests/php/MarkingTest.php && php tests/php/SchoolLogoTest.php && php tests/php/CommanderPromptTest.php && php tests/php/PlatoonRollTest.php && php tests/php/SoldierBoardTest.php && php tests/php/SoldierRankTest.php && php tests/php/LeapYearTest.php && php tests/php/SchoolYearTest.php && php tests/php/NotifyTest.php && php tests/php/OverEntryTest.php && php tests/php/PerfectPlatoonTest.php && php tests/php/ClassOrderTest.php && php tests/php/QuotaOverrideTest.php && php tests/php/CustomLadderTest.php"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

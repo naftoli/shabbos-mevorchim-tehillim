@@ -20,6 +20,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/hebrewYear.php';
+require_once __DIR__ . '/schoolYear.php';
+require_once __DIR__ . '/schoolSettings.php';
 require_once __DIR__ . '/quotaOverride.php';
 require_once __DIR__ . '/className.php';
 require_once __DIR__ . '/teacherName.php';
@@ -288,7 +290,10 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
     // index.php defines this once the school report is available. Overrides are
     // applied on the way out so the file cache stays the engine's own totals.
     if (function_exists('wwtcAdjustArmyAggregates')) {
-        return wwtcAdjustArmyAggregates($raw, $date, $year);
+        $raw = wwtcAdjustArmyAggregates($raw, $date, $year);
+    }
+    if (function_exists('wwtcAdjustSchoolYearAggregates')) {
+        $raw = wwtcAdjustSchoolYearAggregates($raw, $date, $year);
     }
     return $raw;
 }
@@ -1037,6 +1042,9 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null, ?stri
             ],
         ];
     });
+    if (function_exists('wwtcRepriceHolidayBoard')) {
+        $board = wwtcRepriceHolidayBoard($board, $year, $quotaJd);
+    }
     if ($monthName !== null && $monthName !== '') {
         // Custom ladder first, then the one-month override (the override wins).
         if (function_exists('wwtcApplyCustomLaddersToBoard')) {
@@ -1151,6 +1159,9 @@ function wwtcSafeKid(array $u): array
         'className' => wwtcFormatClassName(trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? ''))),
         'gender' => wwtcGender($u['gender'] ?? null),
         'photoUrl' => wwtcPhotoUrl($u['wwtc_photo'] ?? null),
+        'yearStart' => function_exists('wwtcSchoolFirstMonth')
+            ? wwtcSchoolFirstMonth((int) ($u['school_id'] ?? 0))
+            : 'Tishrei',
     ];
 }
 

@@ -311,8 +311,12 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
     $data = wwtcSchoolDataRaw($schoolId, $date, $year);
-    // Custom ladder replaces the engine quota. The one-month override then
+    // A rotated school year reprices the engine quota onto the sheet month.
+    // A custom ladder then replaces that figure. The one-month override
     // replaces that month's kapitel quota. See api/customLadder.php.
+    if (function_exists('wwtcRepriceSchoolYearData')) {
+        $data = wwtcRepriceSchoolYearData($data, $schoolId, $date, $year);
+    }
     if (function_exists('wwtcOverlayCustomLaddersOnSchool')) {
         $data = wwtcOverlayCustomLaddersOnSchool($data, $date, $year);
     }
@@ -367,6 +371,8 @@ function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
     if (!$deltas && !$customMin) {
         return $agg;
     }
+    // School-year deltas are applied afterwards, in wwtcAdjustSchoolYearAggregates,
+    // so a base-commander override still replaces the sheet quota.
     $out = $agg;
     if ($deltas) {
         $out['kapGoal'] = wwtcOverlayKapGoals($agg['kapGoal'] ?? [], $deltas);
@@ -383,6 +389,69 @@ function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
             $army['Minutes'][$date] = (int) ($army['Minutes'][$date] ?? 0) + array_sum($customMin);
             $out['army'] = $army;
         }
+    }
+    return $out;
+}
+
+/**
+ * Army kapitlach and minutes goals follow each school's own year. A school
+ * that starts in Tishrei contributes the engine total. A school that starts
+ * in another month contributes the sheet-month cell instead. Soldiers with a
+ * quota override are left to wwtcAdjustArmyAggregates, which already replaced
+ * their engine quota with the override.
+ */
+function wwtcAdjustSchoolYearAggregates(array $agg, int $date, int $year): array
+{
+    if (!function_exists('wwtcNonDefaultFirstMonths') || !wwtcNonDefaultFirstMonths()) {
+        return $agg;
+    }
+    if (!function_exists('wwtcMonthNameForJd')) {
+        return $agg;
+    }
+    $month = wwtcMonthNameForJd($date, $year);
+    if ($month === '' || (function_exists('wwtcIsHolidayMonth') && wwtcIsHolidayMonth($month))) {
+        return $agg;
+    }
+    $overs = function_exists('wwtcActiveOverridesForMonth') ? wwtcActiveOverridesForMonth($year, $month) : [];
+    $kapDeltas = [];
+    $minDeltas = [];
+    foreach (wwtcNonDefaultFirstMonths() as $sid => $first) {
+        $sheet = wwtcSchoolSheetQuantities((int) $sid, $date, $year, $month);
+        if (!$sheet['qty']) {
+            continue;
+        }
+        $boundary = wwtcAsOfBoundary($date);
+        $cal = wwtcSchoolTaskQuantities((int) $sid, $date, $boundary);
+        $raw = wwtcSchoolDataRaw((int) $sid, $date, $year);
+        foreach ($raw['students'] ?? [] as $student) {
+            $uid = (int) ($student['id'] ?? 0);
+            if ($uid <= 0 || isset($overs[$uid]) || !isset($sheet['qty'][$uid])) {
+                continue;
+            }
+            $kapDeltas[$sid] = ($kapDeltas[$sid] ?? 0) + ((int) $sheet['qty'][$uid]['kap'] - (int) ($student['quota'] ?? 0));
+            if (isset($cal[$uid])) {
+                $minDeltas[$sid] = ($minDeltas[$sid] ?? 0) + ((int) $sheet['qty'][$uid]['min'] - (int) $cal[$uid]['min']);
+            }
+        }
+    }
+    if (!$kapDeltas && !$minDeltas) {
+        return $agg;
+    }
+    $out = $agg;
+    if ($kapDeltas && function_exists('wwtcOverlayKapGoals')) {
+        $out['kapGoal'] = wwtcOverlayKapGoals($agg['kapGoal'] ?? [], $kapDeltas);
+        $army = $out['army'] ?? [];
+        $kap = $army['Kapitelach'] ?? [];
+        $kap[$date] = (int) ($kap[$date] ?? 0) + array_sum($kapDeltas);
+        $army['Kapitelach'] = $kap;
+        $out['army'] = $army;
+    }
+    if ($minDeltas) {
+        $minGoal = $agg['minGoal'] ?? [];
+        foreach ($minDeltas as $sid => $delta) {
+            $minGoal[(int) $sid] = (int) ($minGoal[(int) $sid] ?? 0) + (int) $delta;
+        }
+        $out['minGoal'] = $minGoal;
     }
     return $out;
 }
@@ -559,19 +628,30 @@ function wwtcKidMonths(array $kid): array
     // a week after Shabbos Mevorchim). Only the current month can be self-reported,
     // so a past month is never open.
     $reportOpen = wwtcReportWindowOpen();
+    $firstMonth = function_exists('wwtcSchoolFirstMonth')
+        ? wwtcSchoolFirstMonth((int) ($kid['school_id'] ?? 0))
+        : 'Tishrei';
+    // Tishrei schools keep today's elapsed Hebrew-year months, quota dated on
+    // that same Shabbos. Another start walks the school's own grade year
+    // (which can begin last Hebrew year) and prices quota on the sheet month.
+    $monthRows = function_exists('wwtcKidMonthSlots')
+        ? wwtcKidMonthSlots($firstMonth)
+        : array_map(static function ($m) {
+            return ['month' => $m['month'], 'jd' => (int) $m['jd'], 'quotaJd' => (int) $m['jd']];
+        }, wwtcElapsedMonths());
     // Keyed by jd so the holiday rows (below) interleave chronologically — streaks
     // read this list in order, so Rosh Hashana / Yom Kippur must sit after Tishrei.
     $byDate = [];
-    foreach (wwtcElapsedMonths() as $m) {
+    foreach ($monthRows as $m) {
         $d = (int) $m['jd'];
-        $q = $qFor($kapitel, $d);
+        $q = $qFor($kapitel, (int) ($m['quotaJd'] ?? $d));
         [$said, $reported] = $dFor($kapitel, $d);
         [$saidMinutes] = $dFor($minutes, $d);
         $byDate[$d] = [
             'month' => $m['month'],
             'quota' => $q,
             'said' => $said,
-            'minutes' => $qFor($minutes, $d),
+            'minutes' => $qFor($minutes, (int) ($m['quotaJd'] ?? $d)),
             'saidMinutes' => $saidMinutes,
             'met' => $reported && $q > 0 && $said >= $q,
             'reported' => $reported,
@@ -583,9 +663,27 @@ function wwtcKidMonths(array $kid): array
     // Holiday training missions: quota = this soldier's SM-Tishrei quota, said =
     // MAX(done_qty) across the holiday's day(s) so Rosh Hashana's two days count
     // once. Only holidays that have mission data appear (wwtcHolidayDates filters).
+    // A rotated school uses the quota cell of its Tishrei position, and only
+    // when Tishrei is part of the grade year already under way.
     $quotaJd = (int) (wwtcMonthDatesForYear(wwtcYear())['Tishrei'] ?? 0);
+    $holidayYear = wwtcYear();
+    if (!wwtcIsDefaultSchoolYear($firstMonth)) {
+        $quotaJd = 0;
+        foreach ($monthRows as $slot) {
+            if (($slot['month'] ?? '') !== 'Tishrei') {
+                continue;
+            }
+            $holidayYear = (int) ($slot['year'] ?? wwtcYear());
+            $sheet = wwtcQuotaSheetMonth('Tishrei', $firstMonth);
+            $quotaJd = wwtcCampaignJd(wwtcYear(), $sheet);
+            if ($quotaJd <= 0) {
+                $quotaJd = wwtcCampaignJd(wwtcYear() - 1, $sheet);
+            }
+            break;
+        }
+    }
     if ($quotaJd > 0) {
-        foreach (wwtcHolidayDates(wwtcYear()) as $name => $jds) {
+        foreach (wwtcHolidayDates($holidayYear) as $name => $jds) {
             [$said, $reported] = wwtcKidHolidayDone($kid, $jds, $kapitel);
             [$saidMinutes] = wwtcKidHolidayDone($kid, $jds, $minutes);
             $q = $qFor($kapitel, $quotaJd);
@@ -606,15 +704,27 @@ function wwtcKidMonths(array $kid): array
 
     ksort($byDate);
     // Custom ladder replaces the ladder quota. A one-month override then
-    // replaces that month's kapitel quota (Cheshvan included).
+    // replaces that month's kapitel quota. A rotated school year can include
+    // last Hebrew year's months, so those keep last year's override.
     $months = array_values($byDate);
     if (function_exists('wwtcApplyCustomLadderToKidMonths')) {
         $months = wwtcApplyCustomLadderToKidMonths($kid, $months);
     }
-    return wwtcOverlayKidMonthList(
-        $months,
-        wwtcActiveOverridesForUserYear((int) $kid['user_id'], wwtcYear())
-    );
+    $overrideByMonth = wwtcActiveOverridesForUserYear((int) $kid['user_id'], wwtcYear());
+    if (!wwtcIsDefaultSchoolYear($firstMonth)) {
+        $priorOverrides = wwtcActiveOverridesForUserYear((int) $kid['user_id'], wwtcYear() - 1);
+        $picked = [];
+        foreach ($monthRows as $slot) {
+            $name = (string) ($slot['month'] ?? '');
+            $slotYear = (int) ($slot['year'] ?? wwtcYear());
+            $src = $slotYear === wwtcYear() ? $overrideByMonth : $priorOverrides;
+            if ($name !== '' && isset($src[$name])) {
+                $picked[$name] = $src[$name];
+            }
+        }
+        $overrideByMonth = $picked;
+    }
+    return wwtcOverlayKidMonthList($months, $overrideByMonth);
 }
 
 /**
@@ -674,8 +784,22 @@ function wwtcKidMissionHistoryByGrade(array $kid): array
     }
     // Build jd → [gradeKey, occasion] for every grade the board shows (pre1a..current).
     $currentYear = wwtcYear();
+    $firstMonth = function_exists('wwtcSchoolFirstMonth')
+        ? wwtcSchoolFirstMonth((int) ($kid['school_id'] ?? 0))
+        : 'Tishrei';
     $jdMap = [];
-    for ($gn = 0; $gn <= $currentGrade; $gn++) {
+    // A rotated school year is not one Hebrew year. Map each grade onto the
+    // school year that started (current start − how many grades back).
+    if (!wwtcIsDefaultSchoolYear($firstMonth) && function_exists('wwtcSchoolYearHistoryMap')) {
+        $currentMonth = wwtcMonthForDate(wwtcCurrentDate());
+        $jdMap = wwtcSchoolYearHistoryMap(
+            $firstMonth,
+            $currentGrade,
+            $currentYear,
+            $currentMonth !== '' ? $currentMonth : 'Tishrei'
+        );
+    }
+    for ($gn = 0; $gn <= $currentGrade && wwtcIsDefaultSchoolYear($firstMonth); $gn++) {
         $year = $currentYear - ($currentGrade - $gn);
         $gradeKey = $gn === 0 ? 'pre1a' : (string) $gn;
         foreach (wwtcMonthDatesForYear($year) as $month => $jd) {
@@ -726,6 +850,9 @@ function wwtcKidProgress(array $kid): array
     // RH/YK or other occasions beyond the elapsed-month list.
     $priorMissions = max(0, $missionsTotal - $metThisYear);
     $out = array_merge(wwtcSafeKid($kid), [
+        'yearStart' => function_exists('wwtcSchoolFirstMonth')
+            ? wwtcSchoolFirstMonth((int) ($kid['school_id'] ?? 0))
+            : 'Tishrei',
         'months' => $months,
         'metThisYear' => $metThisYear,
         'missionsTotal' => $missionsTotal,
@@ -1085,6 +1212,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
     wwtcJson($row + [
         'classes' => array_map('wwtcPresentClassLabel', $data['classes']),
         'dedication' => $dedication,
+        'yearStart' => function_exists('wwtcSchoolFirstMonth') ? wwtcSchoolFirstMonth($id) : 'Tishrei',
     ]);
 }
 
@@ -1990,6 +2118,36 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
     }
 
     wwtcJson(['ok' => true, 'matched' => $matched, 'updated' => $changed, 'ladder' => $ladder]);
+}
+
+// School year start. The picked month is that school's first Shabbos Mevorchim
+// (Mevorchim of the month) and quota position 1. HQ or that school's admin only.
+// No student names. Missing table → 503, same as dedications.
+if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-year') {
+    $actor = wwtcRequireActor(['admin']);
+    $input = wwtcInput();
+    $schoolId = (int) ($input['schoolId'] ?? 0);
+    $firstMonth = trim((string) ($input['firstMonth'] ?? ''));
+    if (!in_array($firstMonth, wwtcPlainMonthNames(), true)) {
+        wwtcError('Choose the month the school year starts in.', 422);
+    }
+    if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
+        wwtcError('School not found.', 404);
+    }
+    $schoolIds = (($actor['auth'] ?? '') === 'super') ? [] : wwtcAdminAuthIds((int) $actor['id'], 'school');
+    if (!wwtcCanManageSchool($actor, $schoolId, $schoolIds)) {
+        wwtcError('You do not have permission to perform this action.', 403);
+    }
+    if (!wwtcSchoolSettingsReady()) {
+        wwtcError('School-year storage is not installed yet. Run api/sql/wwtc_school_settings.sql on mashpia.', 503);
+    }
+    wwtcSaveSchoolFirstMonth($schoolId, $firstMonth);
+    wwtcJson([
+        'ok' => true,
+        'schoolId' => $schoolId,
+        'firstMonth' => $firstMonth,
+        'gradeEnds' => wwtcGradeEndMonth($firstMonth),
+    ]);
 }
 
 function wwtcDedicationsReady(): bool

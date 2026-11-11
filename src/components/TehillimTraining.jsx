@@ -3,8 +3,8 @@ import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
 import { buildTraining } from '@/lib/trainingBoard.js'
 
-export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory, year, quotaGrid = null }) {
-  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory, year, quotaGrid })
+export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory, year, quotaGrid = null, firstMonth = 'Tishrei', anchorMonth = null }) {
+  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory, year, quotaGrid, firstMonth, anchorMonth })
   const current = String(grade)
   const [open, setOpen] = useState(() => new Set([current]))
   const rootRef = useRef(null)

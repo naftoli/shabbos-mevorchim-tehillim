@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { QUOTA, MONTHS, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
+import { QUOTA, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
 import { finishGradeLabel, formatKapitlachQuota } from '@/lib/customLadder.js'
+import { DEFAULT_FIRST_MONTH, gradeEndSheetMonth } from '@/lib/schoolYear.js'
 import { asset } from '@/lib/asset.js'
 import { CrownIcon } from '@/components/ui.jsx'
 
@@ -9,17 +10,19 @@ import { CrownIcon } from '@/components/ui.jsx'
 // kapitel number. This is the lifetime goal the ladder is pacing — the hero of
 // the dashboard. `reached` is how far they've actually climbed (furthest month
 // they completed); `target` is where this month's rung takes them. The marks
-// are where THIS ladder finishes each grade (Elul), labeled in Aleph-Beis.
+// are where THIS ladder finishes each grade. Position 12 of the school's
+// year reads the Elul quota cell (Tishrei schools reach it in Elul; a Shvat
+// school reaches it in Teves). The marks are kapitel numbers, not month names.
 
 const TOTAL = 150
-const LAST_MONTH = MONTHS[MONTHS.length - 1] // Elul — the end of each grade's year
 
-function gradeMarks(ladder) {
+function gradeMarks(ladder, yearStart = DEFAULT_FIRST_MONTH) {
+  const endSheet = gradeEndSheetMonth(yearStart)
   const grades = ['pre1a']
   for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
   return grades
     .map((g) => {
-      const cell = QUOTA[g]?.[LAST_MONTH]?.[ladder]
+      const cell = QUOTA[g]?.[endSheet]?.[ladder]
       return cell ? { grade: g, v: cell.v, heb: toHebrewNumeral(cell.v) } : null
     })
     .filter(Boolean)
@@ -31,7 +34,7 @@ function climbLabel(value, span) {
   return toHebrewNumeral(value)
 }
 
-export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen, total, marks }) {
+export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGradeLabel, gender, onOpen, total, marks, yearStart = DEFAULT_FIRST_MONTH }) {
   const rootRef = useRef(null)
   useEffect(() => {
     const node = rootRef.current
@@ -66,7 +69,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
     const i = rows.findIndex((last) => pos - last >= MIN_GAP)
     return i === -1 ? rows.length : i
   }
-  const placed = (marks || (ladder ? gradeMarks(ladder) : [])).map((m, idx) => {
+  const placed = (marks || (ladder ? gradeMarks(ladder, yearStart) : [])).map((m, idx) => {
     const pos = pct(m.v)
     const lb = laneFor(sides.below, pos)
     const la = laneFor(sides.above, pos)

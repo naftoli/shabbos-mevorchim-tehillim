@@ -1,6 +1,7 @@
 import { MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
-import { campaignMonths, currentHebrewYear, quotaMonth } from '@/lib/hebrewYear.js'
+import { currentHebrewYear, quotaMonth } from '@/lib/hebrewYear.js'
 import { finishGradeLabel, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
+import { DEFAULT_FIRST_MONTH, quotaSheetMonth, schoolYearMonthNames } from '@/lib/schoolYear.js'
 import { CrownIcon } from '@/components/ui.jsx'
 
 // The month-by-month plan for a ladder, every grade from Pre-1A to its finish
@@ -8,8 +9,8 @@ import { CrownIcon } from '@/components/ui.jsx'
 // whole Tehillim. Optionally ring the soldier's current grade+month cell.
 // Pass `grid` (a generated custom ladder) to draw that plan instead.
 // In a leap year the columns include Adar I and Adar II; both read the Adar quota.
-export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth, year, grid }) {
-  const months = campaignMonths(year ?? currentHebrewYear())
+export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth, year, grid, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
+  const months = schoolYearMonthNames(firstMonth, year ?? currentHebrewYear(), anchorMonth || highlightMonth || 'Tishrei')
   const grades = grid
     ? gradesThrough(grid.finishGrade, highlightGrade)
     : (() => {
@@ -43,7 +44,8 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
                 {GRADE_LABEL[g] || finishGradeLabel(g)}
               </td>
               {months.map((m) => {
-                const cell = grid?.cells?.[g]?.[quotaMonth(m)] || (!grid ? QUOTA[g]?.[quotaMonth(m)]?.[ladder] : null)
+                const sheet = quotaMonth(quotaSheetMonth(m, firstMonth))
+                const cell = grid?.cells?.[g]?.[sheet] || (!grid ? QUOTA[g]?.[sheet]?.[ladder] : null)
                 const shown = cell ? formatKapitlachQuota(cell.v) : null
                 const finish = !!shown?.crown
                 const here = rowHit && m === highlightMonth

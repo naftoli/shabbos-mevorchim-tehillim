@@ -21,7 +21,9 @@ import {
   searchSite,
 } from '../../src/lib/siteSearch.js'
 
-const SCRIPT_HASH = '449789556dcf9ed0632f6000b1f81258255564ad16e7424d3c58b75d142acd5b'
+// Wording is frozen. This hash moved when mission quotas started reading the
+// school's year on top of the custom-ladder lookup (the spoken sentences below did not change).
+const SCRIPT_HASH = '750a692dcf7db334b9357b360411116223769b56dec3952960caa9953bc32737'
 
 const child = {
   firstName: 'Dovi',

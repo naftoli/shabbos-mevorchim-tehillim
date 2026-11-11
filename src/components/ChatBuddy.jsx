@@ -352,8 +352,9 @@ export default function ChatBuddy() {
       childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
       monthEn,
+      yearStart: progress.yearStart || kid.yearStart || 'Tishrei',
       focusLadder,
-      ladderChoices: ladderMenu(kid.grade, monthEn),
+      ladderChoices: ladderMenu(kid.grade, monthEn, progress.yearStart || kid.yearStart || 'Tishrei'),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
@@ -370,7 +371,7 @@ export default function ChatBuddy() {
   const storedScripts = readKidScripts(typeof localStorage === 'undefined' ? null : localStorage, kidId, monthKey)
   const streaks = progress ? streakFromMissions(streakMissions(progress)) : null
   const quota = ctx?.grade != null && monthKey && (ctx?.ladder != null || progress?.customLadder)
-    ? missionQuota(ctx.grade, monthKey, ctx.ladder, progress?.customLadder)
+    ? missionQuota(ctx.grade, monthKey, ctx.ladder, progress?.customLadder, ctx?.yearStart)
     : { kapitlach: null, minutes: null }
   const facts = standFacts(social)
   const scriptInput = {

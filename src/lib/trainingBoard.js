@@ -1,6 +1,7 @@
 import { quotaFor, GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
 import { cellFor, finishGradeLabel, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
+import { DEFAULT_FIRST_MONTH, normalizeFirstMonth, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
 
 const HOLIDAY_OCCASIONS = [
   { key: 'Rosh Hashana', heb: 'ר״ה', holiday: true },
@@ -11,13 +12,22 @@ const HOLIDAY_OCCASIONS = [
 // the single Adar for Adar I then Adar II.
 export const OCCASIONS = occasionsForYear(5785, new Set(['Rosh Hashana', 'Yom Kippur']))
 
-function occasionsForYear(year, activeHolidays) {
+function occasionList(year, firstMonth) {
+  const y = year == null ? 5785 : Number(year)
+  const first = normalizeFirstMonth(firstMonth)
+  if (first === DEFAULT_FIRST_MONTH) {
+    return campaignMonths(y).map((key) => ({ key, sheetMonth: quotaSheetMonth(key, first) }))
+  }
+  return schoolYearSlots(first, y).map((slot) => ({ key: slot.month, sheetMonth: slot.sheetMonth }))
+}
+
+function occasionsForYear(year, activeHolidays, firstMonth = DEFAULT_FIRST_MONTH) {
   const out = []
-  for (const key of campaignMonths(year == null ? 5785 : year)) {
-    out.push({ key, heb: MONTH_HEB[key] || key })
-    if (key !== 'Tishrei') continue
+  for (const item of occasionList(year, firstMonth)) {
+    out.push({ key: item.key, heb: MONTH_HEB[item.key] || item.key, sheetMonth: item.sheetMonth })
+    if (item.key !== 'Tishrei') continue
     for (const holiday of HOLIDAY_OCCASIONS) {
-      if (activeHolidays.has(holiday.key)) out.push(holiday)
+      if (activeHolidays.has(holiday.key)) out.push({ ...holiday, sheetMonth: quotaSheetMonth('Tishrei', firstMonth) })
     }
   }
   return out
@@ -57,7 +67,7 @@ function historyValue(earnedPast, key) {
  * One cell per mission on this ladder. A check means a record says the quota
  * was met. No record stays blank — it is not shown as a miss.
  */
-export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {}, year = null, quotaGrid = null }) {
+export function buildTraining({ grade, ladder, months, priorMissions = 0, history = {}, year = null, quotaGrid = null, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
   const grades = quotaGrid ? gradesThrough(quotaGrid.finishGrade, grade) : gradesOnLadder(ladder, grade)
   const byMonth = {}
   for (const month of months || []) {
@@ -70,7 +80,15 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   const currentGradeNum = gradeNum(grade)
   // Each grade sat in its own Hebrew year. A leap year on that row shows
   // Adar I and Adar II; a plain year shows one Adar.
-  const yearFor = (g) => (year == null ? null : Number(year) - (currentGradeNum - gradeNum(g)))
+  const first = normalizeFirstMonth(firstMonth)
+  // Tishrei schools: each grade is one Hebrew year, current year minus how
+  // many grades back. Another start uses that same distance from the school
+  // year that contains anchorMonth (this grade's current month).
+  const anchor = anchorMonth || 'Tishrei'
+  const currentStart = year == null
+    ? null
+    : (first === DEFAULT_FIRST_MONTH ? Number(year) : schoolYearStartYear(first, Number(year), anchor))
+  const yearFor = (g) => (currentStart == null ? null : currentStart - (currentGradeNum - gradeNum(g)))
   // The quota shown for a mission should reflect the ladder the soldier was on
   // for that mission, not whatever ladder they sit on now (it may have changed).
   // The current ladder is only a last resort.
@@ -98,7 +116,7 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   for (const g of grades) {
     const isCurrent = String(g) === String(grade)
     const earnedPast = earnedFor(g)
-    const occasions = occasionsForYear(yearFor(g), activeHolidays)
+    const occasions = occasionsForYear(yearFor(g), activeHolidays, first)
     const hit = occasions.find((occ) => resolve(occ, isCurrent, earnedPast).met)
     if (hit) { firstDoneLadder = resolve(hit, isCurrent, earnedPast).doneLadder; break }
   }
@@ -110,9 +128,9 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
   const boards = grades.map((g) => {
     const isCurrent = String(g) === String(grade)
     const earnedPast = earnedFor(g)
-    const occasions = occasionsForYear(yearFor(g), activeHolidays)
+    const occasions = occasionsForYear(yearFor(g), activeHolidays, first)
     const missions = occasions.map((occ) => {
-      const occKey = occ.holiday ? 'Tishrei' : occ.key
+      const occKey = occ.sheetMonth || (occ.holiday ? 'Tishrei' : occ.key)
       const { rec, reported, met, doneLadder } = resolve(occ, isCurrent, earnedPast)
 
       // A base-commander override fixes this month's quota. It wins over the
