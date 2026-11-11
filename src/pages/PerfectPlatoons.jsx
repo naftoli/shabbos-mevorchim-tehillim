@@ -7,6 +7,7 @@ import { getPerfectPlatoons, getSchool, CURRENT_MONTH } from '@/services/api.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
+import { platoonKey } from '@/lib/perfectPlatoons.js'
 
 // Every perfect platoon this month — the full, searchable list behind the
 // "+N more" buttons. A perfect platoon is a class where every single soldier
@@ -75,7 +76,7 @@ export default function PerfectPlatoons() {
               <div className="flex flex-wrap gap-2">
                 {filtered.map((p) => (
                   <Link
-                    key={`${p.schoolId}-${p.className}`}
+                    key={platoonKey(p)}
                     to={`/s/${p.schoolId}`}
                     className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
                     title={`${p.className}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}

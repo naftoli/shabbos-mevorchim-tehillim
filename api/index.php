@@ -237,7 +237,8 @@ function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null):
         foreach ($usersByKey as $uid => $byKey) {
             $q = (int) ($byKey['Kapitelach'] ?? 0);
             $d = (int) ($doneRows[$date][$classId][$uid]['Kapitelach'] ?? 0);
-            $isMet = $q > 0 && $d >= $q;
+            // Same met test as GET /perfect-platoons (wwtcSoldierMetQuota).
+            $isMet = wwtcSoldierMetQuota($q, $d);
             $mq = (int) ($byKey['Minutes'] ?? 0);
             $md = (int) ($doneRows[$date][$classId][$uid]['Minutes'] ?? 0);
             $minQuota += $mq;
@@ -286,7 +287,7 @@ function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null):
             'minutesSaid' => $minD,
             'minutesQuota' => $minQ,
             'minutesPct' => wwtcPct($minD, $minQ),
-            'perfect' => $size > 0 && $met === $size,
+            'perfect' => wwtcClassIsPerfect($met, $size),
         ];
     }
     return [
@@ -425,7 +426,7 @@ function wwtcHolidayPlatoons(array $board): array
     $out = [];
     foreach ($counts['sizeByClass'] as $sid => $byClass) {
         foreach ($byClass as $cid => $size) {
-            if ($size <= 0 || ($counts['metByClass'][$sid][$cid] ?? 0) < $size) {
+            if (!wwtcClassIsPerfect((int) ($counts['metByClass'][$sid][$cid] ?? 0), (int) $size)) {
                 continue;
             }
             $meta = $board['classMeta'][$cid] ?? ['grade' => '', 'teacher' => '', 'sub' => ''];
@@ -434,7 +435,8 @@ function wwtcHolidayPlatoons(array $board): array
             $out[] = [
                 'schoolId' => (int) $sid,
                 'school' => (string) ($board['schools'][$sid] ?? ''),
-                'className' => $grade . ($sub !== '' ? '-' . $sub : ''),
+                'classId' => (int) $cid,
+                'className' => wwtcPlatoonClassName($grade, $sub),
                 'teacher' => (string) ($meta['teacher'] ?? ''),
                 'grade' => $grade,
                 'size' => (int) $size,
@@ -480,7 +482,7 @@ function wwtcHolidaySchoolData(array $board, int $schoolId): array
             'minutesSaid' => $g['minD'],
             'minutesQuota' => $g['minQ'],
             'minutesPct' => wwtcPct($g['minD'], $g['minQ']),
-            'perfect' => $g['size'] > 0 && $g['met'] === $g['size'],
+            'perfect' => wwtcClassIsPerfect($g['met'], $g['size']),
         ];
         $minDone += $g['minD'];
         $minQuota += $g['minQ'];
@@ -941,18 +943,13 @@ if ($method === 'GET' && $path === '/stats') {
           WHERE ' . WWTC_ROSTER_WHERE
     )->fetchColumn();
 
-    // Soldiers who completed + perfect platoons, from the mission-mark signal.
+    // Soldiers who completed stay on the mission-mark signal (the home race),
+    // with quota overrides folded in. The perfect-platoon count is the shared
+    // kapitlach list, so the stat and the Perfect Platoons section cannot disagree.
     $counts = wwtcCompletionCounts($current, $year);
     $metSoldiers = (int) array_sum($counts['metBySchool']);
     $participatedSoldiers = (int) array_sum(wwtcParticipatedBySchool($current));
-    $perfectPlatoons = 0;
-    foreach ($counts['sizeByClass'] as $sid => $classesBySize) {
-        foreach ($classesBySize as $cid => $size) {
-            if ($size > 0 && ($counts['metByClass'][$sid][$cid] ?? 0) >= $size) {
-                $perfectPlatoons++;
-            }
-        }
-    }
+    $perfectPlatoons = count(wwtcPerfectPlatoonRows($current, $year));
 
     wwtcJson([
         'monthLabel' => wwtcMonthForDate($current) ?: (is_array($period) ? (string) $period['month'] : ''),
@@ -1126,10 +1123,10 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)
 // ---- perfect platoons (nationwide) -----------------------------------------
 
 if ($method === 'GET' && $path === '/perfect-platoons') {
-    // A perfect platoon = a class where every enrolled soldier earned the mission
-    // this month (met count === class size), the SPA's definition. Cheap: from the
-    // same mission-mark/headcount counts the home stats use, then one class-meta
-    // lookup — no per-school report loop.
+    // Same rule as the school classes view (wwtcClassIsPerfect): every soldier
+    // said at least their own kapitlach quota. One row per class id. The number
+    // after the slash on the home card is schoolClasses — classes on this
+    // roster, not a rank and not a page size.
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
@@ -1142,43 +1139,7 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
         $current = wwtcCurrentDate();
         $platoonYear = wwtcYear();
     }
-    $counts = wwtcCompletionCounts($current, $platoonYear);
-    $perfect = []; // class_id => ['sid'=>, 'size'=>]
-    foreach ($counts['sizeByClass'] as $sid => $byClass) {
-        foreach ($byClass as $cid => $size) {
-            if ($size > 0 && ($counts['metByClass'][$sid][$cid] ?? 0) >= $size) {
-                $perfect[(int) $cid] = ['sid' => (int) $sid, 'size' => (int) $size];
-            }
-        }
-    }
-
-    $out = [];
-    if ($perfect) {
-        $schools = wwtcEligibleSchools();
-        $ids = implode(',', array_map('intval', array_keys($perfect)));
-        $meta = $MASHPIA_DB->query(
-            "SELECT class_id, class_grade, class_sub, class_teacher FROM classes WHERE class_id IN ($ids)"
-        )->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($meta as $c) {
-            $cid = (int) $c['class_id'];
-            $sid = $perfect[$cid]['sid'];
-            if (!isset($schools[$sid])) {
-                continue; // not an eligible WWTC school
-            }
-            $grade = (string) $c['class_grade'];
-            $sub = (string) ($c['class_sub'] ?? '');
-            $out[] = [
-                'schoolId' => $sid,
-                'school' => $schools[$sid],
-                'className' => $grade . ($sub !== '' ? '-' . $sub : ''),
-                'teacher' => (string) ($c['class_teacher'] ?? ''),
-                'grade' => $grade,
-                'size' => $perfect[$cid]['size'],
-                'schoolClasses' => isset($counts['sizeByClass'][$sid]) ? count($counts['sizeByClass'][$sid]) : 0,
-            ];
-        }
-    }
-    wwtcJson(['month' => wwtcMonthForDate($current), 'platoons' => $out]);
+    wwtcJson(['month' => wwtcMonthForDate($current), 'year' => $platoonYear, 'platoons' => wwtcPerfectPlatoonRows($current, $platoonYear)]);
 }
 
 // ---- reports ----------------------------------------------------------------
@@ -1395,7 +1356,7 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
         'className' => $className,
         'completed' => $completed,
         'size' => count($rows),
-        'perfect' => count($rows) > 0 && $completed === count($rows),
+        'perfect' => wwtcClassIsPerfect($completed, count($rows)),
     ];
     wwtcJson(wwtcPlatoonResponse($summary, $rows, wwtcPlatoonRollAllowed($classId, $schoolId)));
 }

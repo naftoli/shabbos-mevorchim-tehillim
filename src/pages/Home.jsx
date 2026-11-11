@@ -19,6 +19,7 @@ import QuotaBars from '@/components/QuotaBars.jsx'
 import { IconImg, QuotaReached, RaceToggle, StarMark, Pending } from '@/components/campaignBits.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { CAMPAIGN_MARK, MONTH_CHOOSER } from '@/lib/decisions.js'
+import { groupPlatoonsBySchool, platoonKey } from '@/lib/perfectPlatoons.js'
 
 const CAMPAIGN_ICON = CAMPAIGN_MARK === 'target' ? 'design/icon-target.png' : 'design/flag.png'
 
@@ -177,26 +178,7 @@ export default function Home() {
   const [platoonVisible, setPlatoonVisible] = useState(PLATOON_PAGE)
   const [platoonsExpanded, setPlatoonsExpanded] = useState(false)
   const schoolById = Object.fromEntries(schools.map((s) => [s.id, s]))
-  const platoonGroups = []
-  {
-    const seen = new Map()
-    for (const p of platoons) {
-      let group = seen.get(p.schoolId)
-      if (!group) {
-        group = { schoolId: p.schoolId, school: p.school, items: [], schoolClasses: p.schoolClasses || 0, schoolSaid: p.schoolSaid || 0 }
-        seen.set(p.schoolId, group)
-        platoonGroups.push(group)
-      }
-      group.items.push(p)
-      group.schoolClasses = Math.max(group.schoolClasses, p.schoolClasses || 0)
-      group.schoolSaid = p.schoolSaid || group.schoolSaid
-    }
-    platoonGroups.sort((a, b) => {
-      const ap = a.schoolClasses ? a.items.length / a.schoolClasses : 0
-      const bp = b.schoolClasses ? b.items.length / b.schoolClasses : 0
-      return bp - ap || (b.schoolSaid || 0) - (a.schoolSaid || 0) || a.school.localeCompare(b.school)
-    })
-  }
+  const platoonGroups = groupPlatoonsBySchool(platoons)
   const shownGroups = platoonsExpanded ? platoonGroups : platoonGroups.slice(0, platoonVisible)
   const q = query.trim().toLowerCase()
   const filtered = schools.filter(
@@ -375,7 +357,7 @@ export default function Home() {
                       <div className="flex flex-wrap gap-2 px-3 pb-3 pl-16">
                         {g.items.map((p) => (
                           <Link
-                            key={`${p.schoolId}-${p.className}`}
+                            key={platoonKey(p)}
                             to={`/s/${p.schoolId}`}
                             className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
                             title={`${p.className} · ${p.teacher || p.school} · ${p.size} soldiers`}

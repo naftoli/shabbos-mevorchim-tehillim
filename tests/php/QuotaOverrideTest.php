@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../api/quotaOverride.php';
 require __DIR__ . '/../../api/overEntry.php';
+require __DIR__ . '/../../api/perfectPlatoon.php';
 
 $failures = 0;
 $tests = 0;
@@ -189,6 +190,18 @@ check('without the override that platoon is not perfect', wwtcPlatoonIsPerfect([
     ['counted' => 5, 'flagged' => 200, 'status' => 'flagged', 'quota' => 10],
     ['counted' => 8, 'flagged' => 0, 'status' => null, 'quota' => 8],
 ]) === false);
+
+$shared = wwtcPerfectPlatoonsFromSoldiers([
+    ['schoolId' => 1, 'school' => 'A', 'classId' => 7, 'grade' => '1', 'sub' => '', 'teacher' => '', 'quota' => 5, 'said' => 5, 'userId' => 2],
+    ['schoolId' => 1, 'school' => 'A', 'classId' => 7, 'grade' => '1', 'sub' => '', 'teacher' => '', 'quota' => 8, 'said' => 8, 'userId' => 3],
+]);
+$short = wwtcPerfectPlatoonsFromSoldiers([
+    ['schoolId' => 1, 'school' => 'A', 'classId' => 7, 'grade' => '1', 'sub' => '', 'teacher' => '', 'quota' => 10, 'said' => 5, 'userId' => 2],
+    ['schoolId' => 1, 'school' => 'A', 'classId' => 7, 'grade' => '1', 'sub' => '', 'teacher' => '', 'quota' => 8, 'said' => 8, 'userId' => 3],
+]);
+check('the shared perfect-platoon rule lists the class once the override quota is met', count($shared) === 1 && $shared[0]['classId'] === 7);
+check('the same class is absent at the original quota', count($short) === 0);
+check('the public platoon row has no soldier id', !isset($shared[0]['userId']));
 
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);
