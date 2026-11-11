@@ -9,6 +9,7 @@ import {
   generateCustomLadder,
 } from '@/lib/customLadder.js'
 import { listCustomLadderSoldiers, setCustomLadder, removeCustomLadder, CAMPAIGN_YEAR } from '@/services/api.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 
 // Admin: pick one soldier, then "Finish [N] kapitlach by [grade]".
 // The grid is calculated from the ladders and anchored at the soldier's
@@ -139,7 +140,7 @@ export default function CustomLadderTool({ schoolId }) {
                 {groups.length === 0 ? <p className="text-sm text-muted">No soldier matches.</p> : null}
                 {groups.map(([className, rows]) => (
                   <div key={className}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">{className}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">{formatClassName(className)}</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       {rows.map((soldier) => {
                         const selected = String(soldier.id) === String(kidId)
