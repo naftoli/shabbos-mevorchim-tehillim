@@ -1,5 +1,5 @@
-// Artwork already used as the Perfect Platoon mark on How It Works.
-// The child-dashboard success line shows this picture, not a new icon.
-export const PERFECT_PLATOON_ART = 'design/how/perfect-platoon.webp'
-export const PERFECT_PLATOON_ART_WIDTH = 256
-export const PERFECT_PLATOON_ART_HEIGHT = 196
+// Sholem's general Perfect Platoon shield (no number). Shown wherever the
+// site uses the Perfect Platoon mark. Intrinsic size is the 2x web asset.
+export const PERFECT_PLATOON_ART = 'design/perfect-platoon-logo.webp'
+export const PERFECT_PLATOON_ART_WIDTH = 372
+export const PERFECT_PLATOON_ART_HEIGHT = 480

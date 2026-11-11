@@ -8,6 +8,7 @@ import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { platoonKey } from '@/lib/perfectPlatoons.js'
+import { PerfectPlatoonLogo } from '@/components/brandMarks.jsx'
 
 // Every perfect platoon this month — the full, searchable list behind the
 // "+N more" buttons. A perfect platoon is a class where every single soldier
@@ -36,7 +37,11 @@ export default function PerfectPlatoons() {
 
   return (
     <>
-      <PageHero eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'} title="Perfect Platoons">
+      <PageHero
+        mark={<PerfectPlatoonLogo className="h-20 w-auto sm:h-28" />}
+        eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'}
+        title="Perfect Platoons"
+      >
         A platoon is a class — and it’s <span className="font-semibold text-white">perfect</span> when
         every single soldier in it finished their full quota of kapitlach this month
         {perSchool && schoolName ? <> at {schoolName}</> : null}.

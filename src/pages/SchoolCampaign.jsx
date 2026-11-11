@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { Pending, QuotaReached, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
+import { PerfectPlatoonLogo, TopBaseBadge } from '@/components/brandMarks.jsx'
 import SoldierLeaderboard from '@/components/SoldierLeaderboard.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { raceMetric, rankByRace } from '@/lib/schoolRace.js'
+import { baseRanks } from '@/lib/baseRank.js'
 import {
   getSchool,
+  getSchools,
   schoolSoldierLeaderboard,
   schoolClassLeaderboard,
   CURRENT_MONTH,
@@ -35,7 +38,12 @@ export default function SchoolCampaign() {
   const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
   const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId), [schoolId])
   const { data: classesData } = useLiveData(() => schoolClassLeaderboard(schoolId), [schoolId])
+  const { data: armySchools } = useLiveData(() => getSchools(), [])
   const classes = classesData ?? []
+  const rank = useMemo(
+    () => (armySchools ? baseRanks(armySchools).get(String(schoolId)) ?? null : null),
+    [armySchools, schoolId],
+  )
   const soldierRows = soldiers ?? []
   const [classSort, setClassSort] = useState('finished')
 
@@ -73,9 +81,12 @@ export default function SchoolCampaign() {
       <section className="hero-navy">
         <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-4 py-8 sm:gap-4 sm:px-6 sm:py-10 lg:px-10">
           <SchoolLogo school={school} size={72} className="!h-14 !w-14 ring-2 ring-white/30 sm:!h-[72px] sm:!w-[72px]" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
-            <h1 className="break-words font-display text-[1.65rem] font-black leading-tight text-white sm:text-4xl">{school.name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="min-w-0 break-words font-display text-[1.65rem] font-black leading-tight text-white sm:text-4xl">{school.name}</h1>
+              <TopBaseBadge rank={rank} className="h-16 w-auto shrink-0 sm:h-24" />
+            </div>
             <p className="text-white/80">{school.city ? `${school.city} · ` : ''}{fmt(school.kids)} soldiers</p>
           </div>
         </div>
@@ -105,9 +116,12 @@ export default function SchoolCampaign() {
 
         {/* Perfect platoons — classes where every soldier completed their quota */}
         <Card className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h2 className="font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(perfect.length)} this month</span>
+          <div className="flex items-start gap-3">
+            <PerfectPlatoonLogo className="mt-0.5 h-12 w-auto sm:h-14" />
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(perfect.length)} this month</span>
+            </div>
           </div>
           <p className="mb-4 mt-1 text-[13px] font-semibold text-muted">
             A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.

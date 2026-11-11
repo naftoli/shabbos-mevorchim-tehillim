@@ -3,6 +3,7 @@ import { Card, Button } from '@/components/ui.jsx'
 import LadderComparisonChart from '@/components/LadderComparisonChart.jsx'
 import { asset } from '@/lib/asset.js'
 import { guideSection } from '@/data/siteGuide.js'
+import { PERFECT_PLATOON_ART, PERFECT_PLATOON_ART_HEIGHT, PERFECT_PLATOON_ART_WIDTH } from '@/lib/perfectPlatoonBanner.js'
 
 // Milestone copy stays exactly as published. The first ten names are crops of
 // design/how/medals.webp (1600×146); left/width are the opaque coin bounds.
@@ -66,10 +67,10 @@ const ICONS = {
     alt: 'Glossy blue arrow climbing in steps',
   },
   platoon: {
-    src: 'design/how/perfect-platoon.webp',
-    width: 256,
-    height: 196,
-    alt: 'Classroom with desks, a chalkboard, books, and a clock',
+    src: PERFECT_PLATOON_ART,
+    width: PERFECT_PLATOON_ART_WIDTH,
+    height: PERFECT_PLATOON_ART_HEIGHT,
+    alt: 'Perfect Platoon shield',
   },
   base: {
     src: 'design/how/base.webp',
