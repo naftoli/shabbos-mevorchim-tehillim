@@ -55,6 +55,27 @@ foreach ($hebrew as $class) {
 }
 check('a Hebrew class name follows its grade, after Pre-1A', $hebrewNames === ['Pre-1A', '1', 'כיתה א', '3-Boys']);
 
+$shown = ['Bet Bet', '4-boys', 'Aleph Aleph', 'Pre-1A', 'א א', '1 Aleph Bet', 'Ches Yud'];
+usort($shown, 'wwtcCmpClassLabels');
+check('a formatted letter name keeps the grade the number used to show', $shown === [
+    'Pre-1A', 'Aleph Aleph', '1 Aleph Bet', 'א א', 'Bet Bet', '4-boys', 'Ches Yud',
+]);
+
+$missing = wwtcNotCompletedClasses([
+    ['classId' => 3, 'className' => 'Bet Bet', 'name' => 'A', 'said' => 0, 'quota' => 2],
+    ['classId' => 1, 'className' => 'Pre-1A', 'name' => 'B', 'said' => 1, 'quota' => 2],
+    ['classId' => 2, 'className' => 'Aleph Aleph', 'name' => 'C', 'said' => 0, 'quota' => 2],
+], [
+    ['id' => 3, 'grade' => '2', 'size' => 1],
+    ['id' => 1, 'grade' => 'pre1a', 'size' => 1],
+    ['id' => 2, 'grade' => '1', 'size' => 1],
+]);
+$missingNames = [];
+foreach ($missing as $class) {
+    $missingNames[] = $class['className'];
+}
+check('who still needs to finish comes back with Pre-1A first', $missingNames === ['Pre-1A', 'Aleph Aleph', 'Bet Bet']);
+
 $platoons = wwtcPerfectPlatoonsFromSoldiers([
     ['schoolId' => 2, 'school' => 'Sample Cheder', 'classId' => 3, 'grade' => '12', 'sub' => 'A', 'teacher' => '', 'quota' => 1, 'said' => 1, 'userId' => 3],
     ['schoolId' => 1, 'school' => 'Other Base', 'classId' => 1, 'grade' => '1', 'sub' => 'A', 'teacher' => '', 'quota' => 1, 'said' => 1, 'userId' => 4],
@@ -100,6 +121,41 @@ $preAt = strpos($pdf, 'Class Pre-1A: 0 of 1');
 $oneAt = strpos($pdf, 'Class 1-A: 1 of 1');
 $twelveAt = strpos($pdf, 'Class 12-A: 1 of 1');
 check('the PDF By class block lists Pre-1A before 1st grade before 12th', $preAt !== false && $oneAt !== false && $twelveAt !== false && $preAt < $oneAt && $oneAt < $twelveAt);
+
+$lettered = wwtcNotifyComposeReport(
+    wwtcNotifyRecipient(9, 'Rivka', 'base', 61, 'Sample Cheder', 0, '', '7185550100', 'rivka@example.com'),
+    [61 => [
+        'name' => 'Sample Cheder',
+        'classes' => [
+            ['id' => 3, 'name' => '2 Bet Bet', 'grade' => '2', 'students' => [['name' => 'Dalet', 'quota' => 2, 'said' => 1]]],
+            ['id' => 1, 'name' => 'Pre-1A', 'grade' => 'pre1a', 'students' => [['name' => 'Gimmel', 'quota' => 2, 'said' => 1]]],
+            ['id' => 2, 'name' => '1 Aleph Aleph', 'grade' => '1', 'students' => [['name' => 'Hei', 'quota' => 2, 'said' => 1]]],
+        ],
+    ]],
+    'Cheshvan',
+    5787,
+    'https://example.test/login',
+    'December 1'
+);
+check('formatted By class lines still put Pre-1A before Aleph before Bet', $lettered['classLines'] === [
+    'Class Pre-1A: 1 of 1',
+    'Class Aleph Aleph: 1 of 1',
+    'Class Bet Bet: 1 of 1',
+]);
+$letterPdf = '';
+foreach ($lettered['pdfLines'] as $line) {
+    $letterPdf .= $line['text'] . "\n";
+}
+$finishAt = strpos($letterPdf, 'Who still needs to finish');
+$submitAt = strpos($letterPdf, 'Who still needs to submit');
+$finishSlice = $finishAt === false || $submitAt === false ? '' : substr($letterPdf, $finishAt, $submitAt - $finishAt);
+$preFinish = strpos($finishSlice, 'Class: Pre-1A');
+$alephFinish = strpos($finishSlice, 'Class: Aleph Aleph');
+$betFinish = strpos($finishSlice, 'Class: Bet Bet');
+check(
+    'the PDF finish list is Pre-1A, then Aleph, then Bet',
+    $preFinish !== false && $alephFinish !== false && $betFinish !== false && $preFinish < $alephFinish && $alephFinish < $betFinish
+);
 
 if ($failed > 0) {
     fwrite(STDERR, "$failed failed\n");

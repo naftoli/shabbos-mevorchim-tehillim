@@ -22,6 +22,8 @@ import {
 import { platoonIsPerfect } from '@/lib/perfectPlatoons.js'
 import { sortClasses } from '@/lib/classOrder.js'
 import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
+import { formatClassName } from '@/lib/formatClassName.js'
+import ClassName from '@/components/ClassName.jsx'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
 const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
@@ -119,8 +121,8 @@ export default function Reports() {
   const crumb = BREADCRUMB_STYLE === 'site'
     ? 'font-cond text-[18px] uppercase tracking-[0.04em]'
     : 'text-sm font-semibold'
-  const className = platoon.data?.className
-    || base.data?.rows?.find((r) => String(r.id) === String(classId))?.name
+  const className = formatClassName(platoon.data?.className
+    || base.data?.rows?.find((r) => String(r.id) === String(classId))?.name)
 
   // Reports are admin-only. The link lives on the Admin Dashboard; anyone who
   // reaches /reports without an admin session is sent to the admin login.
@@ -164,7 +166,7 @@ export default function Reports() {
             ) : null}
             <button type="button" className="hover:underline" onClick={() => write({ school: null, class: null })}>Army</button>
             {schoolId ? (<><span className="text-muted">›</span><button type="button" className="hover:underline" onClick={() => write({ class: null })}>{base.data?.school || 'Base'}</button></>) : null}
-            {classId ? (<><span className="text-muted">›</span><span>{className || 'Platoon'}</span></>) : null}
+            {classId ? (<><span className="text-muted">›</span><span>{className ? <ClassName name={className} /> : 'Platoon'}</span></>) : null}
           </div>
           <Button variant="outline" className="!px-3 !py-1.5 !text-sm" onClick={() => write({ display: display ? null : '1' })}>
             {display ? 'Exit display mode' : 'Display mode'}
@@ -275,10 +277,10 @@ function BaseView({ data, error, loading, reload, onPickClass }) {
             return (
               <button key={c.id} type="button" onClick={() => onPickClass(c.id)} className="grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.03] sm:px-5">
                 <Rank n={i} />
-                <span className="grid h-11 w-11 place-items-center rounded-xl bg-navy font-cond text-sm text-gold">{GRADE_LABEL[c.grade] || c.grade}</span>
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-navy font-cond text-sm text-gold">{GRADE_LABEL[c.grade] || formatClassName(c.grade)}</span>
                 <span className="min-w-0">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate font-display text-[17px] font-bold text-navy">{c.name}</span>
+                    <span className="truncate font-display text-[17px] font-bold text-navy"><ClassName name={c.name} /></span>
                     <span className="text-sm text-muted"><b className="text-green">{fmt(c.accomplished)}</b> / {fmt(c.goal)}</span>
                   </span>
                   <span className="mt-1.5 block"><Meter pct={pct} color={c.perfect ? 'var(--color-green-mid)' : COLORS[i % COLORS.length]} /></span>
@@ -342,7 +344,7 @@ function PlatoonView({ data, error, loading, reload, admin, year }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div>
           <p className="sh">Platoon</p>
-          <h2 className="font-display text-xl font-black text-navy">{data.className}</h2>
+          <h2 className="font-display text-xl font-black text-navy"><ClassName name={data.className} /></h2>
         </div>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${perfect ? 'bg-green text-white' : 'bg-track text-navy'}`}>
           {perfect ? <StarMark className="h-4 w-4" /> : <CheckMark className="h-4 w-4" />}

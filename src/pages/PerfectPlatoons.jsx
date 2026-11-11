@@ -8,6 +8,8 @@ import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { platoonKey } from '@/lib/perfectPlatoons.js'
+import { displayClassName, formatClassName } from '@/lib/formatClassName.js'
+import ClassName from '@/components/ClassName.jsx'
 import { PerfectPlatoonLogo } from '@/components/brandMarks.jsx'
 
 // Every perfect platoon this month — the full, searchable list behind the
@@ -30,7 +32,7 @@ export default function PerfectPlatoons() {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const filtered = useMemo(
-    () => (q ? all.filter((p) => `${p.className} ${perSchool ? '' : p.school} ${p.teacher || ''}`.toLowerCase().includes(q)) : all),
+    () => (q ? all.filter((p) => `${p.className} ${formatClassName(p.className)} ${perSchool ? '' : p.school} ${p.teacher || ''}`.toLowerCase().includes(q)) : all),
     [all, q, perSchool],
   )
   const stillLoading = loading && platoonsData == null
@@ -84,10 +86,10 @@ export default function PerfectPlatoons() {
                     key={platoonKey(p)}
                     to={`/s/${p.schoolId}`}
                     className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
-                    title={`${p.className}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}
+                    title={`${displayClassName(p.className)}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}
                   >
                     <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
-                    <span className="font-display font-bold text-navy">{p.className}</span>
+                    <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
                     {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
                     {perSchool ? null : <span className="text-navy/55">· {p.school}</span>}
                   </Link>

@@ -12,7 +12,8 @@ declare(strict_types=1);
 
 function wwtcClassOrderParts(string $label): array
 {
-    $raw = trim($label);
+    $stripped = preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $label);
+    $raw = trim(is_string($stripped) ? $stripped : $label);
     if (preg_match('/^(?:pre[\s-]*1[\s-]*a|p1a)/i', $raw, $match)) {
         return [
             'rank' => 0,
@@ -30,7 +31,41 @@ function wwtcClassOrderParts(string $label): array
             ];
         }
     }
+    // formatClassName drops a leading "1 "–"8 " when the next word is that
+    // grade's letter, so "Aleph Aleph" and "א א" are still 1st grade.
+    $tokenRe = '/^([A-Za-z]+|[\x{05D0}-\x{05EA}])' . "['’׳״\"]" . '*/u';
+    if (preg_match($tokenRe, $raw, $tokenMatch)) {
+        $letterRank = wwtcClassOrderLetterRank($tokenMatch[0]);
+        if ($letterRank >= 1 && $letterRank <= 8) {
+            return [
+                'rank' => $letterRank,
+                'section' => ltrim(substr($raw, strlen($tokenMatch[0])), " \t-"),
+                'raw' => $raw,
+            ];
+        }
+    }
     return ['rank' => 100, 'section' => $raw, 'raw' => $raw];
+}
+
+function wwtcClassOrderLetterRank(string $token): int
+{
+    $bare = preg_replace("/['’׳״\"]+$/u", '', $token);
+    $bare = is_string($bare) ? $bare : $token;
+    $hebrew = ['א' => 1, 'ב' => 2, 'ג' => 3, 'ד' => 4, 'ה' => 5, 'ו' => 6, 'ז' => 7, 'ח' => 8];
+    if (isset($hebrew[$bare])) {
+        return $hebrew[$bare];
+    }
+    $english = [
+        'aleph' => 1, 'alef' => 1,
+        'bet' => 2, 'beis' => 2, 'bais' => 2,
+        'gimmel' => 3, 'gimel' => 3,
+        'dalet' => 4, 'daled' => 4,
+        'hei' => 5, 'hey' => 5,
+        'vav' => 6,
+        'zayin' => 7,
+        'ches' => 8, 'chet' => 8,
+    ];
+    return $english[strtolower($bare)] ?? 0;
 }
 
 function wwtcCmpText(string $a, string $b): int

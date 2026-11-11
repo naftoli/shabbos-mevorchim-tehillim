@@ -28,6 +28,7 @@ import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions } from '@/lib/streaks.js'
 import { STREAK_COPY } from '@/lib/streakBar.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
+import ClassName from '@/components/ClassName.jsx'
 import { ladderAdvice } from '@/lib/ladderAdvice.js'
 import { IconImg, Pending } from '@/components/campaignBits.jsx'
 import PerfectPlatoonBanner from '@/components/PerfectPlatoonBanner.jsx'
@@ -286,7 +287,7 @@ export default function KidDashboard() {
               <Avatar name={kid.name} src={kid.photoUrl || progress.photoUrl} size={72} className="ring-2 ring-white/50" />
               <div className="min-w-0 flex-1">
                 <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
-                <p className="mt-1.5 leading-snug text-white/80">{kid.className} · {kid.schoolName}</p>
+                <p className="mt-1.5 leading-snug text-white/80"><ClassName name={kid.className} /> · {kid.schoolName}</p>
                 {progress.rank ? <p className="mt-1 text-sm font-semibold text-gold">Rank · {progress.rank}</p> : null}
               </div>
             </div>

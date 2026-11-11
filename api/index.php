@@ -1047,7 +1047,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
     // installed, so the campaign page simply shows no dedication line.
     $dedication = wwtcDedicationRead('school', wwtcYear(), wwtcMonthForDate($current), $id);
     wwtcJson($row + [
-        'classes' => $data['classes'],
+        'classes' => array_map('wwtcPresentClassLabel', $data['classes']),
         'dedication' => $dedication,
     ]);
 }
@@ -1061,7 +1061,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)/class-leaderboard$#', $pat
     usort($classes, static function ($a, $b) {
         return $b['pct'] <=> $a['pct'] ?: $b['said'] <=> $a['said'];
     });
-    wwtcJson(['schoolId' => $id, 'classes' => $classes]);
+    wwtcJson(['schoolId' => $id, 'classes' => array_map('wwtcPresentClassLabel', $classes)]);
 }
 
 if ($method === 'GET' && preg_match('#^/schools/(\d+)/leaderboard$#', $path, $m)) {
@@ -1118,7 +1118,7 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
             $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
-            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'platoons' => wwtcHolidayPlatoons($board)]);
+            wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'platoons' => array_map('wwtcPresentClassLabel', wwtcHolidayPlatoons($board))]);
         }
         $current = (int) $period['jd'];
         $platoonYear = (int) $period['year'];
@@ -1126,7 +1126,7 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
         $current = wwtcCurrentDate();
         $platoonYear = wwtcYear();
     }
-    wwtcJson(['month' => wwtcMonthForDate($current), 'year' => $platoonYear, 'platoons' => wwtcPerfectPlatoonRows($current, $platoonYear)]);
+    wwtcJson(['month' => wwtcMonthForDate($current), 'year' => $platoonYear, 'platoons' => array_map('wwtcPresentClassLabel', wwtcPerfectPlatoonRows($current, $platoonYear))]);
 }
 
 // ---- reports ----------------------------------------------------------------
@@ -1219,7 +1219,7 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
     foreach ($classes as $c) {
         $rows[] = [
             'id' => $c['id'],
-            'name' => $c['name'],
+            'name' => wwtcFormatClassName((string) $c['name']),
             'grade' => $c['grade'],
             'teacher' => $c['teacher'],
             'size' => $c['size'],
@@ -1358,7 +1358,7 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
         'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
         'schoolId' => $schoolId,
-        'className' => $className,
+        'className' => wwtcFormatClassName($className),
         'completed' => $completed,
         'size' => $size,
         'perfect' => $perfect,
@@ -1470,10 +1470,10 @@ if ($method === 'GET' && $path === '/me/social') {
     }
 
     wwtcJson([
-        'className' => $className,
+        'className' => wwtcFormatClassName($className),
         'classRank' => $classRank,
         'totalClasses' => count($classes),
-        'classAheadName' => $aheadName,
+        'classAheadName' => $aheadName === null ? null : wwtcFormatClassName($aheadName),
         'needToPass' => $needToPass,
         'myRankInClass' => $myRank,
         'classSize' => $classSize,

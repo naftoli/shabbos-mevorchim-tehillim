@@ -21,6 +21,7 @@ import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { splitIncompleteNames } from '@/lib/notCompleted.js'
 import { sortClasses, sortPlatoons } from '@/lib/classOrder.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import * as mashpia from './mashpia.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
 import {
@@ -1090,7 +1091,7 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)
-  return school.classes
+  const rows = school.classes
     .map((cls) => {
       const kids = cls.kids.map((k) => {
         const snap = kapSnapshot(k, month, CAMPAIGN_YEAR)
@@ -1098,12 +1099,14 @@ export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
       })
       return {
         classId: cls.id,
-        className: cls.name,
+        className: formatClassName(cls.name),
+        grade: cls.grade,
         size: cls.kids.length,
         ...splitIncompleteNames(kids),
       }
     })
     .filter((c) => c.missing.length > 0)
+  return sortClasses(rows)
 }
 
 // First demo soldier's working credentials, for the login-screen hint.

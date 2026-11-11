@@ -5,6 +5,7 @@
 import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
 import { COUNSELOR, TOPICS } from '../data/kidQuestions.js'
 import { easiestLadder, hardestLadder, ladderMenu, stepLadder } from './general613.js'
+import { formatClassName } from './formatClassName.js'
 
 const NUMBER_WORDS = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
@@ -83,7 +84,8 @@ function varsFor(ctx, text) {
     'medal.current': medal?.current?.name ?? '',
     'medal.next': medal?.next?.name ?? '',
     'medal.missionsToNext': medal?.missionsToNext ?? '',
-    className: social?.className ?? '',
+    className: formatClassName(social?.className ?? ''),
+    classAheadName: formatClassName(social?.classAheadName ?? ''),
     classRank: social?.classRank ?? '',
     totalClasses: social?.totalClasses ?? '',
     schoolName: social?.schoolName ?? '',

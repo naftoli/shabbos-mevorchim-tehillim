@@ -50,11 +50,31 @@ test('the divided list puts finish before submit and keeps the class name separa
   assert.equal(view.sections[1].classes[1].size, 25)
 })
 
+test('finish and submit groups show the class as letters only', () => {
+  const view = notDoneView([
+    { classId: 9, className: '1 Aleph Bet', size: 4, missing: ['Short', 'Zero'], under: ['Short'], notFilled: ['Zero'] },
+    { classId: 10, className: '2 Bet Bet', size: 3, missing: ['None'], under: [], notFilled: ['None'] },
+  ])
+  assert.equal(view.sections[0].classes[0].className, 'Aleph Bet')
+  assert.deepEqual(view.sections[1].classes.map((c) => c.className), ['Aleph Bet', 'Bet Bet'])
+})
+
 test('an older response with only missing is listed under submit', () => {
   const view = notDoneView([{ classId: 1, className: '5A', size: 10, missing: ['Dovid'] }])
   assert.equal(view.sections[0].classes.length, 0)
   assert.deepEqual(view.sections[1].classes[0].names, ['Dovid'])
   assert.equal(view.sections[1].phrase, '1 still needs to submit')
+})
+
+test('finish and submit list classes by grade, with Pre-1A first', () => {
+  const view = notDoneView([
+    { classId: 4, className: 'Bet Bet', grade: '2', size: 4, under: ['Short'], notFilled: ['Zero'] },
+    { classId: 1, className: 'Pre-1A', grade: 'pre1a', size: 2, under: ['Young'], notFilled: [] },
+    { classId: 2, className: '1 Aleph Aleph', grade: '1', size: 3, under: [], notFilled: ['Blank'] },
+    { classId: 3, className: 'כיתה א', grade: '2', size: 4, under: ['Hebrew'], notFilled: [] },
+  ])
+  assert.deepEqual(view.sections[0].classes.map((c) => c.className), ['Pre-1A', 'Bet Bet', 'כיתה א'])
+  assert.deepEqual(view.sections[1].classes.map((c) => c.className), ['Aleph Aleph', 'Bet Bet'])
 })
 
 test('sample cheder shows both groups for the numeric class and the Hebrew class', () => {

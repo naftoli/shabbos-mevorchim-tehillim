@@ -40,6 +40,19 @@ test('Pre-1A leads and numbered grades stay in grade order', () => {
   ])
 })
 
+test('a formatted class name keeps its grade after the number is dropped', () => {
+  const ordered = ['Bet Bet', '4-boys', 'Aleph Aleph', 'Pre-1A', 'א א', '1 Aleph Bet', 'Ches Yud'].sort(compareClassLabels)
+  assert.deepEqual(ordered, [
+    'Pre-1A',
+    'Aleph Aleph',
+    '1 Aleph Bet',
+    'א א',
+    'Bet Bet',
+    '4-boys',
+    'Ches Yud',
+  ])
+})
+
 test('a name with no grade number uses the grade field, and Pre-1A still leads', () => {
   const rows = sortClasses([
     { id: 4, name: '3-Boys', grade: '3' },

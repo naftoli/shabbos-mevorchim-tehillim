@@ -107,6 +107,25 @@ const TEACHERS = [
 
 const pad2 = (n) => String(n).padStart(2, '0')
 
+const GRADE_WORDS = ['', 'Aleph', 'Bet', 'Gimmel', 'Dalet', 'Hei', 'Vav', 'Zayin', 'Ches']
+const SECTION_WORDS = ['Aleph', 'Bet', 'Gimmel', 'Dalet', 'Hei', 'Vav', 'Zayin', 'Ches', 'Tes', 'Yud']
+
+function demoClassLabel(grade, sectionIndex, peerCount) {
+  if (grade === 'pre1a') {
+    return peerCount > 1 ? `Pre-1A ${String.fromCharCode(65 + sectionIndex)}` : 'Pre-1A'
+  }
+  const n = Number(grade)
+  if (n >= 1 && n <= 8) {
+    const word = GRADE_WORDS[n]
+    const section = peerCount > 1
+      ? (SECTION_WORDS[sectionIndex] || String.fromCharCode(65 + sectionIndex))
+      : word
+    return `${n} ${word} ${section}`
+  }
+  const base = `${GRADE_LABEL[grade] || grade} Grade`
+  return peerCount > 1 ? `${base} ${String.fromCharCode(65 + sectionIndex)}` : base
+}
+
 // Prior-year demo marks. A separate seed so this year's roster numbers stay put.
 function priorYearFor(seq, grade, ladder) {
   const rand = rng(800000 + seq)
@@ -201,14 +220,14 @@ function buildRoster() {
       return { id: `${s.id}-c${ci + 1}`, grade, teacher, kids }
     })
 
-    // Name classes; when a grade has several classes, add section letters (A, B…).
+    // Name classes the way the live roster does: a grade number, the Hebrew
+    // grade word, then the section. The screen drops the number. Grades
+    // outside 1–8, and Pre-1A, keep a name the formatter does not touch.
     const byGrade = {}
     for (const c of rawClasses) (byGrade[c.grade] ||= []).push(c)
     const classes = rawClasses.map((c) => {
       const peers = byGrade[c.grade]
-      const base = `${GRADE_LABEL[c.grade]} Grade`
-      const name = peers.length > 1 ? `${base} ${String.fromCharCode(65 + peers.indexOf(c))}` : base
-      return { ...c, name }
+      return { ...c, name: demoClassLabel(c.grade, peers.indexOf(c), peers.length) }
     })
 
     return { ...s, classes }

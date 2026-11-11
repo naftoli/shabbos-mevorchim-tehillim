@@ -6,9 +6,32 @@
 
 const PRE_1A = /^(?:pre[\s-]*1[\s-]*a|p1a)/i
 const LEADING_GRADE = /^(\d{1,2})(?:st|nd|rd|th)?/i
+const BIDI = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
+const QUOTES = /['\u2019\u05F3\u05F4"]+$/u
+const LETTER = /^(?:[A-Za-z]+|[\u05D0-\u05EA])['\u2019\u05F3\u05F4"]*/
+
+// Same letters formatClassName keeps after it drops the leading number.
+// "1 Aleph Aleph" is shown as "Aleph Aleph", which still has to sort as 1st grade.
+const HEBREW_GRADE = { א: 1, ב: 2, ג: 3, ד: 4, ה: 5, ו: 6, ז: 7, ח: 8 }
+const ENGLISH_GRADE = new Map([
+  ['aleph', 1], ['alef', 1],
+  ['bet', 2], ['beis', 2], ['bais', 2],
+  ['gimmel', 3], ['gimel', 3],
+  ['dalet', 4], ['daled', 4],
+  ['hei', 5], ['hey', 5],
+  ['vav', 6],
+  ['zayin', 7],
+  ['ches', 8], ['chet', 8],
+])
+
+function gradeOfLetter(token) {
+  const bare = token.replace(QUOTES, '')
+  if (HEBREW_GRADE[bare]) return HEBREW_GRADE[bare]
+  return ENGLISH_GRADE.get(bare.toLowerCase()) || 0
+}
 
 export function classOrderParts(label) {
-  const raw = String(label ?? '').trim()
+  const raw = String(label ?? '').replace(BIDI, '').trim()
   const pre = raw.match(PRE_1A)
   if (pre) {
     return { rank: 0, section: raw.slice(pre[0].length).replace(/^[\s-]+/, ''), raw }
@@ -18,6 +41,13 @@ export function classOrderParts(label) {
     const rank = Number(num[1])
     if (rank >= 1 && rank <= 12) {
       return { rank, section: raw.slice(num[0].length).replace(/^[\s-]+/, ''), raw }
+    }
+  }
+  const letter = raw.match(LETTER)
+  if (letter) {
+    const rank = gradeOfLetter(letter[0])
+    if (rank >= 1 && rank <= 8) {
+      return { rank, section: raw.slice(letter[0].length).replace(/^[\s-]+/, ''), raw }
     }
   }
   return { rank: 100, section: raw, raw }

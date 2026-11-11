@@ -36,6 +36,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/compat.php';
+require_once __DIR__ . '/className.php';
 require_once __DIR__ . '/classOrder.php';
 
 function wwtcNotifyAllowedPhoneColumns(): array
@@ -170,7 +171,7 @@ function wwtcNotifyRecipientsFromRows(array $rows, array $eligibleSchoolIds): ar
             $schoolId,
             (string) ($row['class_school_name'] ?? ''),
             $classId,
-            $grade . ($sub !== '' ? '-' . $sub : ''),
+            wwtcFormatClassName($grade . ($sub !== '' ? '-' . $sub : '')),
             $phone,
             $email
         );
@@ -322,7 +323,7 @@ function wwtcNotCompletedClasses(array $students, array $classes): array
         if (!isset($byClass[$cid])) {
             $byClass[$cid] = [
                 'classId' => $cid,
-                'className' => (string) ($s['className'] ?? ''),
+                'className' => wwtcFormatClassName((string) ($s['className'] ?? '')),
                 'size' => 0,
                 'missing' => [],
                 'under' => [],
@@ -341,9 +342,13 @@ function wwtcNotCompletedClasses(array $students, array $classes): array
         $id = (int) ($c['id'] ?? 0);
         if (isset($byClass[$id])) {
             $byClass[$id]['size'] = (int) ($c['size'] ?? 0);
+            $grade = trim((string) ($c['grade'] ?? ''));
+            if ($grade !== '') {
+                $byClass[$id]['grade'] = $grade;
+            }
         }
     }
-    return array_values($byClass);
+    return wwtcSortClasses(array_values($byClass));
 }
 
 function wwtcNotifyClassLine(string $name, int $filled, int $total): string
@@ -380,6 +385,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         if ($className === '') {
             $className = 'Class';
         }
+        $className = wwtcDisplayClassName($className);
         $students = [];
         $classFilled = 0;
         $classTotal = 0;
@@ -452,6 +458,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         }
         $prepared[] = [
             'name' => $className,
+            'grade' => (string) ($class['grade'] ?? ''),
             'filled' => $classFilled,
             'total' => $classTotal,
             'under' => $classUnder,
@@ -1340,7 +1347,7 @@ function wwtcNotifyExecute(array $job, array $deps = []): array
             . ' admin=' . (int) $recipient['adminId']
             . ' school=' . (int) $recipient['schoolId'];
         if (($recipient['role'] ?? '') === 'class') {
-            $line .= ' class=' . (int) $recipient['classId'] . ' ' . (string) ($recipient['className'] ?? '');
+            $line .= ' class=' . (int) $recipient['classId'] . ' ' . wwtcFormatClassName((string) ($recipient['className'] ?? ''));
         } else {
             $line .= ' ' . (string) ($recipient['schoolName'] ?? $report['schoolName']);
         }

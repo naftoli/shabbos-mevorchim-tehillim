@@ -8,6 +8,8 @@ declare(strict_types=1);
  * this code never runs it.
  */
 
+require_once __DIR__ . '/className.php';
+
 function wwtcFlagsReady(): bool
 {
     return function_exists('wwtcColumnExists') && wwtcColumnExists('wwtc_flagged_entries', 'status');
@@ -195,7 +197,7 @@ function wwtcPublicFlag(array $row, array $decisions = []): array
         'month' => $row['month_name'],
         'grade' => $row['grade'],
         'schoolName' => $row['school_name'],
-        'className' => $row['class_name'],
+        'className' => wwtcFormatClassName((string) ($row['class_name'] ?? '')),
         'kidName' => $row['kid_name'],
         'kapitlach' => (int) $row['kapitlach'],
         'minutes' => (int) $row['minutes'],
