@@ -195,6 +195,7 @@ export const getSoldierLeaderboard = (id, n = null) => {
   return req(`/schools/${id}/leaderboard${q}`).then((r) => r.soldiers || [])
 }
 export const getRunningTotals = () => req('/running-totals')
+export const getRunningTotalsBreakdown = () => req('/running-totals/breakdown')
 const monthQuery = (idx) => (idx === undefined || idx === null ? '' : `?monthIdx=${idx}`)
 function reportQuery(monthIdx, period) {
   if (period?.year || period?.month) return periodQuery(period)
@@ -250,6 +251,9 @@ export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder 
 
 export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
   write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
+
+export const setSchoolLadders = ({ schoolId, hidden }) =>
+  write('/admin/school-ladders', { method: 'PUT', body: { schoolId, hidden }, as: 'admin' })
 
 export const overrideQuota = ({ kidId, year, month, reason }) =>
   write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })

@@ -8,6 +8,7 @@ import {
   TRACK_SCRIPT,
   fillClimb,
   fillMission,
+  fillReview,
   fillStand,
   fillStreak,
   fillWelcome,
@@ -21,9 +22,9 @@ import {
   searchSite,
 } from '../../src/lib/siteSearch.js'
 
-// Wording is frozen. This hash moved when mission quotas started reading the
-// school's year on top of the custom-ladder lookup (the spoken sentences below did not change).
-const SCRIPT_HASH = '750a692dcf7db334b9357b360411116223769b56dec3952960caa9953bc32737'
+// Wording is frozen. This hash moved when the last-two-months review was added.
+// The spoken sentences below did not change.
+const SCRIPT_HASH = 'ff26f5e7421c6f9d9bcf182371ad00f5c5142149986f3e9e755dfc9165e7f27a'
 
 const child = {
   firstName: 'Dovi',
@@ -58,6 +59,9 @@ test('Wednesday commander scripts file is unchanged', () => {
   assert.match(fillStand({ baseRank: 23, baseTotal: 75, platoonRank: 4, platoonTotal: 47, soldierRank: 8, soldierTotal: 581 }), /number 23 out of 75/)
   assert.match(fillStreak({ current: 2, longest: 4 }), /2 missions in a row/)
   assert.match(fillClimb('8th grade'), /by 8th grade/)
+  assert.match(fillReview([
+    { month: 'Cheshvan', kapitlach: 4, minutes: 10, quotaKapitlach: 11, quotaMinutes: 40, met: false, reported: true },
+  ]), /Last month was Cheshvan\. You said 4 kapitlach in 10 minutes\./)
 })
 
 test('site lookup does not call an AI service', () => {

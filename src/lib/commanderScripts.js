@@ -7,7 +7,7 @@ import { cellFor } from './customLadder.js'
 import { quotaSheetMonth } from './schoolYear.js'
 import { fmt } from './format.js'
 
-const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'stand', 'streak']
+const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'review', 'stand', 'streak']
 const LIFETIME_SCRIPT_IDS = ['track', 'climb']
 export const SCRIPT_IDS = [...MONTH_SCRIPT_IDS, ...LIFETIME_SCRIPT_IDS]
 
@@ -161,6 +161,73 @@ export function fillStand({
   return [`Let's take a look at where you stand this month!`, ...parts].join('\n\n')
 }
 
+function reviewLabel(index, count) {
+  if (count === 1) return 'Last month'
+  return index === count - 1 ? 'Last month' : 'The month before'
+}
+
+function reviewParagraph(which, row) {
+  const name = cleanName(row?.month)
+  const lead = name ? `${which} was ${name}.` : `${which}.`
+  if (row?.reported === false) return `${lead} You have not reported what you said yet.`
+  const bits = [lead]
+  const kap = formatNum(row?.kapitlach)
+  const min = formatNum(row?.minutes)
+  if (kap != null && min != null) bits.push(`You said ${kap} kapitlach in ${min} minutes.`)
+  else if (kap != null) bits.push(`You said ${kap} kapitlach.`)
+  else if (min != null) bits.push(`You spent ${min} minutes saying Tehillim.`)
+  const quotaKap = formatNum(row?.quotaKapitlach)
+  const quotaMin = formatNum(row?.quotaMinutes)
+  if (quotaKap != null && quotaMin != null) bits.push(`Your quota was ${quotaKap} kapitlach, about ${quotaMin} minutes.`)
+  else if (quotaKap != null) bits.push(`Your quota was ${quotaKap} kapitlach.`)
+  if (row?.met === true) bits.push('You met your quota.')
+  else if (row?.met === false) bits.push('You did not meet your quota.')
+  if (bits.length === 1 && kap == null && min == null && quotaKap == null && row?.met == null) return null
+  return bits.join(' ')
+}
+
+/**
+ * Last month, then the month before, from the soldier's own months.
+ * The current month, holidays, and future months are left out. At most two.
+ */
+export function reviewMonthsFromProgress(progress) {
+  if (!progress) return []
+  const rows = []
+  for (const month of [...(progress.historyMonths || []), ...(progress.months || [])]) {
+    if (!month || month.holiday || month.isFuture || month.isCurrent) continue
+    const name = cleanName(month.month)
+    if (!name) continue
+    const reported = month.reported !== false
+    rows.push({
+      month: name,
+      reported,
+      kapitlach: reported ? readyNumber(month.said) : null,
+      minutes: reported ? readyNumber(month.saidMinutes) : null,
+      quotaKapitlach: readyNumber(month.quota),
+      quotaMinutes: readyNumber(month.minutes),
+      met: month.met === true ? true : month.met === false ? false : null,
+    })
+  }
+  return rows.slice(-2)
+}
+
+/** Walk the last two months. A month with no real facts is left out. */
+export function fillReview(months) {
+  const rows = (Array.isArray(months) ? months : []).filter((row) => row && (cleanName(row.month) || row.reported === false))
+  const kept = rows.slice(-2)
+  if (!kept.length) return null
+  const body = []
+  kept.forEach((row, index) => {
+    const text = reviewParagraph(reviewLabel(index, kept.length), row)
+    if (text) body.push(text)
+  })
+  if (!body.length) return null
+  const intro = kept.length > 1
+    ? "Let's take a look at what you did last month and the month before."
+    : "Let's take a look at what you did last month."
+  return [intro, ...body, 'Keep going, one mission at a time.'].join('\n\n')
+}
+
 export function fillStreak({ current, longest } = {}) {
   const now = readyNumber(current)
   if (now == null) return null
@@ -216,7 +283,7 @@ export function standPlaceCards(social) {
 }
 
 function emptyHeard() {
-  return { welcome: false, choosing: false, mission: false, stand: false, streak: false, track: false, climb: false }
+  return { welcome: false, choosing: false, mission: false, review: false, stand: false, streak: false, track: false, climb: false }
 }
 
 function memory() {
@@ -311,6 +378,12 @@ export function selectCommanderScripts(input = {}) {
     } else if (input.training !== 'yes' && input.training !== 'no' && !heard.welcome) {
       out.push({ id: 'welcome', text: fillWelcome(input.name) })
     }
+    // A custom ladder is still training. The numbered-ladder branch below is
+    // where a regular ladder hears this; a custom-only soldier hears it here.
+    if (readyNumber(input.customTarget) != null && !heard.review) {
+      const review = fillReview(input.reviewMonths)
+      if (review) out.push({ id: 'review', text: review })
+    }
     return out
   }
 
@@ -328,6 +401,11 @@ export function selectCommanderScripts(input = {}) {
         customFinish: input.customFinish,
       }),
     })
+  }
+
+  if (!heard.review) {
+    const review = fillReview(input.reviewMonths)
+    if (review) out.push({ id: 'review', text: review })
   }
 
   if (!heard.stand && input.resultsReady) {
@@ -377,6 +455,7 @@ export function filledScripts(input = {}) {
     }),
     stand,
     streak,
+    review: fillReview(input.reviewMonths),
     track: TRACK_SCRIPT,
     climb: fillClimb(input.gradeLabel),
   }

@@ -14,6 +14,7 @@ import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR,
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
+import { openLadders } from '@/lib/schoolLadders.js'
 import { cellFor, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
 import { DEFAULT_FIRST_MONTH, quotaForSchool, quotaSheetMonth } from '@/lib/schoolYear.js'
 import { isHebrewLeapYear } from '@/lib/hebrewYear.js'
@@ -167,10 +168,11 @@ export default function KidDashboard() {
             <Button variant="navy" className="mt-5" onClick={() => setWelcomeOpen(true)}>Pick my ladder</Button>
           </Card>
         </div>
-        <FirstLadderModal
+          <FirstLadderModal
           open={welcomeOpen}
           name={kid.name}
           grade={kid.grade}
+          hiddenLadders={kid.hiddenLadders}
           onPick={() => { setWelcomeOpen(false); navigate('/ladders') }}
           onClose={() => setWelcomeOpen(false)}
         />
@@ -194,6 +196,8 @@ export default function KidDashboard() {
       }
     }
   }
+  const hiddenLadders = progress.hiddenLadders || kid.hiddenLadders
+  const offeredLadders = openLadders(kid.grade, hiddenLadders)
   const advice = ladderAdvice({
     grade: kid.grade,
     ladder: kid.ladder,
@@ -202,6 +206,7 @@ export default function KidDashboard() {
     declined,
     openFlag: progress.flagged,
     firstMonth: yearStart,
+    hiddenLadders,
   })
   const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
   if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
@@ -450,10 +455,10 @@ export default function KidDashboard() {
               </div>
             </div>
 
-            <div className="mt-8">
+            {offeredLadders.length ? <div className="mt-8">
               <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
               <div className="grid grid-cols-4 gap-1.5">
-                {LADDERS.map((L) => {
+                {offeredLadders.map((L) => {
                   const cell = quotaForSchool(kid.grade, cur.month, L, yearStart)
                   const allowed = cell != null
                   const mine = Number(kid.ladder) === L
@@ -466,7 +471,7 @@ export default function KidDashboard() {
                   )
                 })}
               </div>
-            </div>
+            </div> : null}
           </div>
         </Card>
 

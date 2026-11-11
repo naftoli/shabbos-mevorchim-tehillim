@@ -2,7 +2,8 @@
 // Placeholders in braces are filled from the signed-in soldier. shimmy:true
 // items have no final answer, so the commander does not invent one.
 
-import { availableLadders, GRADE_LABEL } from '../data/ladders.js'
+import { GRADE_LABEL } from '../data/ladders.js'
+import { openLadders } from './schoolLadders.js'
 import { quotaForSchool } from './schoolYear.js'
 import { COUNSELOR, TOPICS } from '../data/kidQuestions.js'
 import { easiestLadder, hardestLadder, ladderMenu, stepLadder } from './general613.js'
@@ -59,9 +60,10 @@ function varsFor(ctx, text) {
   const sm = ctx?.sMevorchim
   const grade = ctx?.grade
   const month = ctx?.monthEn
-  const easy = easiestLadder(grade)
-  const hard = hardestLadder(grade)
-  const list = availableLadders(grade)
+  const hidden = ctx?.hiddenLadders
+  const easy = easiestLadder(grade, hidden)
+  const hard = hardestLadder(grade, hidden)
+  const list = openLadders(grade, hidden)
   const said = Number(cur?.said)
   const quota = Number(cur?.quota)
   const left = Number.isFinite(said) && Number.isFinite(quota) ? Math.max(0, quota - said) : null
@@ -208,7 +210,7 @@ export function wantsLadderChange(text) {
 export function ladderChangeReply(text, ctx) {
   const n = parseSpokenLadder(text)
   if (n == null) return null
-  const options = availableLadders(ctx?.grade)
+  const options = openLadders(ctx?.grade, ctx?.hiddenLadders)
   const label = ctx?.childGradeLabel || 'your'
   if (!options.includes(n)) {
     const list = options.join(', ')
@@ -236,7 +238,7 @@ export function ladderStepReply(text, ctx) {
   const from = Number(ctx?.ladder)
   if (!Number.isFinite(from) || from <= 0) return null
   const direction = harder ? 'harder' : 'easier'
-  const next = stepLadder(ctx?.grade, from, direction)
+  const next = stepLadder(ctx?.grade, from, direction, ctx?.hiddenLadders)
   if (next == null || next === from) {
     return {
       reply: harder

@@ -475,6 +475,37 @@ export function setSchoolYearStartStore(schoolId, firstMonth) {
   } catch { /* private mode */ }
 }
 
+// Ladders a school has turned off. Missing entry = every ladder on.
+const HIDDEN_LADDERS_KEY = 'wwtc.demo.hiddenLadders'
+function loadHiddenLadders() {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    return JSON.parse(localStorage.getItem(HIDDEN_LADDERS_KEY) || '{}')
+  } catch { return {} }
+}
+export function schoolHiddenLadders(schoolId) {
+  const store = loadHiddenLadders()
+  const raw = store[schoolId]
+  if (!Array.isArray(raw)) return []
+  return raw.map(Number).filter((n) => n >= 5 && n <= 12)
+}
+export function setSchoolHiddenLaddersStore(schoolId, hidden) {
+  try {
+    if (typeof localStorage === 'undefined') return
+    const all = loadHiddenLadders()
+    const next = []
+    const seen = new Set()
+    for (const value of hidden || []) {
+      const n = Number(value)
+      if (n < 5 || n > 12 || seen.has(n)) continue
+      seen.add(n)
+      next.push(n)
+    }
+    all[schoolId] = next
+    localStorage.setItem(HIDDEN_LADDERS_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+
 export function schoolDedication(schoolId) {
   const s = SCHOOLS.find((x) => x.id === schoolId)
   if (!s) return null

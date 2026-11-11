@@ -1,4 +1,4 @@
-import { availableLadders } from '@/data/ladders.js'
+import { stepLadder } from '@/lib/general613.js'
 import { DEFAULT_FIRST_MONTH, quotaForSchool } from '@/lib/schoolYear.js'
 import { countsInPublicTotals } from './overEntry.js'
 import { metKap } from './quotaOverride.js'
@@ -57,13 +57,16 @@ function quotaNow(month, grade, ladder, firstMonth) {
  * `harder` is one ladder up (a lower ladder number). `gentler` is one down.
  * A month is only one of those, so the two invitations never fire together.
  */
-export function ladderAdvice({ grade, ladder, months, missionsTotal = 0, declined, openFlag = null, firstMonth = DEFAULT_FIRST_MONTH }) {
+export function ladderAdvice({ grade, ladder, months, missionsTotal = 0, declined, openFlag = null, firstMonth = DEFAULT_FIRST_MONTH, hiddenLadders = null }) {
   const list = consider(months, openFlag)
   const current = Number(ladder)
-  const options = availableLadders(grade)
   if (!current || !list.length) return null
-  const harderLadder = options.includes(current - 1) ? current - 1 : null
-  const gentlerLadder = options.includes(current + 1) ? current + 1 : null
+  const step = (direction) => {
+    const next = stepLadder(grade, current, direction, hiddenLadders)
+    return next != null && next !== current ? next : null
+  }
+  const harderLadder = step('harder')
+  const gentlerLadder = step('easier')
 
   let upRun = 0
   let downRun = 0

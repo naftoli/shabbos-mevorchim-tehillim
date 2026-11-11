@@ -6,6 +6,7 @@ import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
+import { openLadders } from '@/lib/schoolLadders.js'
 import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
 import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
 import {
@@ -17,6 +18,7 @@ import {
   notCompleted,
   setSchoolDedication,
   setSchoolYearStart,
+  setSchoolLadders,
   removeSchoolDedication,
   getHqVerify,
   getArmyDedication,
@@ -118,6 +120,69 @@ function SchoolYearSetting({ school, onSaved }) {
   )
 }
 
+// Turn individual ladders off for this school. Every ladder starts on.
+// A custom ladder is not in this list and stays available.
+function SchoolLadderSetting({ school, onSaved }) {
+  const saved = (school.hiddenLadders || []).map(Number)
+  const [hidden, setHidden] = useState(() => new Set(saved))
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  function toggle(ladder) {
+    setHidden((prev) => {
+      const next = new Set(prev)
+      if (next.has(ladder)) next.delete(ladder)
+      else next.add(ladder)
+      return next
+    })
+  }
+  const same = saved.length === hidden.size && saved.every((ladder) => hidden.has(ladder))
+  async function save() {
+    setBusy(true)
+    setNote('')
+    try {
+      await setSchoolLadders(school.id, [...hidden])
+      setNote('Saved. Soldiers and the virtual commander skip the ladders that are off.')
+      onSaved()
+    } catch (e) {
+      setNote(e?.message || 'Could not save the ladders.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Card className="p-5 sm:p-6">
+      <p className="sh">Ladders for this school</p>
+      <p className="mt-1 text-sm text-muted">
+        Turn a ladder off to hide it from the soldier’s picker and from the virtual commander’s suggestions. Every ladder starts on. A custom ladder stays available.
+      </p>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {LADDERS.map((ladder) => {
+          const on = !hidden.has(ladder)
+          return (
+            <li key={ladder}>
+              <label className="flex min-h-11 items-center gap-3 rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggle(ladder)}
+                  aria-label={`Ladder ${ladder}`}
+                />
+                <span className="font-semibold text-navy">
+                  Ladder {ladder}
+                  <span className="mt-0.5 block font-normal text-muted">finish training by {GRADE_LABEL[String(finishGrade(ladder))]} grade</span>
+                </span>
+                <span className={`ml-auto text-xs font-bold uppercase ${on ? 'text-green' : 'text-muted'}`}>{on ? 'On' : 'Off'}</span>
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      <Button variant="navy" className="mt-3" onClick={save} disabled={busy || same}>{busy ? 'Saving…' : 'Save ladders'}</Button>
+      {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
+    </Card>
+  )
+}
+
 // School admins add / edit / remove their school's monthly dedication.
 function DedicationEditor({ school, onSaved }) {
   const [editing, setEditing] = useState(false)
@@ -161,10 +226,12 @@ function DedicationEditor({ school, onSaved }) {
 
 // Put a whole school, one class, or one soldier onto a ladder. Picking a class
 // reveals a child dropdown (all children in that class, or one named soldier).
-function LadderSetter({ schoolId, classes }) {
+function LadderSetter({ schoolId, classes, hiddenLadders }) {
   const [classId, setClassId] = useState('') // '' = whole school
   const [kidId, setKidId] = useState('') // '' = all children in the class
-  const [ladder, setLadder] = useState(LADDERS[0])
+  const offered = openLadders(null, hiddenLadders)
+  const [ladder, setLadder] = useState(offered[0] ?? LADDERS[0])
+  if (offered.length && !offered.includes(Number(ladder))) setLadder(offered[0])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
 
@@ -246,11 +313,11 @@ function LadderSetter({ schoolId, classes }) {
             onChange={(e) => setLadder(Number(e.target.value))}
             className="min-h-11 w-full max-w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
           >
-            {LADDERS.map((L) => <option key={L} value={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
+            {offered.map((L) => <option key={L} value={L}>Ladder {L} — finish training by {GRADE_LABEL[String(finishGrade(L))]} grade</option>)}
           </select>
         </label>
 
-        <Button variant="navy" onClick={apply} disabled={busy}>{busy ? 'Applying…' : 'Apply'}</Button>
+        <Button variant="navy" onClick={apply} disabled={busy || !offered.length}>{busy ? 'Applying…' : 'Apply'}</Button>
       </div>
       {classId && platoonError ? (
         <p className="mt-2 text-sm text-navy">Couldn’t load this class’s soldiers.</p>
@@ -505,11 +572,13 @@ export default function AdminDashboard() {
 
             <SchoolYearSetting key={school.id} school={school} onSaved={reloadSchool} />
 
+            <SchoolLadderSetting key={`ladders-${school.id}`} school={school} onSaved={reloadSchool} />
+
             {/* Dedication — add / edit / remove */}
             <DedicationEditor school={school} onSaved={reloadSchool} />
 
             {/* Set a school / class / child onto a ladder */}
-            <LadderSetter schoolId={school.id} classes={base?.rows ?? []} />
+            <LadderSetter key={`set-${school.id}`} schoolId={school.id} classes={base?.rows ?? []} hiddenLadders={school.hiddenLadders} />
 
             <CustomLadderTool schoolId={school.id} />
 

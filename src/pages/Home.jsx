@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   getGlobalStats,
   getRunningTotals,
+  getRunningTotalsBreakdown,
   getSchools,
   getPerfectPlatoons,
   getCampaignCalendar,
@@ -155,6 +156,45 @@ function SchoolCard({ s, color, rank }) {
 
 // Months, with each data-backed holiday (from the campaign's holidayMonths)
 // slotted in right after Tishrei — the occasion it follows on the calendar.
+function RunningTotalCard({ label, emoji, value, loading, open, onToggle, rows, rowName, rowsLoading }) {
+  return (
+    <Card className="relative overflow-hidden p-5 sm:p-6">
+      <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{emoji}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="relative flex w-full items-center gap-4 text-left"
+      >
+        <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">
+            {value != null ? fmt(value) : (loading ? '…' : '—')}
+          </span>
+          <span className="mt-1.5 block text-sm font-semibold uppercase tracking-wide text-green">{label}</span>
+        </span>
+        <span className="flex-none text-sm font-semibold text-green">{open ? 'Close' : 'Open'}</span>
+      </button>
+      {open ? (
+        <ul className="relative mt-4 space-y-2 border-t border-line pt-3">
+          {rowsLoading && !rows ? (
+            <li className="text-sm text-muted">Getting the breakdown…</li>
+          ) : rows?.length ? rows.map((row) => (
+            <li key={rowName(row)} className="flex items-baseline justify-between gap-3 text-sm">
+              <span className={`font-semibold text-navy ${row.month ? 'font-heb text-base' : 'font-display'}`}>{rowName(row)}</span>
+              <span className="text-right tabular-nums text-navy">
+                {fmt(row.kapitlach)} kapitlach · {fmt(row.minutes)} minutes
+              </span>
+            </li>
+          )) : (
+            <li className="text-sm text-muted">No breakdown yet.</li>
+          )}
+        </ul>
+      ) : null}
+    </Card>
+  )
+}
+
 function chipsFor(months, holidays = []) {
   const out = []
   let placed = false
@@ -175,6 +215,8 @@ export default function Home() {
   const period = calendar ? { year, month: monthLabel } : null
   const { data: stats, loading: statsLoading } = useLiveData(() => getGlobalStats(period), [period?.year, period?.month])
   const { data: totals, loading: totalsLoading } = useLiveData(() => getRunningTotals(), [])
+  const { data: breakdown, loading: breakdownLoading } = useLiveData(() => getRunningTotalsBreakdown(), [])
+  const [openTotal, setOpenTotal] = useState(null)
   const { data: schoolsData, loading: schoolsLoading } = useLiveData(() => getSchools(period), [period?.year, period?.month])
   const { data: platoonsData, loading: platoonsLoading } = useLiveData(() => getPerfectPlatoons(period), [period?.year, period?.month, monthLabel])
   const { data: dedication } = useLiveData(() => getArmyDedication(period), [period?.year, period?.month])
@@ -290,23 +332,28 @@ export default function Home() {
       <section className="mx-auto mt-8 max-w-[1400px] px-4 sm:px-6 lg:px-10">
         <p className="sh mb-3">Kapitlach Said</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {[
-            { value: totals?.thisYear, label: 'this year', emoji: '📖' },
-            { value: totals?.allTime, label: 'Since 5778', emoji: '🌍' },
-          ].map((c) => (
-            <Card key={c.label} className="relative overflow-hidden p-5 sm:p-6">
-              <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{c.emoji}</span>
-              <div className="relative flex items-center gap-4">
-                <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
-                <div className="min-w-0">
-                  <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">
-                    {c.value != null ? fmt(c.value) : (totalsLoading ? '…' : '—')}
-                  </div>
-                  <div className="mt-1.5 text-sm font-semibold uppercase tracking-wide text-green">{c.label}</div>
-                </div>
-              </div>
-            </Card>
-          ))}
+          <RunningTotalCard
+            label="this year"
+            emoji="📖"
+            value={totals?.thisYear}
+            loading={totalsLoading}
+            open={openTotal === 'year'}
+            onToggle={() => setOpenTotal((current) => (current === 'year' ? null : 'year'))}
+            rows={breakdown?.months}
+            rowsLoading={breakdownLoading}
+            rowName={(row) => MONTH_HEB[row.month] || row.month}
+          />
+          <RunningTotalCard
+            label="Since 5778"
+            emoji="🌍"
+            value={totals?.allTime}
+            loading={totalsLoading}
+            open={openTotal === 'all'}
+            onToggle={() => setOpenTotal((current) => (current === 'all' ? null : 'all'))}
+            rows={breakdown?.years}
+            rowsLoading={breakdownLoading}
+            rowName={(row) => String(row.year)}
+          />
         </div>
       </section>
 
