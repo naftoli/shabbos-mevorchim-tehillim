@@ -47,6 +47,9 @@ const WWTC_REPORT_GRACE_DAYS = 7;
 // setASR()'s roster, to stay identical to the WWTC report pages.
 const WWTC_ROSTER_WHERE = 's.school_era IS NULL AND c.class_era = 0 AND u.school_id NOT IN (82, 612)';
 
+// Perfect-platoon rule shared with the classes view. Pure helpers; no DB at load.
+require_once __DIR__ . '/perfectPlatoon.php';
+
 // Buffer the legacy includes: api/header/db.php and db.php print a plain-text
 // message and exit() when MySQL is unreachable, which would otherwise reach the
 // SPA as a 200 with an unparseable body. Turn any bail-out into a JSON 503.
@@ -950,7 +953,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
             $reported = $d !== null;
             $dk = ($reported && $d['k'] !== null) ? $d['k'] : 0;
             $dm = ($reported && $d['m'] !== null) ? $d['m'] : 0;
-            $isMet = $qk > 0 && $dk >= $qk;
+            $isMet = wwtcSoldierMetQuota($qk, $dk);
             $didPart = $dk > 0;
 
             $schools[$sid] = $names[$sid];
@@ -998,7 +1001,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
         foreach ($sizeByClass as $sid => $byClass) {
             $classesCount += count($byClass);
             foreach ($byClass as $cid => $size) {
-                if ($size > 0 && ($metByClass[$sid][$cid] ?? 0) >= $size) {
+                if (wwtcClassIsPerfect((int) ($metByClass[$sid][$cid] ?? 0), (int) $size)) {
                     $perfectPlatoons++;
                 }
             }
@@ -1228,7 +1231,12 @@ function wwtcEligibleSchools(): array
  * the mission-mark signal (date_tasks_mission_marks — the "earned this month"
  * row the teacher tool and POST /me/report both maintain) plus eligible enrolled
  * headcounts. Cheap grouped queries, so this scales to the whole army without the
- * per-student loop the summary report does. Returns:
+ * per-student loop the summary report does.
+ *
+ * This is the home-race "soldiers who finished" signal. It is not a Perfect
+ * Platoon. A class can finish every kapitlach quota and still lack mission
+ * marks, so perfect platoons use wwtcPerfectPlatoonRows() instead.
+ * Returns:
  *   [ 'metBySchool' => [sid=>n], 'sizeBySchool' => [sid=>n],
  *     'metByClass' => [sid=>[cid=>n]], 'sizeByClass' => [sid=>[cid=>n]] ]
  */
