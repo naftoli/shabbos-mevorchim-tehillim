@@ -4,14 +4,28 @@
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
+import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
+import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
+import { cellFor, formatKapitlachQuota, generateCustomLadder } from '@/lib/customLadder.js'
+import {
+  applySoldierReport,
+  kapitlachInTotals,
+  minutesInTotals,
+  OVER_ENTRY_CONFIRM,
+  reviewSoldier,
+} from '@/lib/overEntry.js'
+import { classIsPerfect } from '@/lib/perfectPlatoons.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
+import { splitIncompleteNames } from '@/lib/notCompleted.js'
+import { sortClasses, sortPlatoons } from '@/lib/classOrder.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import * as mashpia from './mashpia.js'
-import { MONTHS } from '@/data/ladders.js'
+import { campaignMonths } from '@/lib/hebrewYear.js'
 import {
   ROSTER,
   CURRENT_MONTH,
@@ -26,6 +40,8 @@ import {
   ARMY_DEDICATION,
   schoolDedication,
   setSchoolDedicationStore,
+  schoolYearStart,
+  setSchoolYearStartStore,
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
@@ -42,35 +58,115 @@ const demoDataMonth = (month) => (isHolidayMonth(month) ? 'Tishrei' : month)
 
 function saidOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] ?? 0
-  return kid.reports?.[month] ?? 0
+  return kapitlachInTotals(kid, month)
 }
 function minutesOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearMinutes?.[month] ?? 0
-  return kid.minutesByMonth?.[month] ?? 0
+  return minutesInTotals(kid, month)
 }
 function reportedOf(kid, month, year) {
   if (year && String(year) !== String(CAMPAIGN_YEAR)) return kid.priorYearReports?.[month] != null
+  const flag = kid.flag
+  if (flag && flag.month === month && flag.status === 'flagged' && flag.counts === false) {
+    return !!flag.priorReported
+  }
   return Object.prototype.hasOwnProperty.call(kid.reports || {}, month)
 }
 
 export { CURRENT_MONTH, CURRENT_MONTH_INDEX, ELAPSED_MONTHS, CAMPAIGN_YEAR }
 
-const kidMonthQuota = (kid, month) => quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
-const kidMonthSaid = (kid, month) => kid.reports[month] ?? 0
-const kidMonthMinutes = (kid, month) => kid.minutesByMonth?.[month] ?? 0
-const metQuota = (kid, month) => {
-  const q = kidMonthQuota(kid, month)
-  return q > 0 && kidMonthSaid(kid, month) >= q
+const OVERRIDE_KEY = 'wwtc.demo.quotaOverrides'
+const CUSTOM_LADDER_KEY = 'wwtc.demo.customLadders'
+const AUDIT_KEY = 'wwtc.demo.auditLog'
+
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || '[]') } catch { return [] }
 }
-const metAt = (kid, month, year) => {
-  const q = kidMonthQuota(kid, month)
-  return q > 0 && saidOf(kid, month, year) >= q
+function saveOverrides(rows) {
+  try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(rows)) } catch { /* private mode */ }
 }
+function pushAudit(entry) {
+  try {
+    const all = JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]')
+    all.push(entry)
+    localStorage.setItem(AUDIT_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+function activeOverride(kidId, year, month) {
+  return loadOverrides().find((row) => (
+    String(row.userId) === String(kidId)
+    && String(row.year) === String(year)
+    && row.month === month
+    && !row.undoneAt
+  )) || null
+}
+function loadCustomLadders() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_LADDER_KEY) || '[]') } catch { return [] }
+}
+function saveCustomLadders(rows) {
+  try { localStorage.setItem(CUSTOM_LADDER_KEY, JSON.stringify(rows)) } catch { /* private mode */ }
+}
+function activeCustomLadder(kidId) {
+  return loadCustomLadders().find((row) => String(row.userId) === String(kidId) && !row.removedAt) || null
+}
+// Demo quotas come from a custom ladder when one is active, otherwise the
+// soldier's current ladder (Cheshvan is repriced from today's ladder).
+// A one-month override replaces the kapitel number only.
+// saidOf already withholds a flagged amount that does not count yet.
+function ladderCell(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  const named = quotaSheetMonth(demoDataMonth(month), firstMonth)
+  const custom = activeCustomLadder(kid.id)
+  if (custom?.grid) {
+    const cell = cellFor(custom.grid, kid.grade, named)
+    if (cell) return cell
+  }
+  return quotaFor(kid.grade, named, kid.ladder)
+}
+function quotaLabelFor(kid, month, quota, adjusted, firstMonth = DEFAULT_FIRST_MONTH) {
+  if (adjusted) return String(quota)
+  const cell = ladderCell(kid, month, firstMonth)
+  if (activeCustomLadder(kid.id)) return formatKapitlachQuota(cell?.v).label || '—'
+  return cell?.k || '—'
+}
+function engineKap(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  return ladderCell(kid, month, firstMonth)?.v ?? 0
+}
+function engineMin(kid, month, firstMonth = DEFAULT_FIRST_MONTH) {
+  return ladderCell(kid, month, firstMonth)?.m ?? 0
+}
+function kapSnapshot(kid, month, year = CAMPAIGN_YEAR, firstMonth = DEFAULT_FIRST_MONTH) {
+  const engine = engineKap(kid, month, firstMonth)
+  const eff = effectiveKapQuota(engine, activeOverride(kid.id, year, month))
+  const said = saidOf(kid, month, year)
+  const reported = reportedOf(kid, month, year)
+  return { ...eff, said, reported, met: metKap(eff.quota, said, reported) }
+}
+function missionBonus(kid) {
+  let extra = 0
+  for (const row of loadOverrides()) {
+    if (String(row.userId) !== String(kid.id) || row.undoneAt) continue
+    const engine = engineKap(kid, row.month)
+    const said = saidOf(kid, row.month, row.year)
+    const reported = reportedOf(kid, row.month, row.year)
+    const was = metKap(engine, said, reported)
+    const now = metKap(Number(row.overriddenQuota) || 0, said, reported)
+    if (now && !was) extra += 1
+  }
+  return extra
+}
+
+const kidMonthQuota = (kid, month, year = CAMPAIGN_YEAR, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, year, firstMonth).quota
+const kidMonthSaid = (kid, month) => kapitlachInTotals(kid, month)
+const kidMonthMinutes = (kid, month) => minutesInTotals(kid, month)
+const metQuota = (kid, month, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, CAMPAIGN_YEAR, firstMonth).met
+const metAt = (kid, month, year, firstMonth = DEFAULT_FIRST_MONTH) => kapSnapshot(kid, month, year, firstMonth).met
 const kidSaidYear = (kid) => ELAPSED_MONTHS.reduce((a, mo) => a + kidMonthSaid(kid, mo), 0)
 
 // ---- school aggregates -----------------------------------------------------
 
 function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
+  const first = schoolYearStart(school.id)
+  const yearSlots = elapsedSchoolYearSlots(first, Number(year) || Number(CAMPAIGN_YEAR), month)
   let kids = 0
   let saidMonth = 0
   let quotaMonth = 0
@@ -84,12 +180,12 @@ function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
       kids += 1
       const said = saidOf(kid, month, year)
       saidMonth += said
-      quotaMonth += kidMonthQuota(kid, month)
+      quotaMonth += kidMonthQuota(kid, month, year, first)
       minutesSaidMonth += minutesOf(kid, month, year)
-      minutesQuotaMonth += quotaFor(kid.grade, month, kid.ladder)?.m ?? 0
-      if (metAt(kid, month, year)) metMonth += 1
+      minutesQuotaMonth += engineMin(kid, month, first)
+      if (metAt(kid, month, year, first)) metMonth += 1
       if (reportedOf(kid, month, year) && said > 0) participatedMonth += 1
-      saidYear += kidSaidYear(kid)
+      saidYear += yearSlots.reduce((sum, slot) => sum + saidOf(kid, slot.month, slot.year), 0)
     }
   }
   const pct = quotaMonth > 0 ? Math.round((saidMonth / quotaMonth) * 100) : 0
@@ -205,8 +301,10 @@ export function topSchoolsByQuota(n = 5) {
     .slice(0, n)
 }
 export async function getPerfectPlatoons(period) {
-  if (!IS_DEMO) return mashpia.getPerfectPlatoons(period)
-  return demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
+  const rows = !IS_DEMO
+    ? await mashpia.getPerfectPlatoons(period)
+    : demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
+  return sortPlatoons(rows)
 }
 
 function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
@@ -217,10 +315,15 @@ function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
       for (const kid of cls.kids) said += saidOf(kid, month, year)
     }
     for (const cls of school.classes) {
-      if (cls.kids.length > 0 && cls.kids.every((k) => metAt(k, month, year))) {
+      let met = 0
+      for (const kid of cls.kids) {
+        if (metAt(kid, month, year)) met += 1
+      }
+      if (classIsPerfect(met, cls.kids.length)) {
         out.push({
           schoolId: school.id,
           school: school.name,
+          classId: cls.id,
           className: cls.name,
           teacher: cls.teacher,
           grade: cls.grade,
@@ -240,7 +343,7 @@ export async function getCampaignCalendar(year) {
   return {
     year: y,
     years: [Number(CAMPAIGN_YEAR), Number(PRIOR_CAMPAIGN_YEAR)],
-    months: y === Number(CAMPAIGN_YEAR) ? ELAPSED_MONTHS : MONTHS,
+    months: y === Number(CAMPAIGN_YEAR) ? ELAPSED_MONTHS : campaignMonths(y),
     currentMonth: CURRENT_MONTH,
     holidayMonths: ['Rosh Hashana', 'Yom Kippur'],
   }
@@ -271,6 +374,7 @@ function safeKid(kid, school, cls) {
     schoolId: school.id,
     schoolName: school.name,
     className: cls.name,
+    yearStart: schoolYearStart(school.id),
   }
 }
 
@@ -334,40 +438,34 @@ export async function getKidProgress(id) {
   return demoKidProgress(id)
 }
 
+function monthRow(kid, slot, first, current) {
+  const snap = kapSnapshot(kid, slot.month, slot.year, first)
+  return {
+    month: slot.month,
+    year: slot.year,
+    quota: snap.quota,
+    originalQuota: snap.originalQuota,
+    quotaAdjusted: snap.quotaAdjusted,
+    quotaLabel: quotaLabelFor(kid, slot.month, snap.quota, snap.quotaAdjusted, first),
+    said: snap.said,
+    minutes: engineMin(kid, slot.month, first),
+    saidMinutes: slot.year === Number(CAMPAIGN_YEAR) ? kidMonthMinutes(kid, slot.month) : (kid.priorYearMinutes?.[slot.month] ?? 0),
+    met: snap.met,
+    reported: snap.reported,
+    isCurrent: current && slot.month === CURRENT_MONTH && slot.year === Number(CAMPAIGN_YEAR),
+  }
+}
+
 function demoKidProgress(id) {
   const found = locate(id)
   if (!found) return null
   const { kid } = found
-  const months = ELAPSED_MONTHS.map((mo) => {
-    const q = quotaFor(kid.grade, mo, kid.ladder)
-    return {
-      month: mo,
-      quota: q?.v ?? 0,
-      quotaLabel: q?.k ?? '—',
-      said: kidMonthSaid(kid, mo),
-      minutes: q?.m ?? 0, // the quota's target minutes
-      saidMinutes: kidMonthMinutes(kid, mo), // minutes the soldier reported
-      met: metQuota(kid, mo),
-      isCurrent: mo === CURRENT_MONTH,
-    }
-  })
-  const historyMonths = MONTHS.map((mo) => {
-    const q = quotaFor(kid.grade, mo, kid.ladder)
-    const said = kid.priorYearReports?.[mo]
-    const reported = said != null
-    return {
-      month: mo,
-      year: PRIOR_CAMPAIGN_YEAR,
-      quota: q?.v ?? 0,
-      quotaLabel: q?.k ?? null,
-      minutes: q?.m ?? 0,
-      said: reported ? said : 0,
-      saidMinutes: kid.priorYearMinutes?.[mo] ?? 0,
-      met: reported && !!q && said >= q.v,
-      reported,
-      isCurrent: false,
-    }
-  })
+  const first = schoolYearStart(found.school.id)
+  const anchorYear = Number(CAMPAIGN_YEAR)
+  const currentSlots = elapsedSchoolYearSlots(first, anchorYear, CURRENT_MONTH)
+  const priorOrigin = schoolYearStartYear(first, anchorYear, CURRENT_MONTH) - 1
+  const months = currentSlots.map((slot) => monthRow(kid, slot, first, true))
+  const historyMonths = schoolYearSlots(first, priorOrigin).map((slot) => monthRow(kid, slot, first, false))
   // The demo roster only holds one prior year, so stand in a mission history for
   // it under the prior grade — enough for the training board to draw real checks
   // locally. Live builds the full multi-year history from DB marks (index.php).
@@ -377,19 +475,35 @@ function demoKidProgress(id) {
   const missionHistory = priorGrade
     ? { [priorGrade]: Object.fromEntries(historyMonths.filter((m) => m.met).map((m) => [m.month, Number(kid.ladder) || true])) }
     : {}
-  const medal = medalState(kid.missionsTotal)
+  const missionsTotal = (kid.missionsTotal || 0) + missionBonus(kid)
+  const medal = medalState(missionsTotal)
   return {
     ...safeKid(kid, found.school, found.cls),
-    months: months.map((m) => ({ ...m, reported: Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
+    months: months.map((m) => ({ ...m, reported: m.reported ?? Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
     historyMonths,
     priorMissions: kid.priorMissions,
-    metThisYear: kid.metThisYear,
-    missionsTotal: kid.missionsTotal,
+    metThisYear: months.filter((m) => m.met).length,
+    missionsTotal,
     missionHistory,
     medal,
     rank: rankForMedals(medal.earnedCount),
     current: months.find((m) => m.isCurrent) ?? null,
+    customLadder: activeCustomLadder(kid.id)?.grid ?? null,
+    flagged: kid.flag?.status === 'flagged' ? { ...kid.flag, counts: false } : null,
   }
+}
+
+function engineMet(kid, month, year = CAMPAIGN_YEAR) {
+  return metKap(engineKap(kid, month), saidOf(kid, month, year), reportedOf(kid, month, year))
+}
+function recomputeDemoMissions(kid) {
+  let met = 0
+  // Stored mission count stays on the ladder quota. An override is added when
+  // the progress is read, so a flagged amount that does not count is not a mission.
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
+  kid.metThisYear = met
+  kid.missionsTotal = (kid.priorMissions || 0) + met
+  kid.minutes = Object.values(kid.minutesByMonth || {}).reduce((a, m) => a + (Number(m) || 0), 0)
 }
 
 // Record a month's completion. Live: POST /me/report (current Shabbos Mevorchim,
@@ -402,21 +516,82 @@ export async function recordMonth(id, month, kapitlach, minutes, extra = {}) {
   }
   const found = locate(id)
   if (!found) return null
-  const { kid } = found
-  const prevMet = metQuota(kid, month)
-  kid.reports[month] = Number(kapitlach) || 0
-  const nowMet = metQuota(kid, month)
-  if (nowMet && !prevMet) { kid.metThisYear += 1; kid.missionsTotal += 1 }
-  if (!nowMet && prevMet) { kid.metThisYear -= 1; kid.missionsTotal -= 1 }
-  // Per-month reported minutes (replace, not accumulate); keep the total in sync.
-  kid.minutesByMonth = kid.minutesByMonth || {}
-  kid.minutesByMonth[month] = Number(minutes) || 0
-  kid.minutes = Object.values(kid.minutesByMonth).reduce((a, m) => a + m, 0)
+  const { kid, school, cls } = found
+  const q = ladderCell(kid, month, schoolYearStart(school.id))
+  const result = applySoldierReport(kid, {
+    month,
+    kapitlach: Number(kapitlach) || 0,
+    minutes: Number(minutes) || 0,
+    quotaKap: q?.v ?? 0,
+    quotaMin: q?.m ?? 0,
+    grade: kid.grade,
+    flagConfirmed: !!extra.flagConfirmed,
+    kidName: kid.name,
+    className: cls.name,
+    schoolId: school.id,
+    schoolName: school.name,
+    year: CAMPAIGN_YEAR,
+  })
+  if (result.error === 'over_entry') {
+    const err = new Error(OVER_ENTRY_CONFIRM)
+    err.code = 'over_entry'
+    err.threshold = result.plan.line
+    throw err
+  }
+  recomputeDemoMissions(kid)
   saveKidProgress(kid)
   invalidate()
   const progress = demoKidProgress(id)
-  if (extra?.exceptionalConfirmed) progress.exceptional = { emailed: false, reason: 'demo' }
+  if (result.plan.action === 'save' && extra?.exceptionalConfirmed) progress.exceptional = { emailed: false, reason: 'demo' }
   return progress
+}
+
+export async function getFlagQueue({ schoolId = null, all = false } = {}) {
+  if (!IS_DEMO) return mashpia.getFlagQueue()
+  const pending = []
+  const recent = []
+  for (const school of ROSTER) {
+    if (!all && school.id !== schoolId) continue
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        if (!kid.flag) continue
+        const row = {
+          ...kid.flag,
+          kidName: kid.flag.kidName || kid.name,
+          className: kid.flag.className || cls.name,
+          schoolName: kid.flag.schoolName || school.name,
+          schoolId: kid.flag.schoolId ?? school.id,
+        }
+        if (kid.flag.status === 'flagged') pending.push(row)
+        else if (kid.flag.decisions?.length) recent.push(row)
+      }
+    }
+  }
+  const lastAt = (row) => {
+    const list = row.decisions || []
+    return list.length ? list[list.length - 1].at : ''
+  }
+  pending.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+  recent.sort((a, b) => String(lastAt(b)).localeCompare(String(lastAt(a))))
+  return { ready: true, pending, recent }
+}
+
+export async function reviewFlag(id, action, actorName) {
+  if (!IS_DEMO) return mashpia.reviewFlag(id, action)
+  for (const school of ROSTER) {
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        if (!kid.flag || String(kid.flag.id) !== String(id)) continue
+        const result = reviewSoldier(kid, action, { type: 'admin', name: actorName || 'Admin' })
+        if (!result.ok) throw new Error(result.error)
+        recomputeDemoMissions(kid)
+        saveKidProgress(kid)
+        invalidate()
+        return { ok: true, entry: kid.flag }
+      }
+    }
+  }
+  throw new Error('Flagged entry not found.')
 }
 
 // Switch a soldier's ladder. Live: PUT /me/ladder (writes user_tracks.track_id,
@@ -437,7 +612,7 @@ export async function setKidLadder(id, ladder) {
   if (kid.ladder === next) return demoKidProgress(id)
   kid.ladder = next
   let met = 0
-  for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
   kid.metThisYear = met
   kid.missionsTotal = kid.priorMissions + met
   saveKidProgress(kid)
@@ -470,7 +645,7 @@ export async function adminSetLadder({ schoolId, classId = null, kidId = null, l
     if (kid.ladder === next) continue
     kid.ladder = next
     let met = 0
-    for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+    for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
     kid.metThisYear = met
     kid.missionsTotal = kid.priorMissions + met
     saveKidProgress(kid)
@@ -539,7 +714,7 @@ export async function getKidSocial(id) {
     classSize: cls.kids.length,
     myRankInSchool: mySchoolPlace?.rank || 0,
     schoolSize: schoolKids.length,
-    classPerfect: mine?.size > 0 && mine.met === mine.size,
+    classPerfect: classIsPerfect(mine?.met || 0, mine?.size || 0),
     schoolName: school.name,
     schoolRank: schoolPlace?.rank || 0,
     totalSchools: schoolRanked.length,
@@ -560,6 +735,7 @@ export async function getSchool(id) {
 function demoSchool(id) {
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return null
+  const first = schoolYearStart(id)
   const agg = schoolAgg(school)
   const classes = school.classes.map((cls) => {
     let said = 0
@@ -571,10 +747,10 @@ function demoSchool(id) {
     for (const kid of cls.kids) {
       const kidSaid = kidMonthSaid(kid, CURRENT_MONTH)
       said += kidSaid
-      quota += kidMonthQuota(kid, CURRENT_MONTH)
+      quota += kidMonthQuota(kid, CURRENT_MONTH, CAMPAIGN_YEAR, first)
       minsSaid += kidMonthMinutes(kid, CURRENT_MONTH)
-      minsQuota += quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)?.m ?? 0
-      if (metQuota(kid, CURRENT_MONTH)) met += 1
+      minsQuota += engineMin(kid, CURRENT_MONTH, first)
+      if (metQuota(kid, CURRENT_MONTH, first)) met += 1
       if (reportedOf(kid, CURRENT_MONTH, CAMPAIGN_YEAR) && kidSaid > 0) participated += 1
     }
     const size = cls.kids.length
@@ -593,10 +769,10 @@ function demoSchool(id) {
       pctMet: size > 0 ? Math.round((met / size) * 100) : 0,
       pctParticipated: size > 0 ? Math.round((participated / size) * 100) : 0,
       minutesPct: minsQuota > 0 ? Math.round((minsSaid / minsQuota) * 100) : 0,
-      perfect: size > 0 && met === size,
+      perfect: classIsPerfect(met, size),
     }
   })
-  return { ...agg, classes, dedication: schoolDedication(id) }
+  return { ...agg, classes: sortClasses(classes), dedication: schoolDedication(id), yearStart: schoolYearStart(id) }
 }
 
 // n omitted returns the whole board. The page shows ten at a time; ranking
@@ -615,7 +791,7 @@ export async function schoolSoldierLeaderboard(id, n = null) {
         grade: kid.grade,
         saidMonth: kidMonthSaid(kid, CURRENT_MONTH),
         saidYear: kidSaidYear(kid),
-        missions: kid.missionsTotal,
+        missions: kid.missionsTotal + missionBonus(kid),
         ladder: kid.ladder,
       })
     }
@@ -646,6 +822,7 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
     year,
     holiday: isHolidayMonth(month),
     rows: ROSTER.map((school) => {
+      const first = schoolYearStart(school.id)
       let registered = 0
       let goal = 0
       let accomplished = 0
@@ -656,14 +833,13 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
       for (const cls of school.classes) {
         for (const kid of cls.kids) {
           registered += 1
-          const q = quotaFor(kid.grade, dataMonth, kid.ladder)
-          goal += q?.v ?? 0
-          minutesGoal += q?.m ?? 0
-          const said = saidOf(kid, dataMonth, year)
-          accomplished += said
+          const snap = kapSnapshot(kid, dataMonth, year, first)
+          goal += snap.quota
+          minutesGoal += engineMin(kid, dataMonth, first)
+          accomplished += snap.said
           minutes += minutesOf(kid, dataMonth, year)
-          if (reportedOf(kid, dataMonth, year) && said > 0) participated += 1
-          if (metAt(kid, dataMonth, year)) met += 1
+          if (snap.reported && snap.said > 0) participated += 1
+          if (snap.met) met += 1
         }
       }
       return {
@@ -687,10 +863,16 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
 }
 
 // Base report: one row per class in a school.
+function withClassOrder(data) {
+  if (!data || !Array.isArray(data.rows)) return data
+  return { ...data, rows: sortClasses(data.rows) }
+}
+
 export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, period = null) {
-  if (!IS_DEMO) return mashpia.getBaseReport(schoolId, monthIdx, period)
+  if (!IS_DEMO) return withClassOrder(await mashpia.getBaseReport(schoolId, monthIdx, period))
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return null
+  const first = schoolYearStart(school.id)
   const month = period?.month || monthName(monthIdx)
   const year = period?.year || CAMPAIGN_YEAR
   const dataMonth = demoDataMonth(month)
@@ -698,17 +880,18 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
     month,
     school: school.name,
     schoolId,
-    rows: school.classes.map((cls) => {
+    rows: sortClasses(school.classes.map((cls) => {
       let goal = 0
       let accomplished = 0
       let completed = 0
       for (const kid of cls.kids) {
-        goal += quotaFor(kid.grade, dataMonth, kid.ladder)?.v ?? 0
-        accomplished += saidOf(kid, dataMonth, year)
-        if (metAt(kid, dataMonth, year)) completed += 1
+        const snap = kapSnapshot(kid, dataMonth, year, first)
+        goal += snap.quota
+        accomplished += snap.said
+        if (snap.met) completed += 1
       }
-      return { id: cls.id, name: cls.name, grade: cls.grade, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
-    }),
+      return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: classIsPerfect(completed, cls.kids.length) }
+    })),
   }
 }
 
@@ -739,25 +922,35 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
   for (const school of ROSTER) {
     const cls = school.classes.find((c) => c.id === classId)
     if (!cls) continue
+    const first = schoolYearStart(school.id)
     let completed = 0
     for (const kid of cls.kids) {
-      if (metAt(kid, dataMonth, year)) completed += 1
+      if (metAt(kid, dataMonth, year, first)) completed += 1
     }
     const summary = {
       month,
       school: school.name,
+      schoolId: school.id,
       className: cls.name,
       completed,
       size: cls.kids.length,
-      perfect: cls.kids.length > 0 && completed === cls.kids.length,
+      perfect: classIsPerfect(completed, cls.kids.length),
       roll: false,
     }
     if (!canSeeClassRoll(readDemoStaff(), { classId: cls.id, schoolId: school.id })) return summary
     const rows = cls.kids.map((kid) => {
-      const q = quotaFor(kid.grade, dataMonth, kid.ladder)
-      const said = saidOf(kid, dataMonth, year)
-      const met = metAt(kid, dataMonth, year)
-      return { id: kid.id, name: kid.name, ladder: kid.ladder, goal: q?.v ?? 0, goalLabel: q?.k ?? '—', said, met }
+      const snap = kapSnapshot(kid, dataMonth, year, first)
+      return {
+        id: kid.id,
+        name: kid.name,
+        ladder: kid.ladder,
+        goal: snap.quota,
+        originalGoal: snap.originalQuota,
+        goalLabel: quotaLabelFor(kid, dataMonth, snap.quota, snap.quotaAdjusted, first),
+        said: snap.said,
+        met: snap.met,
+        quotaAdjusted: snap.quotaAdjusted,
+      }
     })
     return { ...summary, roll: true, rows }
   }
@@ -816,26 +1009,262 @@ export async function setSchoolDedication(schoolId, text) {
   invalidate()
   return schoolDedication(schoolId)
 }
+export async function setSchoolYearStart(schoolId, firstMonth) {
+  if (!IS_DEMO) return mashpia.setSchoolYearStart({ schoolId, firstMonth })
+  setSchoolYearStartStore(schoolId, firstMonth)
+  invalidate()
+  return { ok: true, schoolId, firstMonth: schoolYearStart(schoolId), gradeEnds: null }
+}
+
 export function removeSchoolDedication(schoolId) {
   setSchoolDedicationStore(schoolId, null)
   invalidate()
   return null
 }
 
-// Who hasn't completed this month, per class — drives the teacher deadline email.
+function demoStaffCanOverride(schoolId) {
+  return overrideAccessStatus(readDemoStaff(), schoolId) === 200
+}
+
+function writeDemoAudit(action, kid, year, month, detail) {
+  const staff = readDemoStaff()
+  pushAudit({
+    action,
+    actorId: staff?.username || staff?.name || 'staff',
+    actorName: staff?.name || 'Staff',
+    userId: kid.id,
+    year,
+    month,
+    detail,
+    createdAt: new Date().toISOString(),
+  })
+}
+
+// Set this month's quota to the kapitlach the soldier entered. Next month and
+// the ladder are untouched. A commander of another school is refused.
+export async function overrideQuota({ kidId, year, month, reason }) {
+  if (!IS_DEMO) return mashpia.overrideQuota({ kidId, year, month, reason })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  const y = year || CAMPAIGN_YEAR
+  const mo = month || CURRENT_MONTH
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only override soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const snap = kapSnapshot(found.kid, mo, y)
+  if (snap.quotaAdjusted) {
+    const error = new Error('That month already has an override. Undo it first.')
+    error.status = 409
+    throw error
+  }
+  if (!snap.reported || snap.said <= 0 || snap.quota <= 0 || snap.said >= snap.quota) {
+    const error = new Error('This soldier is not under quota for that month.')
+    error.status = 422
+    throw error
+  }
+  const staff = readDemoStaff()
+  const when = new Date().toISOString()
+  const rows = loadOverrides()
+  rows.push({
+    userId: found.kid.id,
+    year: y,
+    month: mo,
+    originalQuota: snap.quota,
+    overriddenQuota: snap.said,
+    reason: String(reason || '').trim() || null,
+    createdBy: staff?.username || null,
+    createdByName: staff?.name || null,
+    createdAt: when,
+    undoneAt: null,
+  })
+  saveOverrides(rows)
+  writeDemoAudit('quota_override', found.kid, y, mo, `Quota ${snap.quota} overridden to ${snap.said} for ${mo} ${y}`)
+  invalidate()
+  return { ok: true, userId: found.kid.id, year: y, month: mo, originalQuota: snap.quota, quota: snap.said, met: true, quotaAdjusted: true }
+}
+
+export async function undoQuotaOverride({ kidId, year, month }) {
+  if (!IS_DEMO) return mashpia.undoQuotaOverride({ kidId, year, month })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  const y = year || CAMPAIGN_YEAR
+  const mo = month || CURRENT_MONTH
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only override soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const rows = loadOverrides()
+  const hit = rows.find((row) => String(row.userId) === String(kidId) && String(row.year) === String(y) && row.month === mo && !row.undoneAt)
+  if (!hit) {
+    const error = new Error('That month does not have an override.')
+    error.status = 404
+    throw error
+  }
+  hit.undoneAt = new Date().toISOString()
+  hit.undoneBy = readDemoStaff()?.username || null
+  saveOverrides(rows)
+  writeDemoAudit('quota_override_undo', found.kid, y, mo, `Override removed for ${mo} ${y}`)
+  invalidate()
+  return { ok: true, userId: found.kid.id, year: y, month: mo, quotaAdjusted: false }
+}
+
+// Soldiers in this school, for the custom-ladder picker. Names stay admin-only.
+export async function listCustomLadderSoldiers(schoolId) {
+  if (!IS_DEMO) return mashpia.listCustomLadderSoldiers(schoolId)
+  if (!demoStaffCanOverride(schoolId)) {
+    const error = new Error('You can only set a custom ladder for soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const school = ROSTER.find((s) => String(s.id) === String(schoolId))
+  if (!school) return { schoolId, month: CURRENT_MONTH, year: Number(CAMPAIGN_YEAR), soldiers: [] }
+  const soldiers = []
+  for (const cls of school.classes) {
+    for (const kid of cls.kids) {
+      const cell = ladderCell(kid, CURRENT_MONTH)
+      const custom = activeCustomLadder(kid.id)
+      soldiers.push({
+        id: kid.id,
+        name: kid.name,
+        classId: cls.id,
+        className: cls.name,
+        grade: kid.grade,
+        ladder: kid.ladder,
+        month: CURRENT_MONTH,
+        currentKapitlach: cell?.v ?? 0,
+        currentMinutes: cell?.m ?? 0,
+        customLadder: custom?.grid ?? null,
+      })
+    }
+  }
+  return { schoolId, month: CURRENT_MONTH, year: Number(CAMPAIGN_YEAR), soldiers }
+}
+
+export async function setCustomLadder({ kidId, targetKapitlach, finishGrade, reason }) {
+  if (!IS_DEMO) return mashpia.setCustomLadder({ kidId, targetKapitlach, finishGrade, reason })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only set a custom ladder for soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const cell = ladderCell(found.kid, CURRENT_MONTH)
+  let grid
+  try {
+    grid = generateCustomLadder({
+      targetKapitlach,
+      finishGrade,
+      anchor: {
+        grade: found.kid.grade,
+        month: CURRENT_MONTH,
+        kapitlach: cell?.v ?? 0,
+        minutes: cell?.m ?? 0,
+      },
+    })
+  } catch (e) {
+    e.status = 422
+    throw e
+  }
+  const when = new Date().toISOString()
+  const staff = readDemoStaff()
+  const rows = loadCustomLadders()
+  for (const row of rows) {
+    if (String(row.userId) === String(kidId) && !row.removedAt) {
+      row.removedAt = when
+      row.removedBy = staff?.username || null
+    }
+  }
+  const note = String(reason || '').trim() || null
+  rows.push({
+    userId: found.kid.id,
+    grid,
+    reason: note,
+    createdBy: staff?.username || null,
+    createdAt: when,
+    removedAt: null,
+  })
+  saveCustomLadders(rows)
+  writeDemoAudit(
+    'custom_ladder_set',
+    found.kid,
+    CAMPAIGN_YEAR,
+    CURRENT_MONTH,
+    `Custom ladder: finish ${grid.targetKapitlach} kapitlach by ${grid.finishLabel}`,
+  )
+  invalidate()
+  return { ok: true, userId: found.kid.id, customLadder: grid }
+}
+
+export async function removeCustomLadder({ kidId }) {
+  if (!IS_DEMO) return mashpia.removeCustomLadder({ kidId })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only set a custom ladder for soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const rows = loadCustomLadders()
+  const hit = rows.find((row) => String(row.userId) === String(kidId) && !row.removedAt)
+  if (!hit) {
+    const error = new Error('That soldier does not have a custom ladder.')
+    error.status = 404
+    throw error
+  }
+  const when = new Date().toISOString()
+  hit.removedAt = when
+  hit.removedBy = readDemoStaff()?.username || null
+  saveCustomLadders(rows)
+  writeDemoAudit('custom_ladder_remove', found.kid, CAMPAIGN_YEAR, CURRENT_MONTH, 'Custom ladder removed')
+  invalidate()
+  return { ok: true, userId: found.kid.id, customLadder: null }
+}
+
+// Who hasn't finished this month, per class. `missing` is every incomplete
+// name (older clients). `under` reported something and are short. `notFilled`
+// reported nothing. Same split as wwtcNotifyKidStatus.
 export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
   if (!IS_DEMO) return mashpia.getNotCompleted(schoolId)
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)
-  return school.classes
-    .map((cls) => ({
-      classId: cls.id,
-      className: cls.name,
-      size: cls.kids.length,
-      missing: cls.kids.filter((k) => !metQuota(k, month)).map((k) => k.name),
-    }))
+  const first = schoolYearStart(school.id)
+  const rows = school.classes
+    .map((cls) => {
+      const kids = cls.kids.map((k) => {
+        const snap = kapSnapshot(k, month, CAMPAIGN_YEAR, first)
+        return { name: k.name, said: snap.said, quota: snap.quota }
+      })
+      return {
+        classId: cls.id,
+        className: formatClassName(cls.name),
+        grade: cls.grade,
+        size: cls.kids.length,
+        ...splitIncompleteNames(kids),
+      }
+    })
     .filter((c) => c.missing.length > 0)
+  return sortClasses(rows)
 }
 
 // Site language. One call for Hebrew, Russian, Italian, and French

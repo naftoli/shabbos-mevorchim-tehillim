@@ -9,6 +9,7 @@ import { IS_DEMO } from '@/lib/liveMode.js'
 import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
 import { defaultChatReply } from '@/lib/defaultChat.js'
 import { NO_MATCH_REPLY } from '@/lib/siteSearch.js'
@@ -16,7 +17,6 @@ import { decideLadderChange, transcriptOffersLadder } from '@/lib/ladderTool.js'
 import { connectRealtimeCall } from '@/lib/realtimeCall.js'
 import { realtimeWanted } from '@/lib/realtimeOptIn.js'
 import { asset } from '@/lib/asset.js'
-import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 import { resetCues } from '@/lib/commanderBus.js'
 import {
   TRAINING_NOT_NOW,
@@ -64,7 +64,7 @@ function aiContext(ctx) {
       : null,
     missionsTotal: ctx.progress?.missionsTotal ?? 0,
     medal: medal ? { current: medal.current?.name ?? null, next: medal.next?.name ?? null, missionsToNext: medal.missionsToNext ?? null } : null,
-    rank: s ? { className: s.className, classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
+    rank: s ? { className: formatClassName(s.className), classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
     streak: ctx.streakInfo ?? null,
     scripts: scriptPayload(ctx.commanderScripts),
     scriptNow: Array.isArray(ctx.scriptNow) ? ctx.scriptNow : [],
@@ -182,7 +182,7 @@ function buildReply(text, ctx) {
   if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard', 'winning', 'first place', 'who is ahead', 'who won', 'am i first')) {
     if (!social) return `Every time you say your Tehillim, you lift your whole class and school up! 🏆`
     const tail = social.classRank === 1 ? `Your class is in first place — amazing!` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every child counts — keep saying your Tehillim!`
-    return `Your class ${social.className} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
+    return `Your class ${formatClassName(social.className)} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
   }
   // --- perfect platoon ---
   if (has('perfect platoon', 'platoon')) {
@@ -285,9 +285,6 @@ export default function ChatBuddy() {
   const [openedFor, setOpenedFor] = useState(null)
   const [trackOpen, setTrackOpen] = useState(false)
   const [climbOpen, setClimbOpen] = useState(false)
-  const [commanderPref, setCommanderPref] = useState(() => {
-    try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
-  })
   const kidId = kid?.id ?? null
   const greetedId = useRef(null)
   const [trackedKid, setTrackedKid] = useState(kidId)
@@ -355,8 +352,9 @@ export default function ChatBuddy() {
       childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
       monthEn,
+      yearStart: progress.yearStart || kid.yearStart || 'Tishrei',
       focusLadder,
-      ladderChoices: ladderMenu(kid.grade, monthEn),
+      ladderChoices: ladderMenu(kid.grade, monthEn, progress.yearStart || kid.yearStart || 'Tishrei'),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
@@ -372,14 +370,16 @@ export default function ChatBuddy() {
   const chayolName = (kid?.name || '').trim().split(/\s+/)[0] || null
   const storedScripts = readKidScripts(typeof localStorage === 'undefined' ? null : localStorage, kidId, monthKey)
   const streaks = progress ? streakFromMissions(streakMissions(progress)) : null
-  const quota = ctx?.ladder != null && ctx?.grade != null && monthKey
-    ? missionQuota(ctx.grade, monthKey, ctx.ladder)
+  const quota = ctx?.grade != null && monthKey && (ctx?.ladder != null || progress?.customLadder)
+    ? missionQuota(ctx.grade, monthKey, ctx.ladder, progress?.customLadder, ctx?.yearStart)
     : { kapitlach: null, minutes: null }
   const facts = standFacts(social)
   const scriptInput = {
     name: chayolName,
     ladder: ctx?.ladder,
-    gradeLabel: ctx?.ladder != null ? trainByGrade(ctx.ladder) : null,
+    gradeLabel: progress?.customLadder?.finishLabel || (ctx?.ladder != null ? trainByGrade(ctx.ladder) : null),
+    customTarget: progress?.customLadder?.targetKapitlach ?? null,
+    customFinish: progress?.customLadder?.finishLabel ?? null,
     month: monthKey,
     cardsOnScreen: pathname === '/ladders',
     training: storedScripts.training,
@@ -411,6 +411,8 @@ export default function ChatBuddy() {
     streaks ? `${streaks.current}|${streaks.best}` : '',
     quota.kapitlach ?? '',
     quota.minutes ?? '',
+    progress?.customLadder?.targetKapitlach ?? '',
+    progress?.customLadder?.finishGrade ?? '',
     trackOpen ? 'track' : '',
     climbOpen ? 'climb' : '',
   ].join('~')
@@ -429,7 +431,7 @@ export default function ChatBuddy() {
   if (ctx && ctx.situation !== 'pick' && focusLadder != null) {
     setFocusLadder(null)
   }
-  const autoOpen = autoOpenFor(openedFor, kidId, commanderPref === 'on' ? 'on' : 'off')
+  const autoOpen = autoOpenFor(openedFor, kidId)
   if (autoOpen) {
     setOpenedFor(autoOpen.openedFor)
     setOpen(autoOpen.open)
@@ -1098,11 +1100,11 @@ export default function ChatBuddy() {
         openRef.current = true
         setOpen(true)
       }
-      if (force || openRef.current || commanderPref === 'on') say(text)
+      if (force || openRef.current) say(text)
     }
     window.addEventListener('wwtc-cue', onCue)
     return () => window.removeEventListener('wwtc-cue', onCue)
-  }, [say, commanderPref])
+  }, [say])
 
   if (!kid) return null
   const peekLine = dueNow[0]?.text?.split('\n').find((line) => line.trim()) || (ctx ? peekText(ctx) : '')
@@ -1110,8 +1112,7 @@ export default function ChatBuddy() {
   const shownGreeting = pinnedGreeting?.id === kid.id && pinnedGreeting.situation === 'pick'
     ? pinnedGreeting.text
     : greeting
-  const asking = commanderPref === 'ask'
-  const showPeek = !open && !peekClosed && pathname === '/me' && (asking || !!peek)
+  const showPeek = !open && !peekClosed && pathname === '/me' && !!peek
   const micOk = canListen()
   // The opening greeting is a derived first bubble (not seeded into state), so the
   // panel shows it without a set-state-in-effect; the real conversation follows.
@@ -1138,16 +1139,8 @@ export default function ChatBuddy() {
                 <Avatar size="h-7 w-7" text="text-base" />
                 <span className="font-display text-[14px] font-black text-navy">{BOT_NAME}</span>
               </span>
-              {asking ? (
-                <span className="block">
-                  Want your virtual commander to pop up when you sign in?
-                  <span className="mt-2 flex gap-2">
-                    <button type="button" className="rounded-full bg-navy px-3 py-1 text-sm text-white" onClick={(e) => { e.stopPropagation(); try { localStorage.setItem('wwtc.commander.auto', 'on') } catch { /* ignore */ } setCommanderPref('on'); openPanel() }}>Yes</button>
-                    <button type="button" className="rounded-full bg-track px-3 py-1 text-sm text-navy" onClick={(e) => { e.stopPropagation(); try { localStorage.setItem('wwtc.commander.auto', 'off') } catch { /* ignore */ } setCommanderPref('off'); setPeekClosed(true) }}>Not now</button>
-                  </span>
-                </span>
-              ) : peek}
-              {asking ? null : <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>}
+              {peek}
+              <span className="mt-2 block font-semibold text-blue">Tap to chat →</span>
             </button>
           </div>
         </div>

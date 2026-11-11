@@ -96,7 +96,11 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
   if (response.status === 401 && as) endSession(as)
   const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
-    throw new Error(payload?.error || `Request failed (${response.status}).`)
+    const error = new Error(payload?.error || `Request failed (${response.status}).`)
+    error.status = response.status
+    error.code = payload?.code
+    error.threshold = payload?.threshold
+    throw error
   }
   // A 2xx with an unparseable (e.g. empty) body means the server died after its
   // headers went out; surface it as a clear error rather than returning null and
@@ -224,9 +228,13 @@ export const recordMonth = (kapitlach, minutes, extra = {}) =>
       kapitlach,
       minutes,
       ...(extra?.exceptionalConfirmed ? { exceptionalConfirmed: true } : {}),
+      ...(extra?.flagConfirmed ? { flagConfirmed: true } : {}),
     },
     as: 'kid',
   })
+export const getFlagQueue = () => req('/admin/flags', { as: 'admin' })
+export const reviewFlag = (id, action) =>
+  write(`/admin/flags/${id}/${action}`, { method: 'POST', as: 'admin' })
 export const setDedication = async ({ scope, schoolId, text, year, month }) => {
   const data = await write('/dedication', { method: 'PUT', body: { scope, schoolId, text, year, month }, as: 'admin' })
   return data?.dedication ?? null
@@ -240,6 +248,20 @@ export const setKidLadder = (ladder) =>
 export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
   write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
 
-// Public. No bearer token: page copy only, never a session, serial, or password.
-export const translatePage = (targetLang, content) =>
-  req('/translate', { method: 'POST', body: { targetLang, content } })
+export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
+
+export const overrideQuota = ({ kidId, year, month, reason }) =>
+  write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
+
+export const listCustomLadderSoldiers = (schoolId) =>
+  req(`/admin/custom-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setCustomLadder = ({ kidId, targetKapitlach, finishGrade, reason }) =>
+  write('/admin/custom-ladder', { method: 'POST', body: { kidId, targetKapitlach, finishGrade, reason }, as: 'admin' })
+
+export const removeCustomLadder = ({ kidId }) =>
+  write('/admin/custom-ladder/remove', { method: 'POST', body: { kidId }, as: 'admin' })
+
+export const undoQuotaOverride = ({ kidId, year, month }) =>
+  write('/admin/quota-override/undo', { method: 'POST', body: { kidId, year, month }, as: 'admin' })

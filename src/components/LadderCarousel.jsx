@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react'
 import { availableLadders, finishGrade, GRADE_LABEL, QUOTA } from '@/data/ladders.js'
+import { DEFAULT_FIRST_MONTH, gradeEndSheetMonth } from '@/lib/schoolYear.js'
 import LadderBreakdown from './LadderBreakdown.jsx'
 import { CrownIcon } from '@/components/ui.jsx'
 
-// Kapitel reached by the END of each grade (Elul), for the whole ladder —
-// always from Pre-1A up to the grade the child finishes the whole Tehillim.
-function ladderJourney(ladder) {
+// Kapitel reached by the END of each grade, for the whole ladder — always
+// from Pre-1A up to the grade the child finishes the whole Tehillim. The
+// end of the grade is position 12, which reads the Elul quota cell.
+function ladderJourney(ladder, yearStart = DEFAULT_FIRST_MONTH) {
+  const endSheet = gradeEndSheetMonth(yearStart)
   const rows = []
   const grades = ['pre1a']
   for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
   for (const key of grades) {
-    const cell = QUOTA[key]?.Elul?.[ladder]
+    const cell = QUOTA[key]?.[endSheet]?.[ladder]
     if (!cell) continue
     rows.push({ gradeLabel: GRADE_LABEL[key], k: cell.k, v: cell.v, finish: cell.v >= 150 })
   }
@@ -27,8 +30,8 @@ function Chevron({ dir }) {
   )
 }
 
-function LadderCard({ ladder, active, onPick, onBreakdown, preview, height }) {
-  const rows = useMemo(() => ladderJourney(ladder), [ladder])
+function LadderCard({ ladder, active, onPick, onBreakdown, preview, height, yearStart }) {
+  const rows = useMemo(() => ladderJourney(ladder, yearStart), [ladder, yearStart])
   const accent = ACCENTS[(ladder - 1) % ACCENTS.length]
   const clickable = preview && active
   return (
@@ -83,7 +86,7 @@ function LadderCard({ ladder, active, onPick, onBreakdown, preview, height }) {
   )
 }
 
-export default function LadderCarousel({ grade, defaultLadder = 8, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255 }) {
+export default function LadderCarousel({ grade, defaultLadder = 8, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
   const ladders = useMemo(() => availableLadders(grade), [grade])
   const preferred = ladders.indexOf(defaultLadder)
   const [active, setActive] = useState(preferred >= 0 ? preferred : Math.floor(ladders.length / 2))
@@ -117,7 +120,7 @@ export default function LadderCarousel({ grade, defaultLadder = 8, onPick, previ
                 pointerEvents: preview ? 'none' : center ? 'auto' : 'none',
               }}
             >
-              <LadderCard ladder={L} active={center} onPick={onPick} onBreakdown={setBreakdown} preview={preview} height={height} />
+              <LadderCard ladder={L} active={center} onPick={onPick} onBreakdown={setBreakdown} preview={preview} height={height} yearStart={firstMonth} />
             </div>
           )
         })}
@@ -146,7 +149,7 @@ export default function LadderCarousel({ grade, defaultLadder = 8, onPick, previ
         </div>
       ) : null}
 
-      {breakdown != null ? <LadderBreakdown ladder={breakdown} onClose={() => setBreakdown(null)} /> : null}
+      {breakdown != null ? <LadderBreakdown ladder={breakdown} year={year} firstMonth={firstMonth} anchorMonth={anchorMonth} onClose={() => setBreakdown(null)} /> : null}
     </div>
   )
 }

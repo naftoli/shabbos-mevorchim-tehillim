@@ -6,6 +6,8 @@ import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
+import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
+import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
 import {
   getSchools,
   getSchool,
@@ -14,12 +16,20 @@ import {
   adminSetLadder,
   notCompleted,
   setSchoolDedication,
+  setSchoolYearStart,
   removeSchoolDedication,
   getHqVerify,
   getArmyDedication,
   setArmyDedication,
+  getFlagQueue,
+  reviewFlag,
   CURRENT_MONTH,
 } from '@/services/api.js'
+import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
+import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
+import ClassName from '@/components/ClassName.jsx'
+import { formatClassName } from '@/lib/formatClassName.js'
+import CustomLadderTool from '@/components/CustomLadderTool.jsx'
 
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
@@ -53,6 +63,57 @@ function HqTools() {
         <Button variant="navy" className="mt-2" onClick={async () => { await setArmyDedication(text); setSavedNote('Saved for this month.'); reloadDedication() }}>Save dedication</Button>
         {savedNote ? <p className="mt-2 text-sm text-green">{savedNote}</p> : null}
       </div>
+    </Card>
+  )
+}
+
+// The month the school's first Shabbos Mevorchim blesses. Tishrei is today's
+// year (grade ends Elul). Shvat means Mevorchim Shvat is quota position 1
+// and the grade ends in Teves. HQ and that school's admin only — this page
+// is already limited to them.
+function SchoolYearSetting({ school, onSaved }) {
+  // Nothing saved (no yearStart on the school) is Tishrei, already selected.
+  const saved = firstMonthFromRow(school)
+  const [month, setMonth] = useState(saved)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  async function save() {
+    setBusy(true)
+    setNote('')
+    try {
+      await setSchoolYearStart(school.id, month)
+      setNote(`Saved. The grade year ends in ${gradeEndMonth(month)}.`)
+      onSaved()
+    } catch (e) {
+      setNote(e?.message || 'Could not save the school year.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Card className="p-5 sm:p-6">
+      <p className="sh">School year starts in</p>
+      <p className="mt-1 text-sm text-muted">
+        The first Shabbos Mevorchim of the grade year. <span className="font-heb">{MONTH_HEB[month]}</span> is quota position 1.
+        The grade ends in {gradeEndMonth(month)}.
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="w-full text-sm sm:w-auto">
+          <span className="mb-1 block font-semibold text-navy">First month</span>
+          <select
+            aria-label="School year starts in"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
+          >
+            {PLAIN_MONTHS.map((name) => (
+              <option key={name} value={name}>{name} · {MONTH_HEB[name]}</option>
+            ))}
+          </select>
+        </label>
+        <Button variant="navy" onClick={save} disabled={busy || month === saved}>{busy ? 'Saving…' : 'Save'}</Button>
+      </div>
+      {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
     </Card>
   )
 }
@@ -160,7 +221,7 @@ function LadderSetter({ schoolId, classes }) {
             className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
           >
             <option value="">Whole school</option>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {classes.map((c) => <option key={c.id} value={c.id}>{formatClassName(c.name)}</option>)}
           </select>
         </label>
 
@@ -201,6 +262,157 @@ function LadderSetter({ schoolId, classes }) {
   )
 }
 
+function FlagQueue({ schoolId, all, actorName }) {
+  const { data, error, reload } = useLiveData(() => getFlagQueue({ schoolId, all }), [schoolId, all])
+  const [busy, setBusy] = useState(null)
+  const [note, setNote] = useState('')
+  async function decide(id, action) {
+    setBusy(`${id}:${action}`)
+    setNote('')
+    try {
+      await reviewFlag(id, action, actorName)
+      setNote(action === 'accept'
+        ? 'Accepted. It counts now.'
+        : 'Removed. The soldier is back to the earlier value, or not counted for the month.')
+      reload()
+    } catch (e) {
+      setNote(e?.message || 'Could not save that decision.')
+    } finally {
+      setBusy(null)
+    }
+  }
+  const pending = data?.pending ?? []
+  const recent = data?.recent ?? []
+  return (
+    <Card className="p-5 sm:p-6">
+      <div data-flag-queue>
+      <p className="sh">Flagged reports</p>
+      <p className="mt-1 text-sm text-muted">
+        These amounts do not count in totals, ranks, Perfect Platoon, or medals until you accept them.
+        Remove voids the entry and puts the soldier back to the value they had before, or to not counted for the month.
+      </p>
+      {error ? <p className="mt-3 text-sm text-navy">Couldn’t load the queue. <button type="button" className="underline" onClick={reload}>Try again</button></p> : null}
+      {!data && !error ? <p className="mt-3 text-sm text-muted">Getting flagged reports…</p> : null}
+      {data && pending.length === 0 ? <p className="mt-3 text-sm font-semibold text-green">No flagged reports waiting.</p> : null}
+      {pending.length > 0 ? (
+        <>
+          <ul className="mt-4 space-y-3 sm:hidden">
+            {pending.map((row) => (
+              <li key={row.id} className="rounded-xl border border-line p-3">
+                <p className="font-semibold text-navy">{row.kidName}</p>
+                <p className="text-sm text-muted"><ClassName name={row.className} />{all ? ` · ${row.schoolName}` : ''}</p>
+                <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div><dt className="text-xs uppercase text-muted">Amount</dt><dd className="font-semibold text-navy">{amountLabel(row)}</dd></div>
+                  <div><dt className="text-xs uppercase text-muted">Threshold</dt><dd className="text-navy">above {thresholdLabel(row)}</dd></div>
+                  <div className="col-span-2"><dt className="text-xs uppercase text-muted">Date</dt><dd className="text-navy">{formatFlagWhen(row.createdAt)}</dd></div>
+                </dl>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button type="button" variant="navy" className="min-h-11" disabled={busy != null} onClick={() => decide(row.id, 'accept')}>{busy === `${row.id}:accept` ? 'Saving…' : 'Accept'}</Button>
+                  <Button type="button" variant="outline" className="min-h-11" disabled={busy != null} onClick={() => decide(row.id, 'remove')}>{busy === `${row.id}:remove` ? 'Saving…' : 'Remove'}</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead>
+                <tr className="bg-track/60 text-muted">
+                  <th className="px-3 py-2 font-cond uppercase">Kid</th>
+                  <th className="px-3 py-2 font-cond uppercase">Class</th>
+                  {all ? <th className="px-3 py-2 font-cond uppercase">Base</th> : null}
+                  <th className="px-3 py-2 font-cond uppercase">Amount</th>
+                  <th className="px-3 py-2 font-cond uppercase">Threshold</th>
+                  <th className="px-3 py-2 font-cond uppercase">Date</th>
+                  <th className="px-3 py-2 font-cond uppercase">Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((row) => (
+                  <tr key={row.id} className="border-t border-line">
+                    <td className="px-3 py-2 font-semibold text-navy">{row.kidName}</td>
+                    <td className="px-3 py-2"><ClassName name={row.className} /></td>
+                    {all ? <td className="px-3 py-2">{row.schoolName}</td> : null}
+                    <td className="px-3 py-2">{amountLabel(row)}</td>
+                    <td className="px-3 py-2">above {thresholdLabel(row)}</td>
+                    <td className="px-3 py-2">{formatFlagWhen(row.createdAt)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <Button type="button" variant="navy" className="!px-3 !py-1 !text-sm" disabled={busy != null} onClick={() => decide(row.id, 'accept')}>Accept</Button>
+                        <Button type="button" variant="outline" className="!px-3 !py-1 !text-sm" disabled={busy != null} onClick={() => decide(row.id, 'remove')}>Remove</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+      {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
+      {recent.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-sm font-semibold text-navy">Recent decisions</p>
+          <ul className="mt-2 space-y-1 text-sm text-muted">
+            {recent.slice(0, 8).map((row) => {
+              const last = row.decisions?.[row.decisions.length - 1]
+              const verb = last?.action === 'accepted' ? 'Accepted' : 'Removed'
+              return (
+                <li key={`${row.id}-${last?.at || 'decision'}`}>
+                  {verb} {row.kidName}
+                  {last?.actorName ? ` · ${last.actorName}` : ''}
+                  {last?.at ? ` · ${formatFlagWhen(last.at, true)}` : ''}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
+      </div>
+    </Card>
+  )
+}
+
+function NotDoneList({ classes }) {
+  const view = notDoneView(classes)
+  if (view.empty) {
+    return <p className="mt-4 font-semibold text-green">Every soldier has completed this month — all Perfect Platoons! 🎉</p>
+  }
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-sm font-semibold text-navy">{view.summary}</p>
+      {view.sections.map((section) => (
+        <section key={section.title} className="rounded-xl bg-track/40 p-3">
+          <h4 className="font-display text-lg font-black text-navy">{section.title}</h4>
+          <p className="text-sm font-semibold text-navy">{section.phrase}</p>
+          {section.classes.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">None</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {section.classes.map((cls) => (
+                <div key={cls.classId} className="rounded-lg bg-white px-3 py-2">
+                  <p className="text-navy">
+                    <span className="text-sm font-normal text-muted">Class: </span>
+                    <bdi dir="auto" className="font-bold">{formatClassName(cls.className)}</bdi>
+                  </p>
+                  {cls.size > 0 ? <p className="mt-1 text-sm text-muted">{cls.size} soldiers</p> : null}
+                  <p className="mt-1 text-sm text-navy">{cls.phrase}</p>
+                  <ul className="mt-1 space-y-0.5 text-sm text-muted">
+                    {cls.names.map((name, i) => (
+                      <li key={`${cls.classId}-${i}`}>
+                        <bdi dir="auto">{name}</bdi>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
   const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools() : Promise.resolve([])), [isSuper])
@@ -232,6 +444,8 @@ export default function AdminDashboard() {
             <Button variant="ghost" className="!px-3 !text-[15px] max-sm:min-h-11" onClick={logoutAdmin}>Sign out</Button>
           </div>
         </div>
+
+        <FlagQueue schoolId={isSuper ? null : admin.schoolId} all={!!isSuper} actorName={admin.name} />
 
         {isSuper ? <HqTools /> : null}
 
@@ -289,11 +503,15 @@ export default function AdminDashboard() {
               <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
             </Card>
 
+            <SchoolYearSetting key={school.id} school={school} onSaved={reloadSchool} />
+
             {/* Dedication — add / edit / remove */}
             <DedicationEditor school={school} onSaved={reloadSchool} />
 
             {/* Set a school / class / child onto a ladder */}
             <LadderSetter schoolId={school.id} classes={base?.rows ?? []} />
+
+            <CustomLadderTool schoolId={school.id} />
 
             {/* Base report */}
             <Card className="overflow-hidden">
@@ -301,7 +519,7 @@ export default function AdminDashboard() {
               <ul className="divide-y divide-line sm:hidden">
                 {(base?.rows ?? []).map((c) => (
                   <li key={c.id} className="px-4 py-3">
-                    <p className="font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</p>
+                    <p className="font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</p>
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                       <div><dt className="text-xs uppercase text-muted">Soldiers</dt><dd className="tabular-nums text-navy">{c.size}</dd></div>
                       <div><dt className="text-xs uppercase text-muted">Goal</dt><dd className="tabular-nums text-navy">{fmt(c.goal)}</dd></div>
@@ -323,7 +541,7 @@ export default function AdminDashboard() {
                 <tbody>
                   {(base?.rows ?? []).map((c) => (
                     <tr key={c.id} className="border-t border-line">
-                      <td className="px-4 py-2 font-semibold text-navy">{c.name} {c.perfect ? '★' : ''}</td>
+                      <td className="px-4 py-2 font-semibold text-navy"><ClassName name={c.name} /> {c.perfect ? '★' : ''}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{c.size}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{fmt(c.goal)}</td>
                       <td className="px-4 py-2 text-right font-bold tabular-nums text-green">{fmt(c.accomplished)}</td>
@@ -337,25 +555,16 @@ export default function AdminDashboard() {
 
             {/* Teacher deadline email */}
             <Card className="p-5 sm:p-6">
+              <div id="not-done-yet">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="sh">Teacher Deadline Email</p>
-                  <h3 className="font-display text-xl font-black text-navy">Who still needs to finish — {CURRENT_MONTH}</h3>
+                  <h3 className="font-display text-xl font-black text-navy">{notDoneHeading(CURRENT_MONTH)}</h3>
                 </div>
                 <Button variant="gold">✉ Send to teachers</Button>
               </div>
-              {missing.length === 0 ? (
-                <p className="mt-4 font-semibold text-green">Every soldier has completed this month — all Perfect Platoons! 🎉</p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {missing.map((c) => (
-                    <div key={c.classId} className="rounded-xl bg-track/40 p-3">
-                      <p className="font-semibold text-navy">{c.className} <span className="font-normal text-muted">— {c.missing.length} of {c.size} not done</span></p>
-                      <p className="mt-1 text-sm text-muted">{c.missing.join(', ')}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <NotDoneList classes={missing} />
+              </div>
             </Card>
           </>
         )}

@@ -7,6 +7,11 @@ import { getPerfectPlatoons, getSchool, CURRENT_MONTH } from '@/services/api.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
+import { platoonKey } from '@/lib/perfectPlatoons.js'
+import { displayClassName, formatClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
+import ClassName from '@/components/ClassName.jsx'
+import { PerfectPlatoonLogo } from '@/components/brandMarks.jsx'
 
 // Every perfect platoon this month — the full, searchable list behind the
 // "+N more" buttons. A perfect platoon is a class where every single soldier
@@ -28,14 +33,18 @@ export default function PerfectPlatoons() {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const filtered = useMemo(
-    () => (q ? all.filter((p) => `${p.className} ${perSchool ? '' : p.school} ${p.teacher || ''}`.toLowerCase().includes(q)) : all),
+    () => (q ? all.filter((p) => `${p.className} ${formatClassName(p.className)} ${perSchool ? '' : p.school} ${teacherName(p.teacher)}`.toLowerCase().includes(q)) : all),
     [all, q, perSchool],
   )
   const stillLoading = loading && platoonsData == null
 
   return (
     <>
-      <PageHero eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'} title="Perfect Platoons">
+      <PageHero
+        mark={<PerfectPlatoonLogo className="h-20 w-auto sm:h-28" />}
+        eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'}
+        title="Perfect Platoons"
+      >
         A platoon is a class — and it’s <span className="font-semibold text-white">perfect</span> when
         every single soldier in it finished their full quota of kapitlach this month
         {perSchool && schoolName ? <> at {schoolName}</> : null}.
@@ -73,19 +82,22 @@ export default function PerfectPlatoons() {
 
             {filtered.length ? (
               <div className="flex flex-wrap gap-2">
-                {filtered.map((p) => (
-                  <Link
-                    key={`${p.schoolId}-${p.className}`}
-                    to={`/s/${p.schoolId}`}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
-                    title={`${p.className}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}
-                  >
-                    <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
-                    <span className="font-display font-bold text-navy">{p.className}</span>
-                    {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
-                    {perSchool ? null : <span className="text-navy/55">· {p.school}</span>}
-                  </Link>
-                ))}
+                {filtered.map((p) => {
+                  const teacher = teacherName(p.teacher)
+                  return (
+                    <Link
+                      key={platoonKey(p)}
+                      to={`/s/${p.schoolId}`}
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
+                      title={`${displayClassName(p.className)}${teacher ? ' · ' + teacher : ''} · ${p.size} soldiers`}
+                    >
+                      <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
+                      <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
+                      {teacher ? <span className="text-green">· {teacher}</span> : null}
+                      {perSchool ? null : <span className="text-navy/55">· {p.school}</span>}
+                    </Link>
+                  )
+                })}
               </div>
             ) : (
               <p className="font-display text-[16px] italic text-muted">No perfect platoons match “{query}”.</p>

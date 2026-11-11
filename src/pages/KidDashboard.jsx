@@ -13,12 +13,16 @@ import StreakBar from '@/components/StreakBar.jsx'
 import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
+import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
+import { cellFor, formatKapitlachQuota, gradesThrough } from '@/lib/customLadder.js'
+import { DEFAULT_FIRST_MONTH, quotaForSchool, quotaSheetMonth } from '@/lib/schoolYear.js'
+import { isHebrewLeapYear } from '@/lib/hebrewYear.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
+import { OVER_ENTRY_CONFIRM, OVER_ENTRY_NO, OVER_ENTRY_YES, planReport } from '@/lib/overEntry.js'
 import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
 import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
@@ -26,10 +30,10 @@ import { earliestMedalWhen } from '@/lib/medalWhen.js'
 import { streakFromMissions } from '@/lib/streaks.js'
 import { STREAK_COPY } from '@/lib/streakBar.js'
 import { streakMissions } from '@/lib/trainingBoard.js'
+import ClassName from '@/components/ClassName.jsx'
 import { ladderAdvice } from '@/lib/ladderAdvice.js'
 import { IconImg, Pending } from '@/components/campaignBits.jsx'
 import PerfectPlatoonBanner from '@/components/PerfectPlatoonBanner.jsx'
-import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 
 // Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
 // component identity across renders.
@@ -76,32 +80,43 @@ export default function KidDashboard() {
   )
 
   const cur = progress?.current
+  const yearStart = progress?.yearStart || kid?.yearStart || DEFAULT_FIRST_MONTH
   const sMevorchim = useMemo(() => nextShabbosMevorchim(), [])
   // Climb position comes from the same ladder table as "Your Ladder" (grade +
   // month + ladder → cumulative kapitel). Do not use progress.months[].quota —
   // that is the DB date_tasks quantity, which can disagree when user_tracks.level
   // is out of sync with the child's grade (e.g. level 10 → 11 kapitlach while
   // Ladder 9 in 6th grade is 73/74).
+  const customLadder = progress?.customLadder || null
   const reached = useMemo(() => {
-    if (!progress?.months || !kid?.ladder) return 0
+    if (!progress?.months || (!kid?.ladder && !progress.customLadder)) return 0
     return progress.months.reduce((mx, m) => {
       if (!m.met) return mx
-      const v = quotaFor(kid.grade, m.month, kid.ladder)?.v ?? 0
+      // An overridden month counts the kapitlach they actually entered.
+      // Otherwise a custom ladder replaces the normal ladder. Cheshvan on a
+      // normal ladder is repriced from today's ladder table.
+      const v = m.quotaAdjusted
+        ? (Number(m.quota) || 0)
+        : (progress.customLadder
+          ? (cellFor(progress.customLadder, kid.grade, quotaSheetMonth(m.month, yearStart))?.v ?? 0)
+          : (quotaForSchool(kid.grade, m.month, kid.ladder, yearStart)?.v ?? 0))
       return Math.max(mx, Number(v) || 0)
     }, 0)
-  }, [progress, kid?.grade, kid?.ladder])
-  const climbTarget = cur && kid?.ladder
-    ? (quotaFor(kid.grade, cur.month, kid.ladder)?.v ?? 0)
+  }, [progress, kid, yearStart])
+  const climbTarget = cur
+    ? (cur.quotaAdjusted
+      ? (Number(cur.quota) || 0)
+      : (customLadder
+        ? (cellFor(customLadder, kid.grade, quotaSheetMonth(cur.month, yearStart))?.v ?? 0)
+        : (kid?.ladder ? (quotaForSchool(kid.grade, cur.month, kid.ladder, yearStart)?.v ?? 0) : 0)))
     : 0
   const [said, setSaid] = useState('')
   const [mins, setMins] = useState('')
   const [confirming, setConfirming] = useState(null)
   const [notice, setNotice] = useState('')
+  const [noticeTone, setNoticeTone] = useState('ok')
   const [declined, setDeclined] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`wwtc.ladderInvite.${kid?.id}`) || 'null') } catch { return null }
-  })
-  const [commanderAuto, setCommanderAuto] = useState(() => {
-    try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
   })
   // General 613 walks a new soldier through the ladder out loud. Don't also
   // pop the ladder modal over him; the button below still opens it.
@@ -123,7 +138,7 @@ export default function KidDashboard() {
     // Logged in but progress is still loading (or failed) — don't bounce to login.
     return (
       <>
-        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={progressError ? 'Couldn’t load your Tehillim' : kid.name}>
+        <PageHero eyebrow="My Tehillim · this year" title={progressError ? 'Couldn’t load your Tehillim' : kid.name}>
           {progressError ? 'Something went wrong. Please try again.' : <Pending label="Getting your Tehillim" />}
         </PageHero>
         <div className="mx-auto max-w-2xl px-4 py-10 text-center sm:px-6">
@@ -136,10 +151,10 @@ export default function KidDashboard() {
 
   // First login, or no valid ladder yet: graphic welcome + a prompt to choose.
   // (An out-of-range ladder — e.g. a stale value — counts as not chosen.)
-  if (!kid.ladder || !LADDERS.includes(kid.ladder)) {
+  if ((!kid.ladder || !LADDERS.includes(kid.ladder)) && !progress.customLadder) {
     return (
       <>
-        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={`Welcome, ${kid.name.split(' ')[0]}!`}>
+        <PageHero eyebrow="My Tehillim · this year" title={`Welcome, ${kid.name.split(' ')[0]}!`}>
           Let’s get you started — pick your ladder and you’re on your way up.
         </PageHero>
         <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -164,7 +179,7 @@ export default function KidDashboard() {
   }
 
   const streaks = streakFromMissions(streakMissions(progress))
-  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR))
+  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR), yearStart)
   let earnedOn = null
   {
     const medal = progress.medal?.current
@@ -174,7 +189,7 @@ export default function KidDashboard() {
       else {
         for (const month of progress.months || []) {
           if (month.met) count += 1
-          if (count >= medal.threshold) { earnedOn = `${month.month} ${CAMPAIGN_YEAR}`; break }
+          if (count >= medal.threshold) { earnedOn = `${month.month} this year`; break }
         }
       }
     }
@@ -185,6 +200,8 @@ export default function KidDashboard() {
     months: progress.months,
     missionsTotal: progress.missionsTotal,
     declined,
+    openFlag: progress.flagged,
+    firstMonth: yearStart,
   })
   const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
   if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
@@ -200,18 +217,54 @@ export default function KidDashboard() {
     const beforeMedal = progress.medal?.current?.name || null
     const kap = Number(said) || 0
     const minutes = Number(mins) || 0
-    const over = isAboveQuota({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    const plan = planReport({
+      grade: kid.grade,
+      kapitlach: kap,
+      minutes,
+      quotaKap: cur.quota,
+      quotaMin: cur.minutes,
+      flagConfirmed: !!extra.flagConfirmed,
+    })
+    // Past the grade line: the serious confirm, and the server will flag it.
+    // A smaller over-quota amount keeps the gentle “is that correct?” check.
+    if (plan.action === 'confirm') {
+      setConfirming({ kind: 'flag', kap, minutes, threshold: plan.line })
+      return
+    }
+    const over = plan.action === 'save' && isAboveQuota({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
     if (over && !extra.confirmed) {
-      setConfirming({ kap, minutes })
+      setConfirming({ kind: 'quota', kap, minutes })
       emitCue(`above-${cur.month}-${kap}`, cueAboveQuota(kap))
       return
     }
-    const exceptional = extra.confirmed && isExceptional({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
-    const prog = await recordMonth(kid.id, cur.month, kap, minutes, exceptional ? { exceptionalConfirmed: true } : {})
+    const exceptional = plan.action === 'save' && extra.confirmed && isExceptional({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    let prog
+    try {
+      prog = await recordMonth(kid.id, cur.month, kap, minutes, {
+        ...(exceptional ? { exceptionalConfirmed: true } : {}),
+        ...(plan.action === 'flag' ? { flagConfirmed: true } : {}),
+      })
+    } catch (err) {
+      if (err?.code === 'over_entry') {
+        setConfirming({ kind: 'flag', kap, minutes, threshold: err.threshold || plan.line })
+        return
+      }
+      setNoticeTone('warn')
+      setNotice(err?.message || 'Could not save your report. Please try again.')
+      return
+    }
     setConfirming(null)
     reloadProgress()
     reloadSocial()
+    if (prog?.flagged?.status === 'flagged') {
+      setSaid(prog.current?.said ? String(prog.current.said) : '')
+      setMins(prog.current?.saidMinutes ? String(prog.current.saidMinutes) : '')
+      setNoticeTone('warn')
+      setNotice('Saved as flagged. It does not count yet — your base commander and HQ will review it.')
+      return
+    }
     if (extra.confirmed) {
+      setNoticeTone('ok')
       setNotice(cueAboveConfirmed())
       emitCue(`above-yes-${cur.month}`, cueAboveConfirmed())
     }
@@ -224,6 +277,7 @@ export default function KidDashboard() {
       emitCue(`medal-${nextMedal}`, cueMedalEarned(nextMedal, prog.medal.current.threshold, prog.medal.next?.name, prog.medal.next?.threshold, earnBy))
     }
     if (prog?.exceptional) {
+      setNoticeTone('ok')
       setNotice(prog.exceptional.emailed
         ? 'Saved. Your mashpia will get a note so they can celebrate this with you.'
         : 'Saved. Your mashpia should confirm a report this large. The email is waiting on WWTC_MASHPIA_EMAIL.')
@@ -236,7 +290,7 @@ export default function KidDashboard() {
       <section className="hero-navy">
         <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6">
           <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · {CAMPAIGN_YEAR}</p>
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · this year</p>
             <button onClick={logoutKid} className="min-h-11 rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/10 sm:min-h-0">Sign out</button>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -245,7 +299,7 @@ export default function KidDashboard() {
               <Avatar name={kid.name} src={kid.photoUrl || progress.photoUrl} size={72} className="ring-2 ring-white/50" />
               <div className="min-w-0 flex-1">
                 <h1 className="font-display text-3xl font-black leading-none text-white md:text-4xl">{kid.name}</h1>
-                <p className="mt-1.5 leading-snug text-white/80">{kid.className} · {kid.schoolName}</p>
+                <p className="mt-1.5 leading-snug text-white/80"><ClassName name={kid.className} /> · {kid.schoolName}</p>
                 {progress.rank ? <p className="mt-1 text-sm font-semibold text-gold">Rank · {progress.rank}</p> : null}
               </div>
             </div>
@@ -284,7 +338,7 @@ export default function KidDashboard() {
               <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#c3b1d6" opacity=".9" />
             </svg>
             <p className="relative text-center font-cond text-sm uppercase tracking-[0.14em] text-gold">You are reporting for</p>
-            <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">{CAMPAIGN_YEAR}</span></p>
+            <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">this year</span></p>
             <div className="relative mt-5 grid grid-cols-2 gap-4 text-center">
               {[
                 ['design/icon-book.webp', 420, 280, 'Kapitlach', cur.quota, 'kapitlach'],
@@ -312,13 +366,26 @@ export default function KidDashboard() {
               <p className="mb-4 text-center text-sm text-muted">Tell us what you said — it’s counted for your class, school and army.</p>
             )}
             {switched ? <p className="mb-3 text-center text-sm font-semibold text-navy">Signed out of the last soldier. You’re signed in as {kid.name.split(' ')[0]}.</p> : null}
-            {notice ? <p className="mb-3 text-center text-sm font-semibold text-green">{notice}</p> : null}
-            {confirming ? (
+            {notice ? <p className={`mb-3 text-center text-sm font-semibold ${noticeTone === 'warn' ? 'text-navy' : 'text-green'}`}>{notice}</p> : null}
+            {progress.flagged?.status === 'flagged' ? (
+              <p className="mb-3 text-center text-sm font-semibold text-navy">
+                {progress.flagged.kapitlach} kapitlach{progress.flagged.minutes ? ` and ${progress.flagged.minutes} minutes` : ''} {progress.flagged.month ? <>for <span className="font-heb">{MONTH_HEB[progress.flagged.month] ?? progress.flagged.month}</span> </> : null}is flagged for review. It does not count yet.
+              </p>
+            ) : null}
+            {confirming?.kind === 'flag' ? (
+              <div data-over-entry-confirm className="mb-4 rounded-2xl border border-gold bg-gold/15 p-4 text-center">
+                <p className="font-display text-lg font-black leading-snug text-navy">{OVER_ENTRY_CONFIRM}</p>
+                <div className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
+                  <Button type="button" variant="navy" className="min-h-11" onClick={() => saveReport({ flagConfirmed: true })}>{OVER_ENTRY_YES}</Button>
+                  <Button type="button" variant="outline" className="min-h-11" onClick={() => setConfirming(null)}>{OVER_ENTRY_NO}</Button>
+                </div>
+              </div>
+            ) : confirming ? (
               <div className="mb-4 rounded-2xl bg-gold/15 p-4 text-center">
                 <p className="font-display text-lg font-black text-navy">{cueAboveQuota(confirming.kap)}</p>
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
-                  <Button variant="navy" onClick={() => saveReport({ confirmed: true })}>Yes, that’s correct</Button>
-                  <Button variant="outline" onClick={() => { setConfirming(null); setNotice(cueAboveFixed()); emitCue(`fix-${cur.month}`, cueAboveFixed()) }}>I’ll correct it</Button>
+                  <Button type="button" variant="navy" onClick={() => saveReport({ confirmed: true })}>Yes, that’s correct</Button>
+                  <Button type="button" variant="outline" onClick={() => { setConfirming(null); setNoticeTone('ok'); setNotice(cueAboveFixed()); emitCue(`fix-${cur.month}`, cueAboveFixed()) }}>I’ll correct it</Button>
                 </div>
               </div>
             ) : null}
@@ -337,26 +404,22 @@ export default function KidDashboard() {
                 </p>
               </div>
             )}
-            <div className="mt-5">
-              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {LADDERS.map((L) => {
-                  const cell = quotaFor(kid.grade, cur.month, L)
-                  const allowed = cell != null
-                  const mine = Number(kid.ladder) === L
-                  return (
-                    <div key={L} className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center leading-tight ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
-                      <div className="text-[11px] font-bold sm:text-xs">Ladder {L}</div>
-                      <div className="font-heb text-[13px] sm:text-sm">{cell?.k || '—'}</div>
-                      <div className="text-[11px] sm:text-xs">{cell ? `${cell.m} Min` : 'not for your grade'}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
             {/* Progress — kapitlach + minutes, laid out like the worldwide card */}
-            <div className="mt-8 space-y-7">
+            {progress.customLadder ? (
+              <p className="mt-5 text-center text-sm font-semibold text-navy">
+                Custom ladder · finish {fmt(progress.customLadder.targetKapitlach)} kapitlach by {progress.customLadder.finishLabel}
+                {!cur.quotaAdjusted ? (
+                  <>
+                    {' '}· this month{' '}
+                    <span className={formatKapitlachQuota(cur.quota).overTehillim ? '' : 'font-heb'}>
+                      {formatKapitlachQuota(cur.quota).label}
+                    </span>
+                    {formatKapitlachQuota(cur.quota).overTehillim ? ` (${fmt(cur.quota)})` : null}
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            <div className={`${progress.customLadder ? 'mt-3' : 'mt-5'} space-y-7`}>
               <div>
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
                   <div>
@@ -384,6 +447,24 @@ export default function KidDashboard() {
                   <p className="ml-auto font-display text-2xl font-black tabular-nums text-green">{cur.minutes > 0 ? Math.round((cur.saidMinutes / cur.minutes) * 100) : 0}%</p>
                 </div>
                 <GoalBar percent={cur.minutes > 0 ? (cur.saidMinutes / cur.minutes) * 100 : 0} iconSrc={asset('design/icon-clock.png')} className="mt-4" />
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted">This month’s ladders for you · yours is highlighted</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {LADDERS.map((L) => {
+                  const cell = quotaForSchool(kid.grade, cur.month, L, yearStart)
+                  const allowed = cell != null
+                  const mine = Number(kid.ladder) === L
+                  return (
+                    <div key={L} className={`min-w-0 rounded-xl px-0.5 py-1.5 text-center leading-tight ${mine ? 'bg-green text-white' : allowed ? 'bg-track text-navy' : 'bg-track/40 text-muted'}`}>
+                      <div className="text-[11px] font-bold sm:text-xs">Ladder {L}</div>
+                      <div className="font-heb text-[13px] sm:text-sm">{cell?.k || '—'}</div>
+                      <div className="text-[11px] sm:text-xs">{cell ? `${cell.m} Min` : 'not for your grade'}</div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -449,7 +530,7 @@ export default function KidDashboard() {
 
         {advice ? (
           <Card className="p-5 sm:p-6">
-            <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler()}</p>
+            <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler(advice.ladder)}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="navy" onClick={() => changeLadder(advice.ladder)}>Yes, Ladder {advice.ladder}</Button>
               <Button variant="outline" onClick={() => {
@@ -462,7 +543,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
 
         <MedalBoard
           progress={progress}
@@ -477,29 +558,29 @@ export default function KidDashboard() {
             <div>
               <p className="sh">Your Ladder</p>
               <h3 className="font-display text-xl font-black text-navy">
-                Ladder {kid.ladder}
-                <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+                {progress.customLadder ? (
+                  <>
+                    Custom ladder
+                    <span className="font-normal text-muted"> — finish {fmt(progress.customLadder.targetKapitlach)} kapitlach by {progress.customLadder.finishLabel}</span>
+                  </>
+                ) : (
+                  <>
+                    Ladder {kid.ladder}
+                    <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
+                  </>
+                )}
               </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
-              <label className="flex items-center gap-2 text-sm font-semibold text-navy">
-                <input type="checkbox" checked={commanderAuto === 'on'} onChange={(e) => {
-                  const next = e.target.checked ? 'on' : 'off'
-                  setCommanderAuto(next)
-                  try { localStorage.setItem('wwtc.commander.auto', next) } catch { /* ignore */ }
-                }} />
-                Pop up my commander when I sign in
-              </label>
-            </div>
+            <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
-            <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} />
+            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} firstMonth={yearStart} anchorMonth={cur.month} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
             <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
+            {isHebrewLeapYear(CAMPAIGN_YEAR) ? ' Adar I and Adar II each use the Adar quota.' : ''}
           </p>
         </Card>
 
@@ -508,11 +589,19 @@ export default function KidDashboard() {
           <ClimbMeter
             reached={reached}
             target={climbTarget}
-            ladder={kid.ladder}
-            finishGradeLabel={GRADE_LABEL[String(finishGrade(kid.ladder))]}
+            ladder={progress.customLadder ? null : kid.ladder}
+            total={progress.customLadder?.targetKapitlach}
+            marks={progress.customLadder ? gradesThrough(progress.customLadder.finishGrade, kid.grade).map((g) => {
+              const cell = cellFor(progress.customLadder, g, 'Elul')
+              if (!cell) return null
+              const shown = formatKapitlachQuota(cell.v)
+              return { grade: g, v: cell.v, heb: shown.overTehillim ? shown.short : toHebrewNumeral(cell.v) }
+            }).filter(Boolean) : null}
+            finishGradeLabel={progress.customLadder?.finishLabel || GRADE_LABEL[String(finishGrade(kid.ladder))]}
             gender={kid.gender || progress.gender}
+            yearStart={yearStart}
             onOpen={() => {
-              const text = fillClimb(trainByGrade(kid.ladder))
+              const text = fillClimb(progress.customLadder?.finishLabel || trainByGrade(kid.ladder))
               if (text) emitCue(`climb-${kid.id}`, text, { force: true })
             }}
           />

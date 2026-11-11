@@ -42,15 +42,26 @@ export const ABOVE_QUOTA_METRIC = 'both'
  * D16. After the chayol confirms, a report at or above either threshold is
  * "exceptional": email the mashpia. Minutes are a flat cap. Kapitlach are a
  * multiple of that chayol's own quota (so a quota of 2 does not email at 3).
+ *
+ * Amounts past the grade line are a different path. Those are flagged and do
+ * not count until a base commander or HQ accepts them. The numbers live in
+ * api/over-entry.json (see src/lib/overEntry.js). This email is only for a
+ * high report that is still inside that line.
  */
 export const EXCEPTIONAL_MINUTES = 180
 export const EXCEPTIONAL_KAPITEL_MULTIPLE = 3
 
 /**
- * D24. Months in a row at a more demanding ladder before an invitation.
- * A lower ladder number is the more demanding path. The ladder never changes
- * by itself. After a decline, wait this many further completed missions.
- * This many recorded misses in a row may suggest a gentler ladder.
+ * D24. Months in a row before a ladder invitation. The ladder never changes
+ * by itself. A lower ladder number is the more demanding path (up).
+ * After a decline, wait this many further completed missions.
+ *
+ * Up (LADDER_INVITE_MONTHS): that many recent recorded months in a row at or
+ * above the next ladder's quota — more than the ladder they are on.
+ * Down (GENTLER_LADDER_MISSES): that many recent recorded months in a row
+ * short of their ladder, when what they actually said is closer to the next
+ * gentler ladder than to the one they are on. One step only.
+ * 3 matches the upward invite, so both directions wait for the same run.
  */
 export const LADDER_INVITE_MONTHS = 3
 export const LADDER_REENGAGE_MISSIONS = 3
@@ -123,9 +134,6 @@ export function canSeeClassRoll(viewer, scope = {}) {
   }
   return false
 }
-
-/** D1. 'ask' shows an opt-in. 'on' opens the commander. 'off' stays quiet. */
-export const COMMANDER_AUTO_DEFAULT = 'ask'
 
 /**
  * Voices. Marin stays the default and the girl commander.

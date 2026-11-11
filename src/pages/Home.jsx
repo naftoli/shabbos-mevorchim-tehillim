@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getGlobalStats,
@@ -17,8 +17,15 @@ import { useLiveData } from '@/lib/useLiveData.js'
 import { Button, Card, SchoolLogo, Input } from '@/components/ui.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
 import { IconImg, QuotaReached, RaceToggle, StarMark, Pending } from '@/components/campaignBits.jsx'
+import { PerfectPlatoonLogo, TopBaseBadge } from '@/components/brandMarks.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { CAMPAIGN_MARK, MONTH_CHOOSER } from '@/lib/decisions.js'
+import { baseRanks } from '@/lib/baseRank.js'
+import { PERFECT_PLATOON_ART } from '@/lib/perfectPlatoonBanner.js'
+import { groupPlatoonsBySchool, platoonKey } from '@/lib/perfectPlatoons.js'
+import { displayClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
+import ClassName from '@/components/ClassName.jsx'
 
 const CAMPAIGN_ICON = CAMPAIGN_MARK === 'target' ? 'design/icon-target.png' : 'design/flag.png'
 
@@ -46,10 +53,10 @@ function Eyebrow({ icon, iconClass = 'h-5', className = '', children }) {
   )
 }
 
-function Stat({ value, label, icon, hint }) {
+function Stat({ value, label, icon, hint, iconBox = 'h-[60px] w-[72px] lg:h-[76px] lg:w-[92px]' }) {
   return (
     <div className="flex items-center gap-3 sm:gap-4">
-      <span className="grid h-[60px] w-[72px] flex-none place-items-center lg:h-[76px] lg:w-[92px]">
+      <span className={`grid flex-none place-items-center ${iconBox}`}>
         <img src={icon} alt="" aria-hidden="true" draggable="false" className="max-h-full max-w-full object-contain" />
       </span>
       <div className="min-w-0">
@@ -113,17 +120,20 @@ function SchoolsRace({ schools }) {
   )
 }
 
-function SchoolCard({ s, color }) {
+function SchoolCard({ s, color, rank }) {
   return (
     <Link to={`/s/${s.id}`} className="group block">
       <Card className="h-full transition group-hover:-translate-y-[3px] group-hover:shadow-hover">
         <div className="flex items-start gap-3 px-5 pt-5">
           <SchoolLogo school={{ ...s, color }} size={48} />
           <div className="min-w-0 flex-1">
-            <h3 className="font-display text-xl font-bold leading-tight text-navy">{s.name}</h3>
+            <div className="flex items-start gap-2">
+              <h3 className="min-w-0 flex-1 break-words font-display text-xl font-bold leading-tight text-navy">{s.name}</h3>
+              <TopBaseBadge rank={rank} className="h-16 w-auto shrink-0 sm:h-20" />
+            </div>
             <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.1em] text-green">{s.city}</p>
+            {s.pct >= 100 ? <div className="mt-2"><QuotaReached /></div> : null}
           </div>
-          {s.pct >= 100 ? <QuotaReached /> : null}
         </div>
         <div className="space-y-3 px-5 pb-5 pt-4">
           <div className="flex items-start gap-3">
@@ -172,31 +182,13 @@ export default function Home() {
 
   const schools = schoolsData ?? []
   const platoons = platoonsData ?? []
+  const rankById = useMemo(() => baseRanks(schoolsData ?? []), [schoolsData])
   const [openSchool, setOpenSchool] = useState(null)
   const [teacherSchool, setTeacherSchool] = useState(null)
   const [platoonVisible, setPlatoonVisible] = useState(PLATOON_PAGE)
   const [platoonsExpanded, setPlatoonsExpanded] = useState(false)
   const schoolById = Object.fromEntries(schools.map((s) => [s.id, s]))
-  const platoonGroups = []
-  {
-    const seen = new Map()
-    for (const p of platoons) {
-      let group = seen.get(p.schoolId)
-      if (!group) {
-        group = { schoolId: p.schoolId, school: p.school, items: [], schoolClasses: p.schoolClasses || 0, schoolSaid: p.schoolSaid || 0 }
-        seen.set(p.schoolId, group)
-        platoonGroups.push(group)
-      }
-      group.items.push(p)
-      group.schoolClasses = Math.max(group.schoolClasses, p.schoolClasses || 0)
-      group.schoolSaid = p.schoolSaid || group.schoolSaid
-    }
-    platoonGroups.sort((a, b) => {
-      const ap = a.schoolClasses ? a.items.length / a.schoolClasses : 0
-      const bp = b.schoolClasses ? b.items.length / b.schoolClasses : 0
-      return bp - ap || (b.schoolSaid || 0) - (a.schoolSaid || 0) || a.school.localeCompare(b.school)
-    })
-  }
+  const platoonGroups = groupPlatoonsBySchool(platoons)
   const shownGroups = platoonsExpanded ? platoonGroups : platoonGroups.slice(0, platoonVisible)
   const q = query.trim().toLowerCase()
   const filtered = schools.filter(
@@ -268,7 +260,7 @@ export default function Home() {
                 ))}
               </div>
               <Eyebrow icon={asset(CAMPAIGN_ICON)} iconClass="h-6 sm:h-7" className="mt-3">
-                Army Report: <span className="font-heb">{MONTH_HEB[monthLabel] || monthLabel}</span> {year}
+                Army Report: <span className="font-heb">{MONTH_HEB[monthLabel] || monthLabel}</span> this year
               </Eyebrow>
             </div>
             {stats?.pct >= 100 ? <QuotaReached /> : null}
@@ -289,7 +281,7 @@ export default function Home() {
 
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:mt-10 lg:gap-8">
             <Stat icon={asset('design/icon-school-building.png')} value={stats ? fmt(stats.schools) : '…'} label="Schools" />
-            <Stat icon={asset('design/icon-platoon.webp')} value={stats ? fmt(stats.perfectPlatoons) : '…'} label="Perfect Platoons" hint="Classes where every single soldier finished their full quota of kapitlach" />
+            <Stat icon={asset(PERFECT_PLATOON_ART)} iconBox="h-[76px] w-[60px] lg:h-[96px] lg:w-[76px]" value={stats ? fmt(stats.perfectPlatoons) : '…'} label="Perfect Platoons" hint="Classes where every single soldier finished their full quota of kapitlach" />
           </div>
         </Card>
       </section>
@@ -299,10 +291,10 @@ export default function Home() {
         <p className="sh mb-3">Kapitlach Said</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
-            { value: totals?.thisYear, label: year, sub: 'this year', heb: true, emoji: '📖' },
-            { value: totals?.allTime, label: 'All-Time', sub: 'every year', heb: false, emoji: '🌍' },
+            { value: totals?.thisYear, label: 'this year', emoji: '📖' },
+            { value: totals?.allTime, label: 'Since 5778', emoji: '🌍' },
           ].map((c) => (
-            <Card key={c.sub} className="relative overflow-hidden p-5 sm:p-6">
+            <Card key={c.label} className="relative overflow-hidden p-5 sm:p-6">
               <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{c.emoji}</span>
               <div className="relative flex items-center gap-4">
                 <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
@@ -310,8 +302,7 @@ export default function Home() {
                   <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">
                     {c.value != null ? fmt(c.value) : (totalsLoading ? '…' : '—')}
                   </div>
-                  <div className={`mt-1.5 text-sm font-semibold uppercase tracking-wide text-green ${c.heb ? 'font-heb text-base' : ''}`}>{c.label}</div>
-                  <div className="text-xs text-muted">{c.sub}</div>
+                  <div className="mt-1.5 text-sm font-semibold uppercase tracking-wide text-green">{c.label}</div>
                 </div>
               </div>
             </Card>
@@ -337,12 +328,15 @@ export default function Home() {
       ) : platoonGroups.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
           <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
-                Perfect Platoons · <span className="font-heb">{MONTH_HEB[monthLabel]}</span>
-              </h2>
-              <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(platoons.length)} this month</span>
-              <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm max-sm:!min-h-11" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
+            <div className="flex items-start gap-3">
+              <PerfectPlatoonLogo className="mt-0.5 h-12 w-auto sm:h-16" />
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
+                  Perfect Platoons · <span className="font-heb">{MONTH_HEB[monthLabel]}</span>
+                </h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(platoons.length)} this month</span>
+                <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm max-sm:!min-h-11" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
+              </div>
             </div>
             <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
               A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.
@@ -351,7 +345,7 @@ export default function Home() {
               {shownGroups.map((g) => {
                 const open = platoonsExpanded || openSchool === g.schoolId
                 const showingTeacher = teacherSchool === g.schoolId
-                const teachers = [...new Set(g.items.map((p) => p.teacher).filter(Boolean))]
+                const teachers = [...new Set(g.items.map((p) => teacherName(p.teacher)).filter(Boolean))]
                 const school = schoolById[g.schoolId] || { name: g.school, color: '#268ecd' }
                 const total = g.schoolClasses || g.items.length
                 return (
@@ -373,18 +367,21 @@ export default function Home() {
                     </button>
                     {open ? (
                       <div className="flex flex-wrap gap-2 px-3 pb-3 pl-16">
-                        {g.items.map((p) => (
-                          <Link
-                            key={`${p.schoolId}-${p.className}`}
-                            to={`/s/${p.schoolId}`}
-                            className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
-                            title={`${p.className} · ${p.teacher || p.school} · ${p.size} soldiers`}
-                          >
-                            <StarMark className="h-4 w-4 flex-none" />
-                            <span className="font-display font-bold text-navy">{p.className}</span>
-                            {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
-                          </Link>
-                        ))}
+                        {g.items.map((p) => {
+                          const teacher = teacherName(p.teacher)
+                          return (
+                            <Link
+                              key={platoonKey(p)}
+                              to={`/s/${p.schoolId}`}
+                              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
+                              title={`${displayClassName(p.className)} · ${teacher || p.school} · ${p.size} soldiers`}
+                            >
+                              <StarMark className="h-4 w-4 flex-none" />
+                              <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
+                              {teacher ? <span className="text-green">· {teacher}</span> : null}
+                            </Link>
+                          )
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -403,7 +400,7 @@ export default function Home() {
       {dedication?.text ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-8 sm:px-6 lg:px-10">
           <Card className="border-l-4 border-gold p-5 sm:p-6">
-            <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[dedication.month] || MONTH_HEB[monthLabel]}</span> {dedication.year || year}</p>
+            <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[dedication.month] || MONTH_HEB[monthLabel]}</span> this year</p>
             <p className="mt-1 font-display text-lg italic text-navy">{dedication.text}</p>
           </Card>
         </section>
@@ -426,7 +423,7 @@ export default function Home() {
           <Pending label="Getting the bases" />
         ) : filtered.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((s, i) => <SchoolCard key={s.id} s={s} color={SCHOOL_COLORS[i % SCHOOL_COLORS.length]} />)}
+            {filtered.map((s, i) => <SchoolCard key={s.id} s={s} rank={rankById.get(String(s.id))} color={SCHOOL_COLORS[i % SCHOOL_COLORS.length]} />)}
           </div>
         ) : (
           <p className="font-display text-[16px] italic text-muted">No schools match “{query}”.</p>

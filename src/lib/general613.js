@@ -6,7 +6,8 @@
 // A lower ladder number is more challenging. An easier step goes to a
 // higher number (ladder 12 is the gentlest).
 
-import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { availableLadders, GRADE_LABEL } from '../data/ladders.js'
+import { quotaForSchool } from './schoolYear.js'
 import { cueAheadOne, cueMissed, cueMissedFresh, cueNewMonth, cueWelcome } from './commanderCues.js'
 
 export const BOT_NAME = 'Your Virtual Commander'
@@ -14,10 +15,9 @@ export const BOT_NAME = 'Your Virtual Commander'
 // Open the panel once each time a soldier signs in. A later page change keeps
 // the same kid id, so a panel they closed stays closed. Logout clears it.
 // `null` means leave the panel as it is.
-export function autoOpenFor(openedFor, kidId, preference = 'on') {
+export function autoOpenFor(openedFor, kidId) {
   if (!kidId) return openedFor == null ? null : { openedFor: null, open: false }
   if (openedFor === kidId) return null
-  if (preference !== 'on') return { openedFor: kidId, open: false }
   return { openedFor: kidId, open: true }
 }
 
@@ -52,8 +52,8 @@ export function quotaWords(q) {
   return `${kapitlach} and ${amount(q.m, 'minute', 'minutes')}`
 }
 
-export function quotaPhrase(grade, month, ladder) {
-  return quotaWords(quotaFor(grade, month, ladder))
+export function quotaPhrase(grade, month, ladder, firstMonth = 'Tishrei') {
+  return quotaWords(quotaForSchool(grade, month, ladder, firstMonth))
 }
 
 function gradeWords(grade) {
@@ -87,9 +87,9 @@ export function stepLadder(grade, from, direction) {
   return list[Math.max(0, i - 1)]
 }
 
-export function ladderMenu(grade, month) {
+export function ladderMenu(grade, month, firstMonth = 'Tishrei') {
   return availableLadders(grade).map((L) => {
-    const q = quotaFor(grade, month, L)
+    const q = quotaForSchool(grade, month, L, firstMonth)
     return { ladder: L, kapitlach: q?.v ?? null, minutes: q?.m ?? null }
   })
 }
@@ -111,7 +111,7 @@ function choicesParagraph(easy, hard) {
 // Step 2 of the walk: one ladder, this month, the real quota.
 export function ladderOffer(ctx, ladder) {
   const month = ctx?.monthEn || 'this month'
-  const words = quotaPhrase(ctx?.grade, ctx?.monthEn, ladder)
+  const words = quotaPhrase(ctx?.grade, ctx?.monthEn, ladder, ctx?.yearStart)
   const quota = words
     ? `So, if you take ladder ${ladder}, that would mean that your quota is ${words}.`
     : `So, if you take ladder ${ladder}, your page will show the kapitlach for that ladder.`
