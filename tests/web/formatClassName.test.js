@@ -82,6 +82,7 @@ test('class report labels are Hebrew letters, and odd names stay letters-only', 
   assert.equal(hebrewClassLabel('A', 1), 'אא')
   assert.equal(hebrewClassLabel('Bet', '1'), 'אב')
   assert.equal(hebrewClassLabel('1 א ב'), 'אב')
+  assert.equal(hebrewClassLabel('כיתה א', '2'), formatClassName('כיתה א'))
   assert.equal(hebrewClassLabel('Pre-1A', 'pre1a'), formatClassName('Pre-1A'))
   assert.equal(hebrewClassLabel('Pre-1A A', 'pre1a'), formatClassName('Pre-1A A'))
   assert.equal(hebrewClassLabel('9 Tes Tes', '9'), formatClassName('9 Tes Tes'))

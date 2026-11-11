@@ -83,7 +83,9 @@ function gradeNumber(grade) {
 
 function sectionHebrew(token) {
   const bare = String(token).replace(QUOTES, '')
-  if (/^[\u05D0-\u05EA]$/.test(bare)) return bare
+  // Only the grade letters א–ח. A wider Hebrew name such as "כיתה א" is not
+  // this pattern and falls back to the letters-only label.
+  if (/^[\u05D0-\u05D7]$/.test(bare)) return bare
   return SECTION_HEBREW.get(bare.toLowerCase()) || ''
 }
 
