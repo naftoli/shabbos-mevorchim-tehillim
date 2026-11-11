@@ -57,3 +57,66 @@ export function displayClassName(name) {
 export function classNameIsHebrew(name) {
   return /[\u0590-\u05FF]/.test(formatClassName(name))
 }
+
+// Grade 1–8 and the section letter, Hebrew only. "1 Aleph Bet" -> "אב".
+// A single letter A–D is a section (A->א … D->ד), not a grade word, so the
+// grade argument still supplies א–ח. Pre-1A, grades 9–12, and any token that
+// is not one of these letters fall back to formatClassName.
+const HEBREW_LETTERS = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח']
+
+const SECTION_HEBREW = new Map([
+  ['aleph', 'א'], ['alef', 'א'], ['a', 'א'],
+  ['bet', 'ב'], ['beis', 'ב'], ['bais', 'ב'], ['b', 'ב'],
+  ['gimmel', 'ג'], ['gimel', 'ג'], ['c', 'ג'],
+  ['dalet', 'ד'], ['daled', 'ד'], ['d', 'ד'],
+  ['hei', 'ה'], ['hey', 'ה'],
+  ['vav', 'ו'],
+  ['zayin', 'ז'],
+  ['ches', 'ח'], ['chet', 'ח'],
+])
+
+function gradeNumber(grade) {
+  if (typeof grade === 'number' && Number.isInteger(grade) && grade >= 1 && grade <= 8) return grade
+  const match = String(grade ?? '').trim().toLowerCase().match(/^([1-8])(?:st|nd|rd|th)?$/)
+  return match ? Number(match[1]) : 0
+}
+
+function sectionHebrew(token) {
+  const bare = String(token).replace(QUOTES, '')
+  if (/^[\u05D0-\u05EA]$/.test(bare)) return bare
+  return SECTION_HEBREW.get(bare.toLowerCase()) || ''
+}
+
+export function hebrewClassLabel(name, grade) {
+  const fallback = formatClassName(name)
+  const original = name == null ? '' : String(name).trim()
+  const n = gradeNumber(grade)
+  if (!original) return n ? HEBREW_LETTERS[n] : fallback
+
+  const tokens = original.match(/[A-Za-z]+|[\u05D0-\u05EA]|[0-9]+/gu)
+  if (!tokens) return fallback
+
+  const letters = []
+  let sawNumber = false
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]
+    if (/^[1-8]$/.test(token)) {
+      sawNumber = true
+      const num = Number(token)
+      const next = tokens[i + 1]
+      // "1 Aleph …" already says the grade. Keep the letter, not א plus Aleph.
+      if (next && gradeOfToken(next) === num) continue
+      letters.push(HEBREW_LETTERS[num])
+      continue
+    }
+    if (/^\d+$/.test(token)) return fallback
+    const letter = sectionHebrew(token)
+    if (!letter) return fallback
+    letters.push(letter)
+  }
+  if (!letters.length) return fallback
+  // A name that is only a section ("Bet", grade 1) still needs the grade letter.
+  // A name that already starts with that grade's word ("Aleph Bet") does not.
+  if (n && !sawNumber && gradeOfToken(tokens[0]) !== n) letters.unshift(HEBREW_LETTERS[n])
+  return letters.join('')
+}

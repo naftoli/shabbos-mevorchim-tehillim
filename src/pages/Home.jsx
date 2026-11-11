@@ -21,7 +21,7 @@ import { IconImg, QuotaReached, RaceToggle, StarMark, Pending } from '@/componen
 import { PerfectPlatoonLogo, TopBaseBadge } from '@/components/brandMarks.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { CAMPAIGN_MARK, MONTH_CHOOSER } from '@/lib/decisions.js'
-import { baseRanks } from '@/lib/baseRank.js'
+import { baseRanks, compareBasesInAction } from '@/lib/baseRank.js'
 import { PERFECT_PLATOON_ART } from '@/lib/perfectPlatoonBanner.js'
 import { groupPlatoonsBySchool, platoonKey } from '@/lib/perfectPlatoons.js'
 import { displayClassName } from '@/lib/formatClassName.js'
@@ -128,13 +128,11 @@ function SchoolCard({ s, color, rank }) {
         <div className="flex items-start gap-3 px-5 pt-5">
           <SchoolLogo school={{ ...s, color }} size={48} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 break-words font-display text-xl font-bold leading-tight text-navy">{s.name}</h3>
-              <TopBaseBadge rank={rank} className="h-16 w-auto shrink-0 sm:h-20" />
-            </div>
-            <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.1em] text-green">{s.city}</p>
+            <h3 className="break-words font-display text-xl font-bold leading-tight text-navy">{s.name}</h3>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-green">{s.city}</p>
             {s.pct >= 100 ? <div className="mt-2"><QuotaReached /></div> : null}
           </div>
+          <TopBaseBadge rank={rank} className="h-10 w-auto shrink-0 sm:h-12" />
         </div>
         <div className="space-y-3 px-5 pb-5 pt-4">
           <div className="flex items-start gap-3">
@@ -232,10 +230,12 @@ export default function Home() {
   const schoolById = Object.fromEntries(schools.map((s) => [s.id, s]))
   const platoonGroups = groupPlatoonsBySchool(platoons)
   const shownGroups = platoonsExpanded ? platoonGroups : platoonGroups.slice(0, platoonVisible)
-  const q = query.trim().toLowerCase()
-  const filtered = schools.filter(
-    (s) => !q || s.name.toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q),
-  )
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return schools
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q))
+      .sort((a, b) => compareBasesInAction(a, b, rankById))
+  }, [schools, query, rankById])
 
   // Hero + shell render immediately; numbers fill in as each request lands so
   // the page never sits on a full-screen "Loading…" while the army aggregates.
@@ -375,15 +375,15 @@ export default function Home() {
       ) : platoonGroups.length ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-10 sm:px-6 lg:px-10">
           <Card className="rounded-[32px] p-5 sm:rounded-[40px] sm:p-10 lg:px-14">
-            <div className="flex items-start gap-3">
-              <PerfectPlatoonLogo className="mt-0.5 h-12 w-auto sm:h-16" />
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
-                <h2 className="font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <PerfectPlatoonLogo className="h-12 w-auto sm:h-16" />
+                <h2 className="min-w-0 font-display text-[24px] font-bold italic leading-tight text-navy sm:text-[30px]">
                   Perfect Platoons · <span className="font-heb">{MONTH_HEB[monthLabel]}</span>
                 </h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(platoons.length)} this month</span>
-                <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm max-sm:!min-h-11" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
               </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(platoons.length)} this month</span>
+              <button type="button" className="btn btn-o !px-3 !py-1.5 !text-sm max-sm:!min-h-11" onClick={() => setPlatoonsExpanded((v) => !v)}>{platoonsExpanded ? 'Close' : 'Expand all'}</button>
             </div>
             <p className="mb-4 mt-1 max-w-xl text-[13px] font-semibold text-muted">
               A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.

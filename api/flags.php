@@ -319,8 +319,11 @@ function wwtcFlagTasks(PDO $db, array $kid, int $date): array
 }
 
 /**
- * Accept or remove one flagged row and apply the counting mark that follows
+ * Accept or remove one row and apply the counting mark that follows
  * (the reviewed numbers, or the prior value / a cleared month).
+ * A flagged row can go either way. An accepted row can be removed and a
+ * removed row can be accepted. The mark, the status, and the decision log
+ * are one transaction. The cache is bumped after it commits.
  */
 function wwtcReviewStoredFlag(int $entryId, string $action, array $actor): array
 {
@@ -346,9 +349,10 @@ function wwtcReviewStoredFlag(int $entryId, string $action, array $actor): array
     try {
         $MASHPIA_DB->beginTransaction();
         $fresh = wwtcFlagById($entryId);
-        if (!$fresh || $fresh['status'] !== 'flagged') {
+        $plan = $fresh ? wwtcPlanReview($fresh, $action, $actor, gmdate('c')) : ['ok' => false, 'error' => 'This entry is not waiting for review.'];
+        if (!$plan['ok']) {
             $MASHPIA_DB->rollBack();
-            return ['ok' => false, 'status' => 409, 'error' => 'This entry is not waiting for review.'];
+            return ['ok' => false, 'status' => 409, 'error' => $plan['error']];
         }
         if (isset($tasks[WWTC_GRID_KAPITELACH])) {
             wwtcApplyMark($MASHPIA_DB, (int) $kid['user_id'], $date, $tasks[WWTC_GRID_KAPITELACH], (int) $plan['applyKapitlach'], true);

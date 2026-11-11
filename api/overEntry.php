@@ -172,10 +172,17 @@ function wwtcDecisionRecord(string $action, array $actor, string $at, $note = nu
  * Accept copies the flagged numbers into the counting mark.
  * Remove restores the prior mark, or clears it when there was none
  * (the soldier is not counted for the month).
+ * A flagged row can go either way. An accepted row can be changed to
+ * removed, and a removed row can be changed to accepted. Repeating the
+ * decision that is already on the row is refused.
  */
 function wwtcPlanReview(array $entry, string $action, array $actor, string $at): array
 {
-    if (($entry['status'] ?? '') !== 'flagged') {
+    $status = (string) ($entry['status'] ?? '');
+    $reversible = $status === 'flagged'
+        || ($status === 'accepted' && $action === 'remove')
+        || ($status === 'removed' && $action === 'accept');
+    if (!$reversible) {
         return ['ok' => false, 'error' => 'This entry is not waiting for review.'];
     }
     if ($action === 'accept') {

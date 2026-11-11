@@ -144,10 +144,18 @@ export function applySoldierReport(soldier, input) {
   return { error: null, plan, soldier }
 }
 
-/** Accept counts the flagged numbers. Remove restores the prior value, or clears the month. */
+/**
+ * Accept counts the flagged numbers. Remove restores the prior value, or clears the month.
+ * A flagged row can go either way. An accepted decision can be changed to removed,
+ * and a removed decision can be changed to accepted. The same decision twice is refused.
+ */
 export function reviewSoldier(soldier, action, actor, at) {
   const flag = soldier.flag
-  if (!flag || flag.status !== 'flagged') {
+  const status = flag?.status
+  const reversible = status === 'flagged'
+    || (status === 'accepted' && action === 'remove')
+    || (status === 'removed' && action === 'accept')
+  if (!flag || !reversible) {
     return { ok: false, error: 'This entry is not waiting for review.' }
   }
   const when = at || new Date().toISOString()

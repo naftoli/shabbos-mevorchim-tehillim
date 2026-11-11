@@ -151,11 +151,61 @@ test('remove voids the flagged amount and restores the prior value, or leaves th
   assert.equal(missionCounts(fresh, 'Cheshvan', 5), false)
 })
 
+test('an accepted decision can be removed and a removed decision can be accepted', () => {
+  const kid = { id: 's4', name: 'Dovid R.', reports: { Cheshvan: 4 }, minutesByMonth: { Cheshvan: 10 }, flag: null }
+  applySoldierReport(kid, {
+    month: 'Cheshvan', grade: 'pre1a', kapitlach: 150, minutes: 25,
+    quotaKap: 2, quotaMin: 10, flagConfirmed: true, at: '2026-11-10T12:00:00.000Z',
+  })
+  const accepted = reviewSoldier(kid, 'accept', { type: 'admin', id: 9, name: 'HQ Command' }, '2026-11-11T15:04:00.000Z')
+  assert.equal(accepted.ok, true)
+  assert.equal(kid.reports.Cheshvan, 150)
+  assert.equal(kid.minutesByMonth.Cheshvan, 25)
+  assert.equal(kapitlachInTotals(kid, 'Cheshvan'), 150)
+
+  const removed = reviewSoldier(kid, 'remove', { type: 'admin', id: 9, name: 'HQ Command' }, '2026-11-11T16:00:00.000Z')
+  assert.equal(removed.ok, true)
+  assert.equal(removed.status, 'removed')
+  assert.equal(removed.countedKapitlach, 4)
+  assert.equal(kid.reports.Cheshvan, 4)
+  assert.equal(kid.minutesByMonth.Cheshvan, 10)
+  assert.equal(kapitlachInTotals(kid, 'Cheshvan'), 4)
+  assert.equal(kid.flag.decisions.at(-1).action, 'removed')
+
+  const again = reviewSoldier(kid, 'remove', { type: 'admin', name: 'HQ Command' }, '2026-11-11T16:10:00.000Z')
+  assert.equal(again.ok, false)
+
+  const reaccepted = reviewSoldier(kid, 'accept', { type: 'admin', id: 3, name: 'Base Commander' }, '2026-11-11T17:00:00.000Z')
+  assert.equal(reaccepted.ok, true)
+  assert.equal(reaccepted.status, 'accepted')
+  assert.equal(kid.reports.Cheshvan, 150)
+  assert.equal(kid.minutesByMonth.Cheshvan, 25)
+  assert.equal(kapitlachInTotals(kid, 'Cheshvan'), 150)
+  assert.equal(missionCounts(kid, 'Cheshvan', 2), true)
+  assert.equal(reaccepted.decision.actorName, 'Base Commander')
+  assert.equal(reaccepted.decision.action, 'accepted')
+  assert.equal(reviewSoldier(kid, 'accept', { type: 'admin', name: 'HQ Command' }).ok, false)
+
+  const fresh = { id: 's5', name: 'Chaya M.', reports: {}, minutesByMonth: {}, flag: null }
+  applySoldierReport(fresh, {
+    month: 'Cheshvan', grade: '1', kapitlach: 150, minutes: 20,
+    quotaKap: 5, quotaMin: 20, flagConfirmed: true,
+  })
+  reviewSoldier(fresh, 'accept', { type: 'admin', name: 'HQ Command' }, '2026-11-11T18:00:00.000Z')
+  const cleared = reviewSoldier(fresh, 'remove', { type: 'admin', name: 'HQ Command' }, '2026-11-11T18:05:00.000Z')
+  assert.equal(cleared.ok, true)
+  assert.equal(cleared.notCounted, true)
+  assert.equal(Object.prototype.hasOwnProperty.call(fresh.reports, 'Cheshvan'), false)
+  assert.equal(kapitlachInTotals(fresh, 'Cheshvan'), 0)
+})
+
 test('the admin queue shows kid, class, amount, threshold, and the two decisions', () => {
   const page = read('src/pages/AdminDashboard.jsx')
   assert.match(page, /data-flag-queue/)
   assert.match(page, /Accept/)
   assert.match(page, /Remove/)
+  assert.match(page, /Remove instead/)
+  assert.match(page, /Accept instead/)
   assert.match(page, /thresholdLabel/)
   assert.match(page, /amountLabel/)
   assert.match(page, /getFlagQueue/)

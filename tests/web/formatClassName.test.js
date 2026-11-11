@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { displayClassName, formatClassName } from '../../src/lib/formatClassName.js'
+import { readFileSync } from 'node:fs'
+import { displayClassName, formatClassName, hebrewClassLabel } from '../../src/lib/formatClassName.js'
 import { platoonKey } from '../../src/lib/perfectPlatoons.js'
 import { ROSTER } from '../../src/data/demo.js'
 
@@ -63,6 +64,42 @@ test('Hebrew labels are isolated in plain text and English labels are not', () =
   assert.equal(displayClassName(hebrew), hebrew)
   assert.equal(displayClassName('1 Aleph Bet'), 'Aleph Bet')
   assert.equal(displayClassName('Pre-1A'), 'Pre-1A')
+})
+
+test('class report labels are Hebrew letters, and odd names stay letters-only', () => {
+  assert.equal(hebrewClassLabel('1 Aleph Aleph', '1'), 'אא')
+  assert.equal(hebrewClassLabel('1 Aleph Bet', 1), 'אב')
+  assert.equal(hebrewClassLabel('2 Bet Bet', '2'), 'בב')
+  assert.equal(hebrewClassLabel('2 BEIS Bet'), 'בב')
+  assert.equal(hebrewClassLabel('2 bais Gimmel'), 'בג')
+  assert.equal(hebrewClassLabel('3 Gimel Dalet', '3'), 'גד')
+  assert.equal(hebrewClassLabel('4 Daled Hei'), 'דה')
+  assert.equal(hebrewClassLabel('5 Hey Vav'), 'הו')
+  assert.equal(hebrewClassLabel('5-B', '5'), 'הב')
+  assert.equal(hebrewClassLabel('6 Vav Zayin'), 'וז')
+  assert.equal(hebrewClassLabel('7 Zayin Ches'), 'זח')
+  assert.equal(hebrewClassLabel('8 Chet'), 'ח')
+  assert.equal(hebrewClassLabel('A', 1), 'אא')
+  assert.equal(hebrewClassLabel('Bet', '1'), 'אב')
+  assert.equal(hebrewClassLabel('1 א ב'), 'אב')
+  assert.equal(hebrewClassLabel('Pre-1A', 'pre1a'), formatClassName('Pre-1A'))
+  assert.equal(hebrewClassLabel('Pre-1A A', 'pre1a'), formatClassName('Pre-1A A'))
+  assert.equal(hebrewClassLabel('9 Tes Tes', '9'), formatClassName('9 Tes Tes'))
+  assert.equal(hebrewClassLabel('12 Aleph', '12'), formatClassName('12 Aleph'))
+  assert.equal(hebrewClassLabel('4-boys', '4'), formatClassName('4-boys'))
+  assert.equal(hebrewClassLabel('8 Ches Yud'), formatClassName('8 Ches Yud'))
+  assert.equal(hebrewClassLabel('', 4), 'ד')
+
+  const admin = readFileSync(new URL('../../src/pages/AdminDashboard.jsx', import.meta.url), 'utf8')
+  const reports = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8')
+  assert.match(admin, /HebrewClassName/)
+  assert.match(admin, /odd:bg-white even:bg-gray-100/)
+  assert.match(admin, /bg-white/)
+  assert.match(admin, /bg-gray-100/)
+  assert.match(admin, /getPlatoonReport/)
+  assert.match(admin, /roll === true/)
+  assert.match(reports, /HebrewClassName/)
+  assert.match(reports, /odd:bg-white even:bg-gray-100/)
 })
 
 test('shortening a label does not change the platoon key', () => {

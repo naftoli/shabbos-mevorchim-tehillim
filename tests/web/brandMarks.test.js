@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { placeAmong } from '../../src/lib/placeRank.js'
-import { baseRankScore, baseRanks, topBaseArt } from '../../src/lib/baseRank.js'
+import { baseRankScore, baseRanks, compareBasesInAction, topBaseArt } from '../../src/lib/baseRank.js'
 import { PERFECT_PLATOON_ART } from '../../src/lib/perfectPlatoonBanner.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -30,6 +30,22 @@ test('base rank matches the spoken school rank and ties share a place', () => {
   assert.equal(baseRankScore(schools[0]).join(','), '80,100,50,40')
 })
 
+test('bases in action follow top-base rank and leave unranked schools last', () => {
+  const schools = [
+    { id: 1, name: 'Zayin', pctMet: 10, saidMonth: 900, pct: 99, minutesPct: 99 },
+    { id: 2, name: 'Beis', pctMet: 80, saidMonth: 10, pct: 10, minutesPct: 10 },
+    { id: 3, name: 'Aleph', pctMet: 80, saidMonth: 10, pct: 10, minutesPct: 10 },
+    { id: 'x', name: 'Moshe' },
+    { name: 'No Id' },
+  ]
+  const ranks = baseRanks(schools.filter((s) => s.id !== 'x' && s.name !== 'No Id'))
+  assert.equal(ranks.get('3'), 1)
+  assert.equal(ranks.get('2'), 1)
+  assert.equal(ranks.get('1'), 3)
+  const ordered = [...schools].sort((a, b) => compareBasesInAction(a, b, ranks))
+  assert.deepEqual(ordered.map((s) => s.name), ['Aleph', 'Beis', 'Zayin', 'Moshe', 'No Id'])
+})
+
 test('top base artwork is only the cropped badges 1 through 10', () => {
   for (let n = 1; n <= 10; n += 1) {
     assert.equal(topBaseArt(n), `design/top-base-${n}.webp`)
@@ -50,13 +66,16 @@ test('the general Perfect Platoon shield and top-base badges are on the public p
   const banner = read('src/components/PerfectPlatoonBanner.jsx')
 
   assert.match(home, /asset\(PERFECT_PLATOON_ART\)/)
-  assert.match(home, /<PerfectPlatoonLogo/)
+  assert.match(home, /<div className="flex min-w-0 items-center gap-3">\s*<PerfectPlatoonLogo className="h-12 w-auto sm:h-16" \/>/)
+  assert.equal(/<PerfectPlatoonLogo className="[^"]*mt-0\.5/.test(home), false)
   assert.match(home, /Bases In Action/)
-  assert.match(home, /<TopBaseBadge rank=\{rank\}/)
+  assert.match(home, /compareBasesInAction/)
+  assert.match(home, /<TopBaseBadge rank=\{rank\} className="h-10 w-auto shrink-0 sm:h-12" \/>/)
   assert.equal(home.includes('icon-platoon.webp'), false)
 
-  assert.match(school, /<TopBaseBadge rank=\{rank\}/)
-  assert.match(school, /<PerfectPlatoonLogo/)
+  assert.match(school, /<TopBaseBadge rank=\{rank\} className="h-10 w-auto shrink-0 sm:h-12" \/>/)
+  assert.match(school, /<div className="flex min-w-0 items-center gap-3">\s*<PerfectPlatoonLogo className="h-12 w-auto sm:h-14" \/>/)
+  assert.equal(/<PerfectPlatoonLogo className="[^"]*mt-0\.5/.test(school), false)
   assert.match(list, /<PerfectPlatoonLogo/)
   assert.match(how, /src: PERFECT_PLATOON_ART/)
   assert.equal(how.includes('design/how/perfect-platoon.webp'), false)
