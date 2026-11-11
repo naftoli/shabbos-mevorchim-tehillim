@@ -36,6 +36,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/compat.php';
+require_once __DIR__ . '/classOrder.php';
 
 function wwtcNotifyAllowedPhoneColumns(): array
 {
@@ -459,9 +460,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             'students' => $students,
         ];
     }
-    usort($prepared, function ($a, $b) {
-        return strcmp($a['name'], $b['name']);
-    });
+    usort($prepared, 'wwtcCmpClassRows');
     $classLines = [];
     foreach ($prepared as $class) {
         if ($class['total'] <= 0) {

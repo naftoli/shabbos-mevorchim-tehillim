@@ -3,6 +3,8 @@
 // "3 / 16" is perfect classes out of the classes on that school's roster
 // (schoolClasses), not a rank and not a page size.
 
+import { sortClasses } from './classOrder.js'
+
 // Same test as api/perfectPlatoon.php. size 0 is not a Perfect Platoon.
 export function soldierMetQuota(quota, said) {
   return quota > 0 && said >= quota
@@ -48,6 +50,7 @@ export function groupPlatoonsBySchool(platoons) {
     group.schoolClasses = Math.max(group.schoolClasses, p.schoolClasses || 0)
     group.schoolSaid = p.schoolSaid || group.schoolSaid
   }
+  for (const group of groups) group.items = sortClasses(group.items)
   groups.sort((a, b) => {
     const ap = a.schoolClasses ? a.items.length / a.schoolClasses : 0
     const bp = b.schoolClasses ? b.items.length / b.schoolClasses : 0

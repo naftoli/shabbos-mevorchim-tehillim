@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/classOrder.php';
+
 /**
  * One definition of a Perfect Platoon. GET /perfect-platoons (home list, home
  * count, /stats), the school classes view, the base and platoon reports, the
@@ -155,10 +157,7 @@ function wwtcPerfectPlatoonsFromSoldiers(array $soldiers): array
             'schoolClasses' => $classesBySchool[$c['schoolId']] ?? 0,
         ];
     }
-    usort($platoons, static function ($a, $b) {
-        return [$a['school'], $a['className'], $a['classId']]
-            <=> [$b['school'], $b['className'], $b['classId']];
-    });
+    usort($platoons, 'wwtcCmpPlatoonRows');
     return $platoons;
 }
 
@@ -527,7 +526,7 @@ function wwtcAlignSchoolClasses(array $classes, array $roster, int $schoolId): a
             'perfect' => $c['perfect'],
         ];
     }
-    return $out;
+    return wwtcSortClasses($out);
 }
 
 /**
