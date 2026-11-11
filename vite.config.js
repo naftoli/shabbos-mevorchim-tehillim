@@ -40,6 +40,12 @@ export default defineConfig({
       '/shabbos-mevorchim-tehillim/api': {
         target: process.env.WWTC_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
+        // The grade-line file lives in api/ so PHP and the page share one copy.
+        // Vite must serve that JSON itself; the dev proxy would otherwise send
+        // the import to the PHP server.
+        bypass(req) {
+          if ((req.url || '').includes('over-entry.json')) return req.url
+        },
       },
     },
   },

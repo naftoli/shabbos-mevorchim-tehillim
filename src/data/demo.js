@@ -6,6 +6,7 @@
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
+import { applySoldierReport, planReport } from '@/lib/overEntry.js'
 
 // Where the campaign "is" right now — driven by the REAL date so the demo always
 // agrees with the live Shabbos-Mevorchim countdown. The current month is the one
@@ -46,7 +47,12 @@ function loadProgress() {
 export function saveKidProgress(kid) {
   try {
     const all = loadProgress()
-    all[kid.id] = { ladder: kid.ladder, reports: kid.reports, minutesByMonth: kid.minutesByMonth }
+    all[kid.id] = {
+      ladder: kid.ladder,
+      reports: kid.reports,
+      minutesByMonth: kid.minutesByMonth,
+      flag: Object.prototype.hasOwnProperty.call(kid, 'flag') ? kid.flag : null,
+    }
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(all))
   } catch { /* private mode / unavailable */ }
 }
@@ -236,6 +242,7 @@ function buildRoster() {
         if (s.ladder != null) kid.ladder = s.ladder
         if (s.reports) kid.reports = { ...kid.reports, ...s.reports }
         if (s.minutesByMonth) kid.minutesByMonth = { ...kid.minutesByMonth, ...s.minutesByMonth }
+        if (Object.prototype.hasOwnProperty.call(s, 'flag')) kid.flag = s.flag
         let met = 0
         for (const mo of ELAPSED_MONTHS) {
           const q = quotaFor(kid.grade, mo, kid.ladder)
@@ -248,7 +255,61 @@ function buildRoster() {
     }
   }
 
+  seedDemoFlags(schools)
   return schools
+}
+
+// Two fictional open flags so the base-commander queue has something to review
+// in the demo. They sit beside the counted marks and are not part of them.
+function seedDemoFlags(schools) {
+  const saved = loadProgress()
+  const presets = [
+    { kapitlach: 150, minutes: 20, at: '2026-11-10T18:30:00.000Z' },
+    { kapitlach: 140, minutes: 200, at: '2026-11-10T19:05:00.000Z' },
+  ]
+  const samples = []
+  for (const school of schools) {
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) {
+        if (kid.isDemoNew || !kid.ladder) continue
+        samples.push({ kid, cls, school })
+        if (samples.length === presets.length) break
+      }
+      if (samples.length === presets.length) break
+    }
+    if (samples.length === presets.length) break
+  }
+  samples.forEach((sample, i) => {
+    const { kid, cls, school } = sample
+    const stored = saved[kid.id]
+    if (stored && Object.prototype.hasOwnProperty.call(stored, 'flag')) return
+    const q = quotaFor(kid.grade, CURRENT_MONTH, kid.ladder)
+    const preset = presets[i]
+    const plan = planReport({
+      grade: kid.grade,
+      kapitlach: preset.kapitlach,
+      minutes: preset.minutes,
+      quotaKap: q?.v ?? 0,
+      quotaMin: q?.m ?? 0,
+      flagConfirmed: true,
+    })
+    if (plan.action !== 'flag') return
+    applySoldierReport(kid, {
+      month: CURRENT_MONTH,
+      grade: kid.grade,
+      kapitlach: preset.kapitlach,
+      minutes: preset.minutes,
+      quotaKap: q?.v ?? 0,
+      quotaMin: q?.m ?? 0,
+      flagConfirmed: true,
+      kidName: kid.name,
+      className: cls.name,
+      schoolId: school.id,
+      schoolName: school.name,
+      year: CAMPAIGN_YEAR,
+      at: preset.at,
+    })
+  })
 }
 
 export const ROSTER = buildRoster()
