@@ -19,6 +19,7 @@ import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
+import { splitIncompleteNames } from '@/lib/notCompleted.js'
 import * as mashpia from './mashpia.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
 import {
@@ -1073,19 +1074,27 @@ export async function undoQuotaOverride({ kidId, year, month }) {
   return { ok: true, userId: found.kid.id, year: y, month: mo, quotaAdjusted: false }
 }
 
-// Who hasn't completed this month, per class — drives the teacher deadline email.
+// Who hasn't finished this month, per class. `missing` is every incomplete
+// name (older clients). `under` reported something and are short. `notFilled`
+// reported nothing. Same split as wwtcNotifyKidStatus.
 export async function notCompleted(schoolId, monthIdx = CURRENT_MONTH_INDEX) {
   if (!IS_DEMO) return mashpia.getNotCompleted(schoolId)
   const school = ROSTER.find((s) => s.id === schoolId)
   if (!school) return []
   const month = monthName(monthIdx)
   return school.classes
-    .map((cls) => ({
-      classId: cls.id,
-      className: cls.name,
-      size: cls.kids.length,
-      missing: cls.kids.filter((k) => !metQuota(k, month)).map((k) => k.name),
-    }))
+    .map((cls) => {
+      const kids = cls.kids.map((k) => {
+        const snap = kapSnapshot(k, month, CAMPAIGN_YEAR)
+        return { name: k.name, said: snap.said, quota: snap.quota }
+      })
+      return {
+        classId: cls.id,
+        className: cls.name,
+        size: cls.kids.length,
+        ...splitIncompleteNames(kids),
+      }
+    })
     .filter((c) => c.missing.length > 0)
 }
 

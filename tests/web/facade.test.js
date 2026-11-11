@@ -215,11 +215,13 @@ test('notCompleted unwraps {classes} and sends an admin token', async () => {
   reset()
   mock({
     'POST /admin/login': { body: { token: 'atok2', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
-    'GET /schools/89/not-completed': { body: { schoolId: 89, classes: [{ classId: 1, className: '5A', size: 10, missing: ['Dovid'] }] } },
+    'GET /schools/89/not-completed': { body: { schoolId: 89, classes: [{ classId: 1, className: '5A', size: 10, missing: ['Dovid', 'Leah'], under: ['Dovid'], notFilled: ['Leah'] }] } },
   })
   await api.verifyAdmin('x', 'y')
   const rows = await api.notCompleted(89)
   assert.equal(rows[0].missing[0], 'Dovid')
+  assert.deepEqual(rows[0].under, ['Dovid'])
+  assert.deepEqual(rows[0].notFilled, ['Leah'])
   assert.match(lastCall().headers.Authorization, /^Bearer atok2$/)
 })
 

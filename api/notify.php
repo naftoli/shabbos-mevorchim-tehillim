@@ -291,6 +291,60 @@ function wwtcNotifyKidStatus(int $said, int $quota): string
     return 'under';
 }
 
+function wwtcNotifyStillNeed(int $count, string $action): string
+{
+    $verb = $count === 1 ? 'needs' : 'need';
+    return $count . ' still ' . $verb . ' to ' . $action;
+}
+
+/**
+ * Incomplete soldiers for one school, grouped by class. `under` reported a
+ * kapitlach count above zero and are still short of quota. `notFilled`
+ * reported nothing (said <= 0, including no mark). `missing` is both lists
+ * in roster order, for clients that still read one list.
+ *
+ * @param array<int,array<string,mixed>> $students
+ * @param array<int,array<string,mixed>> $classes
+ * @return array<int,array<string,mixed>>
+ */
+function wwtcNotCompletedClasses(array $students, array $classes): array
+{
+    $byClass = [];
+    foreach ($students as $s) {
+        $said = (int) ($s['said'] ?? 0);
+        $quota = (int) ($s['quota'] ?? 0);
+        $status = wwtcNotifyKidStatus($said, $quota);
+        if ($status === 'full') {
+            continue;
+        }
+        $cid = (int) ($s['classId'] ?? 0);
+        if (!isset($byClass[$cid])) {
+            $byClass[$cid] = [
+                'classId' => $cid,
+                'className' => (string) ($s['className'] ?? ''),
+                'size' => 0,
+                'missing' => [],
+                'under' => [],
+                'notFilled' => [],
+            ];
+        }
+        $name = (string) ($s['name'] ?? '');
+        if ($status === 'under') {
+            $byClass[$cid]['under'][] = $name;
+        } else {
+            $byClass[$cid]['notFilled'][] = $name;
+        }
+        $byClass[$cid]['missing'][] = $name;
+    }
+    foreach ($classes as $c) {
+        $id = (int) ($c['id'] ?? 0);
+        if (isset($byClass[$id])) {
+            $byClass[$id]['size'] = (int) ($c['size'] ?? 0);
+        }
+    }
+    return array_values($byClass);
+}
+
 function wwtcNotifyClassLine(string $name, int $filled, int $total): string
 {
     return 'Class ' . $name . ': ' . $filled . ' of ' . $total;
@@ -329,6 +383,8 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         $classFilled = 0;
         $classTotal = 0;
         $classFull = 0;
+        $classUnder = 0;
+        $classMissing = 0;
         foreach ($class['students'] ?? [] as $student) {
             $said = (int) ($student['said'] ?? 0);
             $quota = (int) ($student['quota'] ?? 0);
@@ -342,6 +398,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             $total++;
             if ($status === 'missing') {
                 $missing++;
+                $classMissing++;
             } else {
                 $filled++;
                 $classFilled++;
@@ -350,6 +407,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
                     $classFull++;
                 } else {
                     $under++;
+                    $classUnder++;
                 }
             }
             $detail = '';
@@ -381,6 +439,7 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             $full += $classFull;
             $filled += $classFilled;
             $missing += $gap;
+            $classMissing += $gap;
         }
         if (array_key_exists('perfect', $class)) {
             $isPerfect = (bool) $class['perfect'];
@@ -394,6 +453,8 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             'name' => $className,
             'filled' => $classFilled,
             'total' => $classTotal,
+            'under' => $classUnder,
+            'missing' => $classMissing,
             'perfect' => $isPerfect,
             'students' => $students,
         ];
@@ -407,6 +468,16 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
             continue;
         }
         $classLines[] = wwtcNotifyClassLine($class['name'], $class['filled'], $class['total']);
+    }
+    $incompleteLines = [];
+    foreach ($prepared as $class) {
+        $classUnder = (int) ($class['under'] ?? 0);
+        $classMissing = (int) ($class['missing'] ?? 0);
+        if ($classUnder + $classMissing <= 0) {
+            continue;
+        }
+        $incompleteLines[] = 'Class: ' . $class['name'];
+        $incompleteLines[] = wwtcNotifyStillNeed($classUnder, 'finish') . ', ' . wwtcNotifyStillNeed($classMissing, 'submit');
     }
 
     $who = trim((string) ($recipient['name'] ?? ''));
@@ -436,8 +507,8 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
     $add($total . ' soldiers', 11, false, $ink);
     $add($filled . ' filled it out', 11, false, $ink);
     $add($full . ' did the full quota', 11, false, $green);
-    $add($under . ' filled it out but were under quota', 11, false, $amber);
-    $add($missing . " didn't fill it out", 11, false, $red);
+    $add(wwtcNotifyStillNeed($under, 'finish'), 11, false, $amber);
+    $add(wwtcNotifyStillNeed($missing, 'submit'), 11, false, $red);
     $add('Perfect platoons: ' . $perfect, 11, false, $ink, 0, 8);
     if ($classLines) {
         $add('By class', 13, true, $navy, 0, 3);
@@ -454,8 +525,8 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
 
     $sections = [
         'full' => ['Did full quota', $green],
-        'under' => ['Filled it out but under quota', $amber],
-        'missing' => ["Didn't fill it out", $red],
+        'under' => ['Who still needs to finish', $amber],
+        'missing' => ['Who still needs to submit', $red],
     ];
     foreach ($sections as $status => $meta) {
         $add($meta[0], 13, true, $meta[1], 0, 3);
@@ -474,7 +545,11 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
                 continue;
             }
             $any = true;
-            $add($class['name'], 11, true, $ink, 0, 2);
+            $add('Class: ' . $class['name'], 11, true, $ink, 0, 2);
+            if ($status === 'under' || $status === 'missing') {
+                $action = $status === 'under' ? 'finish' : 'submit';
+                $add(wwtcNotifyStillNeed(count($rows), $action), 10, false, $meta[1], 14, 1);
+            }
             foreach ($rows as $student) {
                 $add($student['name'], 11, false, $ink, 14, 1);
                 if ($student['detail'] !== '') {
@@ -499,21 +574,33 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         'under' => $under,
         'perfect' => $perfect,
         'classLines' => $classLines,
+        'incompleteLines' => $incompleteLines,
         'kidNames' => $kidNames,
         'pdfLines' => $lines,
         'schoolName' => $schoolName,
     ];
 }
 
-function wwtcNotifyBodies(string $role, int $filled, int $total, int $missing, string $link, array $classLines, string $fillUrl = ''): array
+function wwtcNotifyBodies(string $role, int $filled, int $total, int $missing, string $link, array $classLines, string $fillUrl = '', int $under = 0, array $incompleteLines = []): array
 {
     $scope = $role === 'base' ? 'base' : 'class';
-    $counts = $filled . ' out of ' . $total . ' kids in your ' . $scope
+    // Approved WhatsApp templates (wwtc_class_followup / wwtc_base_followup)
+    // have four body variables: filled, total, submit-count, link. The
+    // approved sentence is "but {{3}} didn't", and {{3}} is only the kids who
+    // still need to submit (said <= 0). A template wording change — not a
+    // fifth variable — would be needed before the bubble itself can say
+    // "X still need to finish, Y still need to submit". SMS is free text, so
+    // it already uses that sentence. Do not stuff the phrase into {{3}} while
+    // the approved wording still ends with "didn't."
+    $templateCounts = $filled . ' out of ' . $total . ' kids in your ' . $scope
         . ' filled out their Shabbos Mevorchim Tehillim, but ' . $missing
         . " didn't.";
+    $split = wwtcNotifyStillNeed($under, 'finish') . ', ' . wwtcNotifyStillNeed($missing, 'submit');
+    $counts = $filled . ' out of ' . $total . ' kids in your ' . $scope
+        . ' filled out their Shabbos Mevorchim Tehillim. ' . $split . '.';
     // {{4}} / $link is the signed PDF. The public sign-in page is a separate
     // SMS line, because the template has no fifth variable for it.
-    $whatsapp = $counts . ' See the full report here: ' . $link . '.';
+    $whatsapp = $templateCounts . ' See the full report here: ' . $link . '.';
     if ($role === 'base') {
         // The short WhatsApp bubble does not list classes. SMS does, so this
         // sentence stays on the template only and is not repeated in the text.
@@ -522,6 +609,9 @@ function wwtcNotifyBodies(string $role, int $filled, int $total, int $missing, s
     $whatsapp .= " Please follow up with them today and see why they didn't.";
 
     $sms = $counts;
+    if ($incompleteLines) {
+        $sms .= "\n" . implode("\n", $incompleteLines);
+    }
     if ($role === 'base' && $classLines) {
         $sms .= "\n" . implode("\n", $classLines);
     }
@@ -1325,7 +1415,9 @@ function wwtcNotifyExecute(array $job, array $deps = []): array
             (int) $report['missing'],
             $link,
             $report['classLines'],
-            $fillUrl
+            $fillUrl,
+            (int) $report['under'],
+            $report['incompleteLines']
         );
         $baseResult['bodyWhatsapp'] = $bodies['whatsapp'];
         $baseResult['bodySms'] = $bodies['sms'];
