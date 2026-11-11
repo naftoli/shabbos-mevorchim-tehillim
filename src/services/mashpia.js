@@ -247,3 +247,9 @@ export const setKidLadder = (ladder) =>
 // row id (the soldier's user_id). Server scopes it to the admin's authority.
 export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
   write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
+
+export const overrideQuota = ({ kidId, year, month, reason }) =>
+  write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
+
+export const undoQuotaOverride = ({ kidId, year, month }) =>
+  write('/admin/quota-override/undo', { method: 'POST', body: { kidId, year, month }, as: 'admin' })

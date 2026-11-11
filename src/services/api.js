@@ -5,6 +5,7 @@
 
 import { quotaFor, availableLadders } from '@/data/ladders.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
+import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
 import {
   applySoldierReport,
   kapitlachInTotals,
@@ -66,17 +67,62 @@ function reportedOf(kid, month, year) {
 
 export { CURRENT_MONTH, CURRENT_MONTH_INDEX, ELAPSED_MONTHS, CAMPAIGN_YEAR }
 
-const kidMonthQuota = (kid, month) => quotaFor(kid.grade, month, kid.ladder)?.v ?? 0
+const OVERRIDE_KEY = 'wwtc.demo.quotaOverrides'
+const AUDIT_KEY = 'wwtc.demo.auditLog'
+
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || '[]') } catch { return [] }
+}
+function saveOverrides(rows) {
+  try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(rows)) } catch { /* private mode */ }
+}
+function pushAudit(entry) {
+  try {
+    const all = JSON.parse(localStorage.getItem(AUDIT_KEY) || '[]')
+    all.push(entry)
+    localStorage.setItem(AUDIT_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+function activeOverride(kidId, year, month) {
+  return loadOverrides().find((row) => (
+    String(row.userId) === String(kidId)
+    && String(row.year) === String(year)
+    && row.month === month
+    && !row.undoneAt
+  )) || null
+}
+// Demo quotas come from the soldier's current ladder, which is how Cheshvan
+// is repriced from today's ladder. An override replaces that one month.
+// saidOf already withholds a flagged amount that does not count yet.
+function engineKap(kid, month) {
+  return quotaFor(kid.grade, demoDataMonth(month), kid.ladder)?.v ?? 0
+}
+function kapSnapshot(kid, month, year = CAMPAIGN_YEAR) {
+  const engine = engineKap(kid, month)
+  const eff = effectiveKapQuota(engine, activeOverride(kid.id, year, month))
+  const said = saidOf(kid, month, year)
+  const reported = reportedOf(kid, month, year)
+  return { ...eff, said, reported, met: metKap(eff.quota, said, reported) }
+}
+function missionBonus(kid) {
+  let extra = 0
+  for (const row of loadOverrides()) {
+    if (String(row.userId) !== String(kid.id) || row.undoneAt) continue
+    const engine = engineKap(kid, row.month)
+    const said = saidOf(kid, row.month, row.year)
+    const reported = reportedOf(kid, row.month, row.year)
+    const was = metKap(engine, said, reported)
+    const now = metKap(Number(row.overriddenQuota) || 0, said, reported)
+    if (now && !was) extra += 1
+  }
+  return extra
+}
+
+const kidMonthQuota = (kid, month, year = CAMPAIGN_YEAR) => kapSnapshot(kid, month, year).quota
 const kidMonthSaid = (kid, month) => kapitlachInTotals(kid, month)
 const kidMonthMinutes = (kid, month) => minutesInTotals(kid, month)
-const metQuota = (kid, month) => {
-  const q = kidMonthQuota(kid, month)
-  return q > 0 && kidMonthSaid(kid, month) >= q
-}
-const metAt = (kid, month, year) => {
-  const q = kidMonthQuota(kid, month)
-  return q > 0 && saidOf(kid, month, year) >= q
-}
+const metQuota = (kid, month) => kapSnapshot(kid, month, CAMPAIGN_YEAR).met
+const metAt = (kid, month, year) => kapSnapshot(kid, month, year).met
 const kidSaidYear = (kid) => ELAPSED_MONTHS.reduce((a, mo) => a + kidMonthSaid(kid, mo), 0)
 
 // ---- school aggregates -----------------------------------------------------
@@ -95,7 +141,7 @@ function schoolAgg(school, month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
       kids += 1
       const said = saidOf(kid, month, year)
       saidMonth += said
-      quotaMonth += kidMonthQuota(kid, month)
+      quotaMonth += kidMonthQuota(kid, month, year)
       minutesSaidMonth += minutesOf(kid, month, year)
       minutesQuotaMonth += quotaFor(kid.grade, month, kid.ladder)?.m ?? 0
       if (metAt(kid, month, year)) metMonth += 1
@@ -352,31 +398,35 @@ function demoKidProgress(id) {
   const { kid } = found
   const months = ELAPSED_MONTHS.map((mo) => {
     const q = quotaFor(kid.grade, mo, kid.ladder)
+    const snap = kapSnapshot(kid, mo, CAMPAIGN_YEAR)
     return {
       month: mo,
-      quota: q?.v ?? 0,
-      quotaLabel: q?.k ?? '—',
-      said: kidMonthSaid(kid, mo),
+      quota: snap.quota,
+      originalQuota: snap.originalQuota,
+      quotaAdjusted: snap.quotaAdjusted,
+      quotaLabel: snap.quotaAdjusted ? String(snap.quota) : (q?.k ?? '—'),
+      said: snap.said,
       minutes: q?.m ?? 0, // the quota's target minutes
       saidMinutes: kidMonthMinutes(kid, mo), // minutes the soldier reported
-      met: metQuota(kid, mo),
+      met: snap.met,
       isCurrent: mo === CURRENT_MONTH,
     }
   })
   const historyMonths = campaignMonths(PRIOR_CAMPAIGN_YEAR).map((mo) => {
     const q = quotaFor(kid.grade, mo, kid.ladder)
-    const said = kid.priorYearReports?.[mo]
-    const reported = said != null
+    const snap = kapSnapshot(kid, mo, PRIOR_CAMPAIGN_YEAR)
     return {
       month: mo,
       year: PRIOR_CAMPAIGN_YEAR,
-      quota: q?.v ?? 0,
-      quotaLabel: q?.k ?? null,
+      quota: snap.quota,
+      originalQuota: snap.originalQuota,
+      quotaAdjusted: snap.quotaAdjusted,
+      quotaLabel: snap.quotaAdjusted ? String(snap.quota) : (q?.k ?? null),
       minutes: q?.m ?? 0,
-      said: reported ? said : 0,
+      said: snap.said,
       saidMinutes: kid.priorYearMinutes?.[mo] ?? 0,
-      met: reported && !!q && said >= q.v,
-      reported,
+      met: snap.met,
+      reported: snap.reported,
       isCurrent: false,
     }
   })
@@ -389,14 +439,15 @@ function demoKidProgress(id) {
   const missionHistory = priorGrade
     ? { [priorGrade]: Object.fromEntries(historyMonths.filter((m) => m.met).map((m) => [m.month, Number(kid.ladder) || true])) }
     : {}
-  const medal = medalState(kid.missionsTotal)
+  const missionsTotal = (kid.missionsTotal || 0) + missionBonus(kid)
+  const medal = medalState(missionsTotal)
   return {
     ...safeKid(kid, found.school, found.cls),
-    months: months.map((m) => ({ ...m, reported: Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
+    months: months.map((m) => ({ ...m, reported: m.reported ?? Object.prototype.hasOwnProperty.call(kid.reports || {}, m.month) })),
     historyMonths,
     priorMissions: kid.priorMissions,
-    metThisYear: kid.metThisYear,
-    missionsTotal: kid.missionsTotal,
+    metThisYear: months.filter((m) => m.met).length,
+    missionsTotal,
     missionHistory,
     medal,
     rank: rankForMedals(medal.earnedCount),
@@ -405,9 +456,14 @@ function demoKidProgress(id) {
   }
 }
 
+function engineMet(kid, month, year = CAMPAIGN_YEAR) {
+  return metKap(engineKap(kid, month), saidOf(kid, month, year), reportedOf(kid, month, year))
+}
 function recomputeDemoMissions(kid) {
   let met = 0
-  for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+  // Stored mission count stays on the ladder quota. An override is added when
+  // the progress is read, so a flagged amount that does not count is not a mission.
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
   kid.metThisYear = met
   kid.missionsTotal = (kid.priorMissions || 0) + met
   kid.minutes = Object.values(kid.minutesByMonth || {}).reduce((a, m) => a + (Number(m) || 0), 0)
@@ -519,7 +575,7 @@ export async function setKidLadder(id, ladder) {
   if (kid.ladder === next) return demoKidProgress(id)
   kid.ladder = next
   let met = 0
-  for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+  for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
   kid.metThisYear = met
   kid.missionsTotal = kid.priorMissions + met
   saveKidProgress(kid)
@@ -552,7 +608,7 @@ export async function adminSetLadder({ schoolId, classId = null, kidId = null, l
     if (kid.ladder === next) continue
     kid.ladder = next
     let met = 0
-    for (const mo of ELAPSED_MONTHS) if (metQuota(kid, mo)) met += 1
+    for (const mo of ELAPSED_MONTHS) if (engineMet(kid, mo)) met += 1
     kid.metThisYear = met
     kid.missionsTotal = kid.priorMissions + met
     saveKidProgress(kid)
@@ -697,7 +753,7 @@ export async function schoolSoldierLeaderboard(id, n = null) {
         grade: kid.grade,
         saidMonth: kidMonthSaid(kid, CURRENT_MONTH),
         saidYear: kidSaidYear(kid),
-        missions: kid.missionsTotal,
+        missions: kid.missionsTotal + missionBonus(kid),
         ladder: kid.ladder,
       })
     }
@@ -739,13 +795,13 @@ export async function getArmyReport(monthIdx = CURRENT_MONTH_INDEX, period = nul
         for (const kid of cls.kids) {
           registered += 1
           const q = quotaFor(kid.grade, dataMonth, kid.ladder)
-          goal += q?.v ?? 0
+          const snap = kapSnapshot(kid, dataMonth, year)
+          goal += snap.quota
           minutesGoal += q?.m ?? 0
-          const said = saidOf(kid, dataMonth, year)
-          accomplished += said
+          accomplished += snap.said
           minutes += minutesOf(kid, dataMonth, year)
-          if (reportedOf(kid, dataMonth, year) && said > 0) participated += 1
-          if (metAt(kid, dataMonth, year)) met += 1
+          if (snap.reported && snap.said > 0) participated += 1
+          if (snap.met) met += 1
         }
       }
       return {
@@ -785,9 +841,10 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
       let accomplished = 0
       let completed = 0
       for (const kid of cls.kids) {
-        goal += quotaFor(kid.grade, dataMonth, kid.ladder)?.v ?? 0
-        accomplished += saidOf(kid, dataMonth, year)
-        if (metAt(kid, dataMonth, year)) completed += 1
+        const snap = kapSnapshot(kid, dataMonth, year)
+        goal += snap.quota
+        accomplished += snap.said
+        if (snap.met) completed += 1
       }
       return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
     }),
@@ -828,6 +885,7 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
     const summary = {
       month,
       school: school.name,
+      schoolId: school.id,
       className: cls.name,
       completed,
       size: cls.kids.length,
@@ -837,9 +895,18 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
     if (!canSeeClassRoll(readDemoStaff(), { classId: cls.id, schoolId: school.id })) return summary
     const rows = cls.kids.map((kid) => {
       const q = quotaFor(kid.grade, dataMonth, kid.ladder)
-      const said = saidOf(kid, dataMonth, year)
-      const met = metAt(kid, dataMonth, year)
-      return { id: kid.id, name: kid.name, ladder: kid.ladder, goal: q?.v ?? 0, goalLabel: q?.k ?? '—', said, met }
+      const snap = kapSnapshot(kid, dataMonth, year)
+      return {
+        id: kid.id,
+        name: kid.name,
+        ladder: kid.ladder,
+        goal: snap.quota,
+        originalGoal: snap.originalQuota,
+        goalLabel: snap.quotaAdjusted ? String(snap.quota) : (q?.k ?? '—'),
+        said: snap.said,
+        met: snap.met,
+        quotaAdjusted: snap.quotaAdjusted,
+      }
     })
     return { ...summary, roll: true, rows }
   }
@@ -902,6 +969,103 @@ export function removeSchoolDedication(schoolId) {
   setSchoolDedicationStore(schoolId, null)
   invalidate()
   return null
+}
+
+function demoStaffCanOverride(schoolId) {
+  return overrideAccessStatus(readDemoStaff(), schoolId) === 200
+}
+
+function writeDemoAudit(action, kid, year, month, detail) {
+  const staff = readDemoStaff()
+  pushAudit({
+    action,
+    actorId: staff?.username || staff?.name || 'staff',
+    actorName: staff?.name || 'Staff',
+    userId: kid.id,
+    year,
+    month,
+    detail,
+    createdAt: new Date().toISOString(),
+  })
+}
+
+// Set this month's quota to the kapitlach the soldier entered. Next month and
+// the ladder are untouched. A commander of another school is refused.
+export async function overrideQuota({ kidId, year, month, reason }) {
+  if (!IS_DEMO) return mashpia.overrideQuota({ kidId, year, month, reason })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  const y = year || CAMPAIGN_YEAR
+  const mo = month || CURRENT_MONTH
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only override soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const snap = kapSnapshot(found.kid, mo, y)
+  if (snap.quotaAdjusted) {
+    const error = new Error('That month already has an override. Undo it first.')
+    error.status = 409
+    throw error
+  }
+  if (!snap.reported || snap.said <= 0 || snap.quota <= 0 || snap.said >= snap.quota) {
+    const error = new Error('This soldier is not under quota for that month.')
+    error.status = 422
+    throw error
+  }
+  const staff = readDemoStaff()
+  const when = new Date().toISOString()
+  const rows = loadOverrides()
+  rows.push({
+    userId: found.kid.id,
+    year: y,
+    month: mo,
+    originalQuota: snap.quota,
+    overriddenQuota: snap.said,
+    reason: String(reason || '').trim() || null,
+    createdBy: staff?.username || null,
+    createdByName: staff?.name || null,
+    createdAt: when,
+    undoneAt: null,
+  })
+  saveOverrides(rows)
+  writeDemoAudit('quota_override', found.kid, y, mo, `Quota ${snap.quota} overridden to ${snap.said} for ${mo} ${y}`)
+  invalidate()
+  return { ok: true, userId: found.kid.id, year: y, month: mo, originalQuota: snap.quota, quota: snap.said, met: true, quotaAdjusted: true }
+}
+
+export async function undoQuotaOverride({ kidId, year, month }) {
+  if (!IS_DEMO) return mashpia.undoQuotaOverride({ kidId, year, month })
+  const found = locate(kidId)
+  if (!found) {
+    const error = new Error('Soldier not found.')
+    error.status = 404
+    throw error
+  }
+  const y = year || CAMPAIGN_YEAR
+  const mo = month || CURRENT_MONTH
+  if (!demoStaffCanOverride(found.school.id)) {
+    const error = new Error('You can only override soldiers in your own school.')
+    error.status = 403
+    throw error
+  }
+  const rows = loadOverrides()
+  const hit = rows.find((row) => String(row.userId) === String(kidId) && String(row.year) === String(y) && row.month === mo && !row.undoneAt)
+  if (!hit) {
+    const error = new Error('That month does not have an override.')
+    error.status = 404
+    throw error
+  }
+  hit.undoneAt = new Date().toISOString()
+  hit.undoneBy = readDemoStaff()?.username || null
+  saveOverrides(rows)
+  writeDemoAudit('quota_override_undo', found.kid, y, mo, `Override removed for ${mo} ${y}`)
+  invalidate()
+  return { ok: true, userId: found.kid.id, year: y, month: mo, quotaAdjusted: false }
 }
 
 // Who hasn't completed this month, per class — drives the teacher deadline email.

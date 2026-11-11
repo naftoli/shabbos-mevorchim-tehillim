@@ -132,6 +132,33 @@ Writes — admin (bearer from `POST /admin/login`):
   home page; the school dedication shows on that school's campaign page
   (`GET /schools/:id` returns it for the current month).
 
+- `POST /admin/quota-override` — `{ kidId, year, month, reason? }` and
+  `POST /admin/quota-override/undo` — `{ kidId, year, month }`. A base
+  commander (school admin) or HQ sets one soldier's quota for that one month
+  to the kapitlach they entered, so the month counts as met. The ladder and
+  every other month stay as they are. Stored in `wwtc_quota_overrides`
+  (run `api/sql/wwtc_quota_overrides.sql` once; both routes return **503**
+  until it exists). The same file creates `wwtc_audit_log`. A commander of
+  another school gets **403**. Cheshvan is often repriced from today's ladder;
+  an active override replaces that number wherever this API computes a quota,
+  a completion, a class or school total, a perfect platoon, a streak, a medal,
+  a rank, or the monthly report. The platoon roll (staff only) shows
+  "quota adjusted by base commander".
+
+### What Naftoli does for quota overrides
+
+1. Run `api/sql/wwtc_quota_overrides.sql` once on the mashpia database.
+   It creates `wwtc_quota_overrides` and `wwtc_audit_log`. Do not run it from
+   the app. Until both tables exist, Override returns **503**.
+2. Deploy `api/quotaOverride.php`, `api/bootstrap.php`, and `api/index.php`
+   with the app. No new secret. HQ and a school admin sign in with the
+   existing admin login. A base commander can override only soldiers in a
+   school on their `admin_auths` row (`auth = 'school'`). HQ (`admins.auth =
+   super`) can override any school.
+3. Nothing else to configure. The override is read on each request, so the
+   report cache does not have to be flushed. The soldier's ladder row is not
+   changed.
+
 > Writes have been verified read-only (the mission/task lookups resolve correctly
 > against live data) but the INSERT/UPDATE/DELETE path has NOT been exercised
 > against a database yet — test on `test.mashpia.com` before master.

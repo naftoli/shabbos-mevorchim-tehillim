@@ -197,6 +197,7 @@ function wwtcLoadPerfectPlatoonSoldiers(int $date): array
             'grade' => (string) ($row['class_grade'] ?? ''),
             'sub' => (string) ($row['class_sub'] ?? ''),
             'teacher' => (string) ($row['class_teacher'] ?? ''),
+            'userId' => (int) $row['user_id'],
             'quota' => (int) ($row['quota'] ?? 0),
             'said' => $doneByUser[(int) $row['user_id']] ?? 0,
         ];
@@ -210,19 +211,64 @@ function wwtcLoadPerfectPlatoonSoldiers(int $date): array
  *
  * @return array<int,array<string,mixed>>
  */
-function wwtcPerfectPlatoonRows(int $date): array
+function wwtcPerfectPlatoonSoldiers(int $date): array
 {
     static $memo = [];
     if (isset($memo[$date])) {
         return $memo[$date];
     }
     $produce = static function () use ($date) {
-        return wwtcPerfectPlatoonsFromSoldiers(wwtcLoadPerfectPlatoonSoldiers($date));
+        return wwtcLoadPerfectPlatoonSoldiers($date);
     };
     if (function_exists('wwtcCached')) {
-        $memo[$date] = wwtcCached('perfect_platoons.' . $date, $produce);
+        $memo[$date] = wwtcCached('perfect_platoon_soldiers.' . $date, $produce);
     } else {
         $memo[$date] = $produce();
     }
     return $memo[$date];
+}
+
+/**
+ * Replace a soldier's engine quota with an active override before the shared
+ * said >= quota test. Cheshvan's as-of (or today's ladder) figure loses.
+ * The soldier list cache stays the engine numbers; the override is applied
+ * on the way out. userId is not copied into the public platoon rows.
+ *
+ * @param array<int,array<string,mixed>> $soldiers
+ */
+function wwtcApplyOverridesToPlatoonSoldiers(array $soldiers, int $date, int $year): array
+{
+    if ($year <= 0 || !function_exists('wwtcMonthNameForJd') || !function_exists('wwtcActiveOverridesForMonth')) {
+        return $soldiers;
+    }
+    $month = wwtcMonthNameForJd($date, $year);
+    if ($month === '') {
+        return $soldiers;
+    }
+    $overs = wwtcActiveOverridesForMonth($year, $month);
+    if (!$overs) {
+        return $soldiers;
+    }
+    foreach ($soldiers as $i => $soldier) {
+        $uid = (int) ($soldier['userId'] ?? 0);
+        if ($uid <= 0 || !isset($overs[$uid])) {
+            continue;
+        }
+        $eff = wwtcEffectiveQuota((int) ($soldier['quota'] ?? 0), $overs[$uid]);
+        $soldiers[$i]['quota'] = $eff['quota'];
+    }
+    return $soldiers;
+}
+
+function wwtcPerfectPlatoonRows(int $date, ?int $year = null): array
+{
+    if ($year === null && function_exists('wwtcYear')) {
+        $year = wwtcYear();
+    }
+    $soldiers = wwtcApplyOverridesToPlatoonSoldiers(
+        wwtcPerfectPlatoonSoldiers($date),
+        $date,
+        (int) $year
+    );
+    return wwtcPerfectPlatoonsFromSoldiers($soldiers);
 }

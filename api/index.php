@@ -172,7 +172,7 @@ function wwtcNationwideSchools(?int $date = null, ?int $year = null): array
     $date = $date ?? wwtcCurrentDate();
     $agg = wwtcArmyAggregates($date, $year);
     $names = $agg['schools'];
-    $counts = wwtcCompletionCounts($date);
+    $counts = wwtcCompletionCounts($date, $year);
     $part = wwtcParticipatedBySchool($date);
 
     $rows = [];
@@ -202,7 +202,7 @@ function wwtcNationwideSchools(?int $date = null, ?int $year = null): array
  * met their own quota) are derived from the per-soldier rows — the class reports
  * do not compute them, but the SPA shows them.
  */
-function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): array
+function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null): array
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
@@ -297,6 +297,65 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
         'minutesQuota' => $minQuota,
     ];
     });
+}
+
+/** Engine school report with quota overrides applied on the way out. */
+function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): array
+{
+    $year = $year ?: wwtcYear();
+    $date = $date ?? wwtcCurrentDate();
+    return wwtcOverlaySchoolData(wwtcSchoolDataRaw($schoolId, $date, $year), $date, $year);
+}
+
+/**
+ * Shrink army kapitlach goals by each active override. The engine quota is the
+ * figure already inside the cached school report — for Cheshvan that is today's
+ * ladder — and the override replaces it.
+ */
+function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
+{
+    $month = wwtcMonthNameForJd($date, $year);
+    if ($month === '') {
+        return $agg;
+    }
+    $overs = wwtcActiveOverridesForMonth($year, $month);
+    if (!$overs) {
+        return $agg;
+    }
+    $bySchool = [];
+    foreach ($overs as $uid => $row) {
+        $bySchool[(int) $row['school_id']][(int) $uid] = $row;
+    }
+    $deltas = [];
+    foreach ($bySchool as $sid => $map) {
+        $raw = wwtcSchoolDataRaw($sid, $date, $year);
+        $seen = [];
+        foreach ($raw['students'] ?? [] as $student) {
+            $uid = (int) ($student['id'] ?? 0);
+            if (!isset($map[$uid])) {
+                continue;
+            }
+            $seen[$uid] = true;
+            $deltas[$sid] = ($deltas[$sid] ?? 0) + ((int) $map[$uid]['overridden_quota'] - (int) $student['quota']);
+        }
+        foreach ($map as $uid => $row) {
+            if (isset($seen[$uid])) {
+                continue;
+            }
+            $deltas[$sid] = ($deltas[$sid] ?? 0) + ((int) $row['overridden_quota'] - (int) $row['original_quota']);
+        }
+    }
+    if (!$deltas) {
+        return $agg;
+    }
+    $out = $agg;
+    $out['kapGoal'] = wwtcOverlayKapGoals($agg['kapGoal'] ?? [], $deltas);
+    $army = $agg['army'] ?? [];
+    $kap = $army['Kapitelach'] ?? [];
+    $kap[$date] = (int) ($kap[$date] ?? 0) + array_sum($deltas);
+    $army['Kapitelach'] = $kap;
+    $out['army'] = $army;
+    return $out;
 }
 
 // ---- holiday board shapers --------------------------------------------------
@@ -536,7 +595,12 @@ function wwtcKidMonths(array $kid): array
     }
 
     ksort($byDate);
-    return array_values($byDate);
+    // Cheshvan's quota above may be today's ladder (wwtcTrackAsOf falls back to
+    // the current track). An override for that month replaces it here.
+    return wwtcOverlayKidMonthList(
+        array_values($byDate),
+        wwtcActiveOverridesForUserYear((int) $kid['user_id'], wwtcYear())
+    );
 }
 
 /**
@@ -552,7 +616,7 @@ function wwtcKidMissionsLifetime(int $userId): int
           WHERE user_id = :uid AND subject_id = ' . WWTC_SUBJECT_ID
     );
     $stmt->execute([':uid' => $userId]);
-    return (int) $stmt->fetchColumn();
+    return (int) $stmt->fetchColumn() + wwtcUnmarkedOverrideCount($userId);
 }
 
 /** SPA grade key ('pre1a', '1'..'12') → number for math; -1 if unknown. */
@@ -824,7 +888,7 @@ if ($method === 'GET' && $path === '/stats') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             $a = $board['army'];
             wwtcJson([
                 'monthLabel' => $period['month'],
@@ -879,13 +943,13 @@ if ($method === 'GET' && $path === '/stats') {
           WHERE ' . WWTC_ROSTER_WHERE
     )->fetchColumn();
 
-    // Soldiers who completed stay on the mission-mark signal (the home race).
-    // The perfect-platoon count is the shared kapitlach list, so the stat and
-    // the Perfect Platoons section cannot disagree.
-    $counts = wwtcCompletionCounts($current);
+    // Soldiers who completed stay on the mission-mark signal (the home race),
+    // with quota overrides folded in. The perfect-platoon count is the shared
+    // kapitlach list, so the stat and the Perfect Platoons section cannot disagree.
+    $counts = wwtcCompletionCounts($current, $year);
     $metSoldiers = (int) array_sum($counts['metBySchool']);
     $participatedSoldiers = (int) array_sum(wwtcParticipatedBySchool($current));
-    $perfectPlatoons = count(wwtcPerfectPlatoonRows($current));
+    $perfectPlatoons = count(wwtcPerfectPlatoonRows($current, $year));
 
     wwtcJson([
         'monthLabel' => wwtcMonthForDate($current) ?: (is_array($period) ? (string) $period['month'] : ''),
@@ -956,7 +1020,7 @@ if ($method === 'GET' && $path === '/schools') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'schools' => wwtcHolidaySchools($board)]);
         }
         $rows = wwtcNationwideSchools((int) $period['jd'], (int) $period['year']);
@@ -1066,14 +1130,16 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'platoons' => wwtcHolidayPlatoons($board)]);
         }
         $current = (int) $period['jd'];
+        $platoonYear = (int) $period['year'];
     } else {
         $current = wwtcCurrentDate();
+        $platoonYear = wwtcYear();
     }
-    wwtcJson(['month' => wwtcMonthForDate($current), 'platoons' => wwtcPerfectPlatoonRows($current)]);
+    wwtcJson(['month' => wwtcMonthForDate($current), 'year' => $platoonYear, 'platoons' => wwtcPerfectPlatoonRows($current, $platoonYear)]);
 }
 
 // ---- reports ----------------------------------------------------------------
@@ -1086,7 +1152,7 @@ if ($method === 'GET' && $path === '/reports/army') {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             wwtcJson(['month' => $period['month'], 'year' => $period['year'], 'holiday' => true, 'rows' => wwtcHolidayArmyRows($board)]);
         }
         $date = (int) $period['jd'];
@@ -1098,7 +1164,7 @@ if ($method === 'GET' && $path === '/reports/army') {
     $names = $agg['schools'];
     $goal = $agg['kapGoal'];
     $done = $agg['kapDone'];
-    $counts = wwtcCompletionCounts($date);
+    $counts = wwtcCompletionCounts($date, $reportYear);
 
     $participated = wwtcParticipatedBySchool($date);
     $minGoal = $agg['minGoal'];
@@ -1150,7 +1216,7 @@ if ($method === 'GET' && preg_match('#^/reports/base/(\d+)$#', $path, $m)) {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             $classes = wwtcHolidaySchoolData($board, $id)['classes'];
             $monthLabel = $period['month'];
         } else {
@@ -1251,7 +1317,7 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
     if (wwtcHasPeriodQuery()) {
         $period = wwtcQueryPeriod();
         if ($period['holiday']) {
-            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year']);
+            $board = wwtcHolidayBoard($period['jds'], (int) $period['quotaJd'], (int) $period['year'], (string) $period['month']);
             $data = wwtcHolidaySchoolData($board, $schoolId);
             $monthLabel = $period['month'];
         } else {
@@ -1274,16 +1340,19 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
             'id' => $s['id'],
             'name' => $s['name'],
             'goal' => $s['quota'],
+            'originalGoal' => (int) ($s['originalQuota'] ?? $s['quota']),
             // No Hebrew kapitel label server-side; the numeric goal stands in for
             // goalLabel (the SPA renders it where it shows the demo's Hebrew range).
             'goalLabel' => (string) $s['quota'],
             'said' => $s['said'],
             'met' => $s['met'],
+            'quotaAdjusted' => !empty($s['quotaAdjusted']),
         ];
     }
     $summary = [
         'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
+        'schoolId' => $schoolId,
         'className' => $className,
         'completed' => $completed,
         'size' => count($rows),
@@ -2032,6 +2101,115 @@ if ($method === 'GET' && $path === '/hq/verify') {
             'Schools in missingLogos have no shield file yet. Upload it on mashpia (school logos).',
         ],
     ]);
+}
+
+/**
+ * The quota and kapitlach the monthly report is showing for this soldier.
+ * That figure is the report engine's own quota — Cheshvan included, which the
+ * engine reprices from today's ladder. A flagged amount that does not count
+ * yet is not the number the override adopts. Null month means it is not on
+ * the calendar.
+ *
+ * @return array{engineQuota:int,said:int,reported:bool}|null
+ */
+function wwtcOverrideEngineFigures(array $kid, int $year, string $month): ?array
+{
+    $dates = wwtcMonthDatesForYear($year);
+    if (!isset($dates[$month])) {
+        return null;
+    }
+    $jd = (int) $dates[$month];
+    $raw = wwtcSchoolDataRaw((int) $kid['school_id'], $jd, $year);
+    foreach ($raw['students'] ?? [] as $student) {
+        if ((int) $student['id'] !== (int) $kid['user_id']) {
+            continue;
+        }
+        $said = (int) $student['said'];
+        if (function_exists('wwtcOpenFlag')) {
+            $flag = wwtcOpenFlag((int) $kid['user_id'], $jd);
+            if ($flag && ($flag['status'] ?? '') === 'flagged') {
+                $said = wwtcCountedKapitlach($said, (int) ($flag['kapitlach'] ?? 0), 'flagged');
+            }
+        }
+        return [
+            'engineQuota' => (int) $student['quota'],
+            'said' => $said,
+            'reported' => $said > 0,
+        ];
+    }
+    return ['engineQuota' => 0, 'said' => 0, 'reported' => false];
+}
+
+function wwtcOverrideActorSchools(array $actor): array
+{
+    if (($actor['auth'] ?? '') === 'super') {
+        return [];
+    }
+    return wwtcAdminAuthIds((int) $actor['id'], 'school');
+}
+
+// Base commander (or HQ) sets one soldier's quota for one month to the
+// kapitlach they entered. The ladder and every other month are left alone.
+if ($method === 'POST' && $path === '/admin/quota-override') {
+    $actor = wwtcRequireActor(['admin']);
+    $input = wwtcInput();
+    $kidId = (int) ($input['kidId'] ?? 0);
+    $year = isset($input['year']) && $input['year'] !== '' ? (int) $input['year'] : wwtcYear();
+    $month = trim((string) ($input['month'] ?? ''));
+    if ($kidId <= 0 || $month === '') {
+        wwtcError('A soldier and a month are required.', 422);
+    }
+    $kid = wwtcKidByUserId($kidId);
+    if (!$kid || !isset(wwtcEligibleSchools()[(int) $kid['school_id']])) {
+        wwtcError('Soldier not found.', 404);
+    }
+    $figures = wwtcOverrideEngineFigures($kid, $year, $month);
+    if ($figures === null) {
+        wwtcError('That month is not on the campaign calendar.', 422);
+    }
+    $existing = wwtcActiveOverridesForMonth($year, $month);
+    $result = wwtcPerformOverride($MASHPIA_DB, $actor, $kid, $input, wwtcOverrideActorSchools($actor), [
+        'ready' => wwtcOverridesReady() && wwtcAuditReady(),
+        'engineQuota' => $figures['engineQuota'],
+        'said' => $figures['said'],
+        'reported' => $figures['reported'],
+        'year' => $year,
+        'month' => $month,
+        'already' => isset($existing[$kidId]),
+    ]);
+    if ($result['status'] !== 200) {
+        wwtcError($result['error'], $result['status']);
+    }
+    wwtcJson($result['body']);
+}
+
+if ($method === 'POST' && $path === '/admin/quota-override/undo') {
+    $actor = wwtcRequireActor(['admin']);
+    $input = wwtcInput();
+    $kidId = (int) ($input['kidId'] ?? 0);
+    $year = isset($input['year']) && $input['year'] !== '' ? (int) $input['year'] : wwtcYear();
+    $month = trim((string) ($input['month'] ?? ''));
+    if ($kidId <= 0 || $month === '') {
+        wwtcError('A soldier and a month are required.', 422);
+    }
+    $kid = wwtcKidByUserId($kidId);
+    if (!$kid || !isset(wwtcEligibleSchools()[(int) $kid['school_id']])) {
+        wwtcError('Soldier not found.', 404);
+    }
+    if (!isset(wwtcMonthDatesForYear($year)[$month])) {
+        wwtcError('That month is not on the campaign calendar.', 422);
+    }
+    $existing = wwtcActiveOverridesForMonth($year, $month);
+    $result = wwtcPerformUndo($MASHPIA_DB, $actor, $kid, wwtcOverrideActorSchools($actor), [
+        'ready' => wwtcOverridesReady() && wwtcAuditReady(),
+        'year' => $year,
+        'month' => $month,
+        'active' => isset($existing[$kidId]),
+    ]);
+    if ($result['status'] !== 200) {
+        wwtcError($result['error'], $result['status']);
+    }
+    wwtcJson($result['body']);
 }
 
 /** null = every school (HQ). An array is the base commander's schools. */
