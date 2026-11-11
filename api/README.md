@@ -199,6 +199,22 @@ Silence with the mic open is not billed as a full minute of speech. Input
 transcription adds a small extra. `gpt-realtime-2.1-mini` is roughly a third of
 that if you set `OPENAI_REALTIME_MODEL`.
 
+## Perfect Platoon graphics
+
+Daily job, ledger, public download page, and the staff WhatsApp office.
+Schools search at `/platoon-graphics`. HQ and school admins send from
+`/office/platoon-graphics` (the same admin login). School WhatsApp numbers
+are not on the public page or the public API. The picture is a placeholder
+until `WWTC_PLATOON_RENDER_CMD` points at Sholem's `platoon_render.py`.
+
+Full notes, the crontab line, the ledger import columns, and what has to be
+on the server: `api/platoon-graphics/README.md`. Run
+`api/sql/wwtc_platoon_graphics.sql` once by hand. The app does not run it.
+
+```
+15 6 * * * php /ABSOLUTE/PATH/shabbos-mevorchim-tehillim/api/bin/make-platoon-graphics.php >> /var/log/wwtc-platoon-graphics.log 2>&1
+```
+
 ## Setup
 
 1. **Token secret.** Set `WWTC_TOKEN_SECRET` in `mashpia.com/includes/globals.php`

@@ -20,6 +20,9 @@ src/data/roster.generated.js
 # local API config / secrets (DB credentials) — never commit
 api/config.local.php
 
+# Perfect Platoon PNGs the daily job writes when WWTC_PLATOON_GRAPHICS_DIR is unset
+/var/
+
 # local/editor
 .DS_Store
 *.local

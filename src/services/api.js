@@ -29,6 +29,7 @@ import {
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
+import { demoPublicPlatoonGraphics } from '@/lib/platoonGraphicsDemo.js'
 
 const HOLIDAYS = new Set(['Rosh Hashana', 'Yom Kippur'])
 export function isHolidayMonth(month) {
@@ -207,6 +208,11 @@ export function topSchoolsByQuota(n = 5) {
 export async function getPerfectPlatoons(period) {
   if (!IS_DEMO) return mashpia.getPerfectPlatoons(period)
   return demoPerfectPlatoons(demoDataMonth(period?.month || CURRENT_MONTH), period?.year || CAMPAIGN_YEAR)
+}
+
+export async function getPublicPlatoonGraphics(period) {
+  if (!IS_DEMO) return mashpia.getPublicPlatoonGraphics(period)
+  return demoPublicPlatoonGraphics(period)
 }
 
 function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {

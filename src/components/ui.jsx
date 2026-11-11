@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { forwardRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { asset } from '../lib/asset.js'
 
@@ -119,14 +119,15 @@ export function Field({ label, hint, children }) {
   )
 }
 
-export function Input(props) {
+export const Input = forwardRef(function Input(props, ref) {
   return (
     <input
       {...props}
+      ref={ref}
       className={`min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 sm:min-h-0 ${props.className || ''}`}
     />
   )
-}
+})
 
 export function Textarea(props) {
   return (

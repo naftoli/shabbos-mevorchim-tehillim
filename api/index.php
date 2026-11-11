@@ -17,6 +17,7 @@ require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
 require __DIR__ . '/soldierBoard.php';
 require __DIR__ . '/soldierRank.php';
+require __DIR__ . '/platoonGraphics.php';
 
 function wwtcRoutePath(): string
 {
@@ -1060,43 +1061,8 @@ if ($method === 'GET' && $path === '/perfect-platoons') {
     } else {
         $current = wwtcCurrentDate();
     }
-    $counts = wwtcCompletionCounts($current);
-    $perfect = []; // class_id => ['sid'=>, 'size'=>]
-    foreach ($counts['sizeByClass'] as $sid => $byClass) {
-        foreach ($byClass as $cid => $size) {
-            if ($size > 0 && ($counts['metByClass'][$sid][$cid] ?? 0) >= $size) {
-                $perfect[(int) $cid] = ['sid' => (int) $sid, 'size' => (int) $size];
-            }
-        }
-    }
-
-    $out = [];
-    if ($perfect) {
-        $schools = wwtcEligibleSchools();
-        $ids = implode(',', array_map('intval', array_keys($perfect)));
-        $meta = $MASHPIA_DB->query(
-            "SELECT class_id, class_grade, class_sub, class_teacher FROM classes WHERE class_id IN ($ids)"
-        )->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($meta as $c) {
-            $cid = (int) $c['class_id'];
-            $sid = $perfect[$cid]['sid'];
-            if (!isset($schools[$sid])) {
-                continue; // not an eligible WWTC school
-            }
-            $grade = (string) $c['class_grade'];
-            $sub = (string) ($c['class_sub'] ?? '');
-            $out[] = [
-                'schoolId' => $sid,
-                'school' => $schools[$sid],
-                'className' => $grade . ($sub !== '' ? '-' . $sub : ''),
-                'teacher' => (string) ($c['class_teacher'] ?? ''),
-                'grade' => $grade,
-                'size' => $perfect[$cid]['size'],
-                'schoolClasses' => isset($counts['sizeByClass'][$sid]) ? count($counts['sizeByClass'][$sid]) : 0,
-            ];
-        }
-    }
-    wwtcJson(['month' => wwtcMonthForDate($current), 'platoons' => $out]);
+    // Same rows the daily graphics job uses. classId is extra; the SPA ignores it.
+    wwtcJson(['month' => wwtcMonthForDate($current), 'platoons' => wwtcPerfectPlatoonRows($current)]);
 }
 
 // ---- reports ----------------------------------------------------------------
@@ -1983,6 +1949,11 @@ if ($method === 'GET' && $path === '/hq/verify') {
             'Schools in missingLogos have no shield file yet. Upload it on mashpia (school logos).',
         ],
     ]);
+}
+
+// Perfect Platoon graphics (public download + staff office). Own routes only.
+if (wwtcDispatchPlatoonGraphics($method, $path)) {
+    exit;
 }
 
 wwtcError('Not found: ' . $method . ' ' . $path, 404);
