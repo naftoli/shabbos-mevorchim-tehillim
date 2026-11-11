@@ -4,7 +4,6 @@ import { Brand, Button } from './ui.jsx'
 import ChatBuddy from './ChatBuddy.jsx'
 import { asset } from '../lib/asset.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useLanguage } from '../context/LanguageContext.jsx'
 import LanguageSwitch from './LanguageSwitch.jsx'
 import { IS_DEMO } from '../lib/liveMode.js'
 
@@ -20,7 +19,6 @@ const menuLink = ({ isActive }) =>
 
 export default function Layout({ children }) {
   const { isKid, isAdmin } = useAuth()
-  const { pending, notice } = useLanguage()
   const { pathname } = useLocation()
   const [params] = useSearchParams()
   useEffect(() => {
@@ -87,12 +85,6 @@ export default function Layout({ children }) {
         <div className="border-t border-white/40">
           <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 sm:px-6 lg:px-10">
             <LanguageSwitch />
-            {pending ? (
-              <span data-no-translate className="text-[12px] font-semibold text-navy">Translating…</span>
-            ) : null}
-            {notice ? (
-              <span data-no-translate role="status" className="text-[12px] font-semibold text-navy">{notice}</span>
-            ) : null}
           </div>
         </div>
         {/* Phone-only disclosure menu. */}

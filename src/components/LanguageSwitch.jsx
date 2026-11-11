@@ -9,9 +9,8 @@ function itemClass(on) {
   }`
 }
 
-// English restores the original page. It is not sent to POST /translate.
-// The four language names stay in English so the control itself is not
-// swapped out from under the reader.
+// English restores the original page. The four names stay in English so the
+// control itself is not swapped out. Switching is entirely on this device.
 export default function LanguageSwitch() {
   const { lang, choose } = useLanguage()
   return (

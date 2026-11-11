@@ -1,6 +1,7 @@
-// Visible-page translation. The server does the language work; this module
-// decides which text is safe to send and how to put the answer back.
-// Tokens, serials, dates of birth, and passwords never go in the payload.
+// Visible-page translation from the static locale files. Nothing is fetched.
+// Serials, dates of birth, and passwords are left as written.
+
+import { lookup } from './i18n.js'
 
 export const TARGET_LANGS = [
   { code: 'he', label: 'Hebrew' },
@@ -10,8 +11,6 @@ export const TARGET_LANGS = [
 ]
 
 export const LANG_STORAGE_KEY = 'wwtc.lang'
-export const TRANSLATE_CHUNK = 30
-export const TRANSLATION_UNAVAILABLE = "Translation isn't available right now. The page stays in English."
 
 const TARGET_CODES = TARGET_LANGS.map((item) => item.code)
 const ATTRS = ['placeholder', 'aria-label', 'alt', 'title']
@@ -82,18 +81,7 @@ export function shouldTranslateText(text) {
   return true
 }
 
-export function uniqueMissing(cores, lang, cache) {
-  const out = []
-  const seen = new Set()
-  for (const core of cores) {
-    if (!shouldTranslateText(core)) continue
-    if (cache.has(translationCacheKey(lang, core))) continue
-    if (seen.has(core)) continue
-    seen.add(core)
-    out.push(core)
-  }
-  return out
-}
+export { lookup }
 
 function channelsOf(node) {
   let channels = memory.get(node)
@@ -143,7 +131,7 @@ function blocked(el) {
   return false
 }
 
-function consider(node, channel, read, write, lang, cache, pending) {
+function consider(node, channel, read, write, lang) {
   const current = read() ?? ''
   const saved = cell(node, channel)
   let english
@@ -152,17 +140,14 @@ function consider(node, channel, read, write, lang, cache, pending) {
   else english = current
   const { lead, core, tail } = splitEdges(english)
   if (!shouldTranslateText(core)) return
-  const hit = cache.get(translationCacheKey(lang, core))
-  if (typeof hit === 'string') {
-    const next = lead + hit + tail
-    if (current !== next) write(next)
-    putCell(node, channel, { lang, english, translated: next, read, write })
-    return
-  }
-  pending.push({ node, channel, read, write, lead, core, tail, english })
+  const hit = lookup(lang, core)
+  if (hit === core) return
+  const next = lead + hit + tail
+  if (current !== next) write(next)
+  putCell(node, channel, { lang, english, translated: next, read, write })
 }
 
-function walk(root, lang, cache, pending) {
+function walk(root, lang) {
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       return blocked(node.parentElement) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
@@ -171,7 +156,7 @@ function walk(root, lang, cache, pending) {
   let node = walker.nextNode()
   while (node) {
     const textNode = node
-    consider(textNode, 'text', () => textNode.nodeValue ?? '', (value) => { textNode.nodeValue = value }, lang, cache, pending)
+    consider(textNode, 'text', () => textNode.nodeValue ?? '', (value) => { textNode.nodeValue = value }, lang)
     node = walker.nextNode()
   }
   const marked = root.querySelectorAll('[placeholder], [aria-label], [alt], [title]')
@@ -187,50 +172,14 @@ function walk(root, lang, cache, pending) {
         () => el.getAttribute(name) ?? '',
         (value) => el.setAttribute(name, value),
         lang,
-        cache,
-        pending,
       )
     }
   })
 }
 
-export async function translateDocument(root, lang, cache, fetchList, isCurrent = () => true, onRequest = () => {}) {
-  if (!root || lang === 'en') return
+/** Swap visible English copy for the chosen static locale. No network. */
+export function applyLocale(root, lang) {
+  if (!root || !lang || lang === 'en') return
   prune()
-  const pending = []
-  walk(root, lang, cache, pending)
-  const cores = uniqueMissing(pending.map((item) => item.core), lang, cache)
-  if (!cores.length || !isCurrent()) return
-  onRequest()
-  const translated = new Map()
-  for (let i = 0; i < cores.length; i += TRANSLATE_CHUNK) {
-    if (!isCurrent()) return
-    const chunk = cores.slice(i, i + TRANSLATE_CHUNK)
-    const data = await fetchList(lang, chunk)
-    const list = data?.translations
-    if (!Array.isArray(list) || list.length !== chunk.length) {
-      throw new Error(TRANSLATION_UNAVAILABLE)
-    }
-    chunk.forEach((core, n) => {
-      if (typeof list[n] !== 'string') throw new Error(TRANSLATION_UNAVAILABLE)
-      translated.set(core, list[n])
-      cache.set(translationCacheKey(lang, core), list[n])
-    })
-  }
-  if (!isCurrent()) return
-  for (const item of pending) {
-    const hit = translated.get(item.core) ?? cache.get(translationCacheKey(lang, item.core))
-    if (typeof hit !== 'string') continue
-    const next = item.lead + hit + item.tail
-    const now = item.read()
-    if (now !== item.english && now !== next) continue
-    if (now !== next) item.write(next)
-    putCell(item.node, item.channel, {
-      lang,
-      english: item.english,
-      translated: next,
-      read: item.read,
-      write: item.write,
-    })
-  }
+  walk(root, lang)
 }

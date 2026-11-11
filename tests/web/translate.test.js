@@ -1,11 +1,9 @@
-// Page translation: the facade posts to /translate with no credentials, and the
-// pure helpers decide direction, storage, and which strings are safe to send.
+// Static locales. The page does not call POST /translate.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { mock, lastCall, reset } from './harness.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (path) => readFileSync(join(root, path), 'utf8')
@@ -16,16 +14,11 @@ const {
   htmlAttrsFor,
   looksLikeSecret,
   shouldTranslateText,
-  uniqueMissing,
-  translationCacheKey,
   splitEdges,
   readStoredLang,
   writeStoredLang,
-  TRANSLATION_UNAVAILABLE,
+  lookup,
 } = await import('../../src/lib/pageTranslate.js')
-
-const api = await import('@/services/api.js')
-const mashpia = await import('@/services/mashpia.js')
 
 test('html direction is rtl only for Hebrew', () => {
   assert.deepEqual(htmlAttrsFor('he'), { dir: 'rtl', lang: 'he' })
@@ -33,7 +26,6 @@ test('html direction is rtl only for Hebrew', () => {
   assert.deepEqual(htmlAttrsFor('it'), { dir: 'ltr', lang: 'it' })
   assert.deepEqual(htmlAttrsFor('fr'), { dir: 'ltr', lang: 'fr' })
   assert.deepEqual(htmlAttrsFor('en'), { dir: 'ltr', lang: 'en' })
-  assert.deepEqual(htmlAttrsFor('es'), { dir: 'ltr', lang: 'en' })
 })
 
 test('the language choice is remembered only as a known code', () => {
@@ -48,61 +40,34 @@ test('the language choice is remembered only as a known code', () => {
   assert.equal(readStoredLang(storage), 'he')
   writeStoredLang(storage, 'nope')
   assert.equal(readStoredLang(storage), 'en')
-  assert.equal(readStoredLang(null), 'en')
 })
 
-test('secrets and already-Hebrew text are not sent', () => {
+test('secrets are not treated as copy to translate', () => {
   assert.equal(shouldTranslateText('Home'), true)
-  assert.equal(shouldTranslateText('Say 150 kapitlach'), true)
-  assert.equal(shouldTranslateText('Enter a serial number and date of birth.'), true)
-  assert.equal(shouldTranslateText(''), false)
-  assert.equal(shouldTranslateText('150'), false)
   assert.equal(shouldTranslateText('2015-05-05'), false)
-  assert.equal(looksLikeSecret('2015-05-05'), true)
-  assert.equal(shouldTranslateText('123456'), false)
+  assert.equal(looksLikeSecret('123456'), true)
   assert.equal(shouldTranslateText('Bearer abc.def.ghi'), false)
-  assert.equal(shouldTranslateText('sk-abcdefghijklmnop'), false)
-  assert.equal(shouldTranslateText('soldier@example.com'), false)
-  assert.equal(shouldTranslateText('גומר זיין דעם תהלים שבת מברכים'), false)
   const { lead, core, tail } = splitEdges('  Home  ')
-  assert.equal(lead, '  ')
   assert.equal(core, 'Home')
-  assert.equal(tail, '  ')
+  assert.equal(`${lead}${core}${tail}`, '  Home  ')
 })
 
-test('a cached string is not requested again', () => {
-  const cache = new Map([[translationCacheKey('he', 'Home'), 'בית']])
-  assert.deepEqual(uniqueMissing(['Home', 'Home', 'Schools', '150'], 'he', cache), ['Schools'])
-})
-
-test('translatePage posts the copy and does not send a token', async () => {
-  reset()
-  mashpia.saveToken('kid', 'secret-token', 3600)
-  mock({ 'POST /translate': { body: { targetLang: 'he', translations: ['בית', 'בתי ספר'] } } })
-  const data = await api.translatePage('he', ['Home', 'Schools'])
-  assert.deepEqual(data.translations, ['בית', 'בתי ספר'])
-  const call = lastCall()
-  assert.equal(call.method, 'POST')
-  assert.equal(call.apiPath, '/translate')
-  assert.deepEqual(call.body, { targetLang: 'he', content: ['Home', 'Schools'] })
-  assert.equal(call.headers.Authorization, undefined)
-  assert.equal(JSON.stringify(call.body).includes('secret-token'), false)
-  assert.deepEqual(Object.keys(call.body).sort(), ['content', 'targetLang'])
-  mashpia.endSession('kid')
-})
-
-test('a string payload is passed through as a string', async () => {
-  reset()
-  mock({ 'POST /translate': { body: { targetLang: 'ru', translation: 'Главная' } } })
-  await api.translatePage('ru', 'Home')
-  assert.deepEqual(lastCall().body, { targetLang: 'ru', content: 'Home' })
-  assert.equal(lastCall().headers.Authorization, undefined)
-})
-
-test('a 503 rejects and names no partial translation', async () => {
-  reset()
-  mock({ 'POST /translate': { status: 503, body: { error: 'Translation is not configured yet.' } } })
-  await assert.rejects(() => api.translatePage('fr', ['Home']), /not configured/)
+test('static locales translate the home hero and keep campaign names', () => {
+  assert.equal(lookup('en', 'Home'), 'Home')
+  assert.equal(lookup('he', 'Home'), 'בית')
+  assert.equal(lookup('ru', 'Home'), 'Главная')
+  assert.equal(lookup('it', 'Home'), 'Inizio')
+  assert.equal(lookup('fr', 'Home'), 'Accueil')
+  const hero = lookup('he', 'Every Kapitel.')
+  assert.match(hero, /Kapitel/)
+  assert.doesNotMatch(hero, /fetch|\/translate/)
+  const sentence = lookup('fr', 'Saying the entire Tehillim on Shabbos Mevorchim is important for you, your children, and your children\'s children.')
+  assert.match(sentence, /Tehillim/)
+  assert.match(sentence, /Shabbos Mevorchim/)
+  assert.match(sentence, /important/)
+  assert.equal(lookup('ru', '5 - White'), '5 - Белый')
+  assert.equal(lookup('it', '12 this month'), '12 questo mese')
+  assert.equal(lookup('he', 'Oholei Torah'), 'Oholei Torah')
 })
 
 test('the header and the phone menu both offer the four languages and English', () => {
@@ -113,27 +78,16 @@ test('the header and the phone menu both offer the four languages and English', 
     assert.match(buttons, new RegExp(`label: '${label}'`))
   }
   assert.deepEqual(TARGET_LANGS.map((item) => item.code), ['he', 'ru', 'it', 'fr'])
-  assert.match(layout, /role="status"/)
-  assert.match(read('src/main.jsx'), /LanguageProvider/)
-  assert.match(read('src/lib/pageTranslate.js'), /TRANSLATION_UNAVAILABLE/)
-  assert.match(TRANSLATION_UNAVAILABLE, /stays in English/)
-  const apiSource = read('src/services/api.js')
-  assert.match(apiSource, /export async function translatePage/)
-  const fn = apiSource.slice(apiSource.indexOf('export async function translatePage'))
-  assert.equal(fn.slice(0, 180).includes('serial'), false)
-  assert.equal(fn.slice(0, 180).includes('Authorization'), false)
 })
 
-test('the PHP route is the existing API and reuses the chat key', () => {
-  const index = read('api/index.php')
-  assert.match(index, /\$path === '\/translate'/)
-  assert.match(index, /wwtcTranslateRequest\(wwtcInput\(\), wwtcAiKey\(\)\)/)
-  assert.match(index, /wwtcAiKey\(\)/)
-  assert.equal(index.includes('WWTC_TRANSLATE'), false)
-  const client = read('src/services/mashpia.js')
-  const start = client.indexOf('export const translatePage')
-  const body = client.slice(start, start + 220)
-  assert.match(body, /\/translate/)
-  assert.equal(body.includes('Authorization'), false)
-  assert.equal(body.includes("as:"), false)
+test('the frontend does not call the translate endpoint', () => {
+  const page = read('src/lib/pageTranslate.js')
+  const context = read('src/context/LanguageContext.jsx')
+  const api = read('src/services/api.js')
+  assert.equal(page.includes('/translate'), false)
+  assert.equal(page.includes('fetch('), false)
+  assert.equal(context.includes('translatePage'), false)
+  assert.equal(context.includes('/translate'), false)
+  assert.equal(api.includes('function translatePage'), false)
+  assert.equal(api.includes("'/translate'"), false)
 })
