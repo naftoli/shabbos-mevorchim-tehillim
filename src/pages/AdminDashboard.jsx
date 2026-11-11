@@ -6,6 +6,8 @@ import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
+import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
+import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
 import {
   getSchools,
   getSchool,
@@ -14,6 +16,7 @@ import {
   adminSetLadder,
   notCompleted,
   setSchoolDedication,
+  setSchoolYearStart,
   removeSchoolDedication,
   getHqVerify,
   getArmyDedication,
@@ -60,6 +63,57 @@ function HqTools() {
         <Button variant="navy" className="mt-2" onClick={async () => { await setArmyDedication(text); setSavedNote('Saved for this month.'); reloadDedication() }}>Save dedication</Button>
         {savedNote ? <p className="mt-2 text-sm text-green">{savedNote}</p> : null}
       </div>
+    </Card>
+  )
+}
+
+// The month the school's first Shabbos Mevorchim blesses. Tishrei is today's
+// year (grade ends Elul). Shvat means Mevorchim Shvat is quota position 1
+// and the grade ends in Teves. HQ and that school's admin only — this page
+// is already limited to them.
+function SchoolYearSetting({ school, onSaved }) {
+  // Nothing saved (no yearStart on the school) is Tishrei, already selected.
+  const saved = firstMonthFromRow(school)
+  const [month, setMonth] = useState(saved)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  async function save() {
+    setBusy(true)
+    setNote('')
+    try {
+      await setSchoolYearStart(school.id, month)
+      setNote(`Saved. The grade year ends in ${gradeEndMonth(month)}.`)
+      onSaved()
+    } catch (e) {
+      setNote(e?.message || 'Could not save the school year.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Card className="p-5 sm:p-6">
+      <p className="sh">School year starts in</p>
+      <p className="mt-1 text-sm text-muted">
+        The first Shabbos Mevorchim of the grade year. <span className="font-heb">{MONTH_HEB[month]}</span> is quota position 1.
+        The grade ends in {gradeEndMonth(month)}.
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="w-full text-sm sm:w-auto">
+          <span className="mb-1 block font-semibold text-navy">First month</span>
+          <select
+            aria-label="School year starts in"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3 py-2 sm:min-h-0 sm:w-auto"
+          >
+            {PLAIN_MONTHS.map((name) => (
+              <option key={name} value={name}>{name} · {MONTH_HEB[name]}</option>
+            ))}
+          </select>
+        </label>
+        <Button variant="navy" onClick={save} disabled={busy || month === saved}>{busy ? 'Saving…' : 'Save'}</Button>
+      </div>
+      {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
     </Card>
   )
 }
@@ -448,6 +502,8 @@ export default function AdminDashboard() {
               </div>
               <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
             </Card>
+
+            <SchoolYearSetting key={school.id} school={school} onSaved={reloadSchool} />
 
             {/* Dedication — add / edit / remove */}
             <DedicationEditor school={school} onSaved={reloadSchool} />

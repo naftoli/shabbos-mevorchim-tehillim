@@ -248,6 +248,9 @@ export const setKidLadder = (ladder) =>
 export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
   write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
 
+export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
+
 export const overrideQuota = ({ kidId, year, month, reason }) =>
   write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
 

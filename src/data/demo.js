@@ -5,6 +5,7 @@
 
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
+import { firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 import { applySoldierReport, planReport } from '@/lib/overEntry.js'
 
@@ -451,6 +452,29 @@ export function setSchoolDedicationStore(schoolId, dedication) {
     localStorage.setItem(DEDICATION_KEY, JSON.stringify(all))
   } catch { /* private mode / unavailable */ }
 }
+// Per-school grade-year start. Missing entry = Tishrei (today's sequence).
+const YEAR_START_KEY = 'wwtc.demo.yearStart'
+function loadYearStarts() {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    return JSON.parse(localStorage.getItem(YEAR_START_KEY) || '{}')
+  } catch { return {} }
+}
+export function schoolYearStart(schoolId) {
+  const store = loadYearStarts()
+  // No saved entry for this school is a missing row: Tishrei.
+  if (!Object.prototype.hasOwnProperty.call(store, schoolId)) return firstMonthFromRow(null)
+  return firstMonthFromRow(store[schoolId])
+}
+export function setSchoolYearStartStore(schoolId, firstMonth) {
+  try {
+    if (typeof localStorage === 'undefined') return
+    const all = loadYearStarts()
+    all[schoolId] = normalizeFirstMonth(firstMonth)
+    localStorage.setItem(YEAR_START_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+
 export function schoolDedication(schoolId) {
   const s = SCHOOLS.find((x) => x.id === schoolId)
   if (!s) return null

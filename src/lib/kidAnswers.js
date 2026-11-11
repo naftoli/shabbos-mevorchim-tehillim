@@ -2,7 +2,8 @@
 // Placeholders in braces are filled from the signed-in soldier. shimmy:true
 // items have no final answer, so the commander does not invent one.
 
-import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { availableLadders, GRADE_LABEL } from '../data/ladders.js'
+import { quotaForSchool } from './schoolYear.js'
 import { COUNSELOR, TOPICS } from '../data/kidQuestions.js'
 import { easiestLadder, hardestLadder, ladderMenu, stepLadder } from './general613.js'
 import { formatClassName } from './formatClassName.js'
@@ -98,7 +99,7 @@ function varsFor(ctx, text) {
   const n = text ? parseSpokenLadder(text) : null
   if (n != null) {
     vars.n = n
-    const q = quotaFor(grade, month, n)
+    const q = quotaForSchool(grade, month, n, ctx?.yearStart)
     if (q) {
       vars.kapitlach = q.v
       vars.minutes = q.m
@@ -216,7 +217,7 @@ export function ladderChangeReply(text, ctx) {
       pickLadder: null,
     }
   }
-  const q = quotaFor(ctx?.grade, ctx?.monthEn, n)
+  const q = quotaForSchool(ctx?.grade, ctx?.monthEn, n, ctx?.yearStart)
   const amount = q ? `${q.v} kapitlach and ${q.m} minutes` : 'the kapitlach and minutes on your page'
   return {
     reply: `Ladder ${n} means you say ${amount} this month. Do you want me to switch you to ladder ${n}?`,
@@ -244,7 +245,7 @@ export function ladderStepReply(text, ctx) {
       pickLadder: null,
     }
   }
-  const q = quotaFor(ctx?.grade, ctx?.monthEn, next)
+  const q = quotaForSchool(ctx?.grade, ctx?.monthEn, next, ctx?.yearStart)
   const amount = q ? `${q.v} kapitlach and ${q.m} minutes` : 'the kapitlach and minutes on your page'
   return {
     reply: `Let's look at ladder ${next}. That's ${amount} this month. Do you want me to switch you to ladder ${next}?`,

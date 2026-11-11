@@ -4,6 +4,7 @@
 
 import { GRADE_LABEL, quotaFor } from '../data/ladders.js'
 import { cellFor } from './customLadder.js'
+import { quotaSheetMonth } from './schoolYear.js'
 import { fmt } from './format.js'
 
 const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'stand', 'streak']
@@ -88,8 +89,9 @@ export function trainByGrade(ladder) {
 }
 
 /** This month's kapitlach and minutes from the ladder table. Null when absent. */
-export function missionQuota(grade, month, ladder, customGrid = null) {
-  const cell = customGrid ? cellFor(customGrid, grade, month) : quotaFor(grade, month, ladder)
+export function missionQuota(grade, month, ladder, customGrid = null, firstMonth = 'Tishrei') {
+  const named = quotaSheetMonth(month, firstMonth)
+  const cell = customGrid ? cellFor(customGrid, grade, named) : quotaFor(grade, named, ladder)
   if (!cell) return { kapitlach: null, minutes: null }
   return {
     kapitlach: readyNumber(cell.v),

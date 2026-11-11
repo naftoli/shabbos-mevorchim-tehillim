@@ -6,9 +6,9 @@ import {
   GRADE_LABEL,
   availableLadders,
   finishGrade,
-  quotaFor,
 } from '@/data/ladders.js'
-import { campaignMonths, currentHebrewYear } from '@/lib/hebrewYear.js'
+import { currentHebrewYear } from '@/lib/hebrewYear.js'
+import { DEFAULT_FIRST_MONTH, quotaForSchool, schoolYearMonthNames } from '@/lib/schoolYear.js'
 
 // The ladder picker lives UNDER THE CHILD. A signed-in soldier has a known
 // grade (passed in and locked); the demo/preview path lets you pick a grade.
@@ -33,8 +33,8 @@ function LadderButton({ ladder, active, onClick }) {
   )
 }
 
-export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose, year }) {
-  const months = campaignMonths(year ?? currentHebrewYear())
+export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
+  const months = schoolYearMonthNames(firstMonth, year ?? currentHebrewYear(), anchorMonth || 'Tishrei')
   const [grade, setGrade] = useState(fixedGrade ?? '5')
   const ladders = availableLadders(grade)
   const [ladder, setLadder] = useState(initialLadder ?? ladders[ladders.length - 1])
@@ -101,7 +101,7 @@ export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder,
           </thead>
           <tbody>
             {months.map((mo) => {
-              const cell = quotaFor(grade, mo, activeLadder)
+              const cell = quotaForSchool(grade, mo, activeLadder, firstMonth)
               return (
                 <tr key={mo} className="border-t border-[var(--color-line)]">
                   <td className="px-5 py-2 font-heb font-semibold text-navy">{MONTH_HEB[mo]}</td>
