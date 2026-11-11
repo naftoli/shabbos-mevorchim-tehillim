@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Card, Badge } from '@/components/ui.jsx'
 import {
-  MONTHS,
   MONTH_HEB,
   GRADES,
   GRADE_LABEL,
@@ -9,6 +8,7 @@ import {
   finishGrade,
   quotaFor,
 } from '@/data/ladders.js'
+import { campaignMonths, currentHebrewYear } from '@/lib/hebrewYear.js'
 
 // The ladder picker lives UNDER THE CHILD. A signed-in soldier has a known
 // grade (passed in and locked); the demo/preview path lets you pick a grade.
@@ -33,7 +33,8 @@ function LadderButton({ ladder, active, onClick }) {
   )
 }
 
-export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose }) {
+export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose, year }) {
+  const months = campaignMonths(year ?? currentHebrewYear())
   const [grade, setGrade] = useState(fixedGrade ?? '5')
   const ladders = availableLadders(grade)
   const [ladder, setLadder] = useState(initialLadder ?? ladders[ladders.length - 1])
@@ -99,7 +100,7 @@ export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder,
             </tr>
           </thead>
           <tbody>
-            {MONTHS.map((mo) => {
+            {months.map((mo) => {
               const cell = quotaFor(grade, mo, activeLadder)
               return (
                 <tr key={mo} className="border-t border-[var(--color-line)]">

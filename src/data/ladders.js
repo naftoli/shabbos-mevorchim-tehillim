@@ -246,8 +246,10 @@ export const QUOTA = Object.fromEntries(
   ]),
 )
 
-// Look up one cell. grade: 'pre1a' | '1'..'12'; month: a MONTHS entry; ladder 5-12.
-// Leap years have two Adars (Adar I + Adar II); both use the same Adar quota.
+// Look up one cell. grade: 'pre1a' | '1'..'12'; month: a MONTHS entry (or
+// "Adar I" / "Adar II"); ladder 5-12.
+// The master sheet has no separate Adar I / Adar II rows. A leap year says the
+// Adar quota twice — once in Adar I (אדר א׳) and once in Adar II (אדר ב׳).
 export function quotaFor(grade, month, ladder) {
   const mo = month === 'Adar I' || month === 'Adar II' ? 'Adar' : month
   const cells = QUOTA[grade]?.[mo]

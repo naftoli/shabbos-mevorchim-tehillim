@@ -14,6 +14,7 @@ import { getKidProgress, recordMonth, setKidLadder, getKidSocial, CAMPAIGN_YEAR,
 import { useLiveData } from '@/lib/useLiveData.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import { GRADE_LABEL, MONTH_HEB, LADDERS, finishGrade, quotaFor } from '@/data/ladders.js'
+import { isHebrewLeapYear } from '@/lib/hebrewYear.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
@@ -462,7 +463,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} />
 
         <MedalBoard
           progress={progress}
@@ -495,11 +496,12 @@ export default function KidDashboard() {
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
-            <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} />
+            <LadderBreakdownTable ladder={kid.ladder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
             <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
+            {isHebrewLeapYear(CAMPAIGN_YEAR) ? ' Adar I and Adar II each use the Adar quota.' : ''}
           </p>
         </Card>
 

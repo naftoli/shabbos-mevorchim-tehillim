@@ -1,10 +1,13 @@
-import { MONTHS, MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
+import { MONTH_HEB, GRADE_LABEL, finishGrade, QUOTA, toHebrewNumeral } from '@/data/ladders.js'
+import { campaignMonths, currentHebrewYear, quotaMonth } from '@/lib/hebrewYear.js'
 import { CrownIcon } from '@/components/ui.jsx'
 
 // The month-by-month plan for a ladder, every grade from Pre-1A to its finish
 // grade. Each cell = the cumulative kapitel (Aleph-Beis) + minutes; 👑 = the
 // whole Tehillim. Optionally ring the soldier's current grade+month cell.
-export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth }) {
+// In a leap year the columns include Adar I and Adar II; both read the Adar quota.
+export default function LadderBreakdownTable({ ladder, highlightGrade, highlightMonth, year }) {
+  const months = campaignMonths(year ?? currentHebrewYear())
   const grades = ['pre1a']
   for (let g = 1; g <= finishGrade(ladder); g++) grades.push(String(g))
   const hg = highlightGrade != null ? String(highlightGrade) : null
@@ -14,7 +17,7 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
       <thead>
         <tr>
           <th className="sticky left-0 z-10 bg-paper px-2 py-2 text-left font-cond uppercase tracking-wide text-muted">Grade</th>
-          {MONTHS.map((m) => (
+          {months.map((m) => (
             <th
               key={m}
               className={`font-heb px-2 py-2 text-[15px] font-bold ${m === highlightMonth ? 'text-green' : 'text-navy'}`}
@@ -32,8 +35,8 @@ export default function LadderBreakdownTable({ ladder, highlightGrade, highlight
               <td className={`sticky left-0 z-10 bg-paper px-2 py-1.5 text-left font-semibold ${rowHit ? 'text-green' : 'text-navy'}`}>
                 {GRADE_LABEL[g]}
               </td>
-              {MONTHS.map((m) => {
-                const cell = QUOTA[g]?.[m]?.[ladder]
+              {months.map((m) => {
+                const cell = QUOTA[g]?.[quotaMonth(m)]?.[ladder]
                 const finish = cell && cell.v >= 150
                 const here = rowHit && m === highlightMonth
                 return (
