@@ -124,9 +124,6 @@ export function canSeeClassRoll(viewer, scope = {}) {
   return false
 }
 
-/** D1. 'ask' shows an opt-in. 'on' opens the commander. 'off' stays quiet. */
-export const COMMANDER_AUTO_DEFAULT = 'ask'
-
 /**
  * Voices. Marin stays the default and the girl commander.
  * A boy gets cedar unless OPENAI_REALTIME_VOICE pins one voice for everyone.

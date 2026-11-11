@@ -14,10 +14,9 @@ export const BOT_NAME = 'Your Virtual Commander'
 // Open the panel once each time a soldier signs in. A later page change keeps
 // the same kid id, so a panel they closed stays closed. Logout clears it.
 // `null` means leave the panel as it is.
-export function autoOpenFor(openedFor, kidId, preference = 'on') {
+export function autoOpenFor(openedFor, kidId) {
   if (!kidId) return openedFor == null ? null : { openedFor: null, open: false }
   if (openedFor === kidId) return null
-  if (preference !== 'on') return { openedFor: kidId, open: false }
   return { openedFor: kidId, open: true }
 }
 
