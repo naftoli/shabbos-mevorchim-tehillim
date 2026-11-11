@@ -232,8 +232,11 @@ output — this is a JSON API with its own bearer tokens, the Lulav model.
 
 The current Shabbos-Mevorchim date and the English month spellings (matching the
 SPA's `ladders.js`) are computed in `wwtcMonthDates()` / `wwtcCurrentDate()`.
-Note a leap year (like 5787) splits Adar into `Adar I` / `Adar II`, which the
-SPA's 12-month list does not yet model.
+A leap year (5784, 5787, …) splits Adar into `Adar I` and `Adar II`. A plain
+year (5785, …) has one `Adar`. The two leap-year months are separate keys in
+month lists, mission history, and dedications, so they do not overwrite. Both
+reuse the ladder sheet's single Adar quota. Marks stay on their own
+Shabbos-Mevorchim julian day; no schema change is required.
 
 ## Caching the heavy aggregates
 

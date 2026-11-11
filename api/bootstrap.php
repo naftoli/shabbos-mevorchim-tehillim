@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/compat.php';
+require_once __DIR__ . '/hebrewYear.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
@@ -564,9 +565,10 @@ function wwtcYear(): int
 
 /**
  * The campaign's Shabbos-Mevorchim dates for the year as [englishMonth => jd],
- * in calendar order, with Adar collapsed the way the class does (Adar/Adar II
- * only split in a leap year). English month spellings match the SPA's
- * ladders.js MONTHS, so the app can key straight off them.
+ * in calendar order. A plain year has one "Adar" (the duplicate Adar II slot
+ * from calculateSM is skipped). A leap year keeps "Adar I" and "Adar II" as
+ * separate keys so their marks never share a month. English spellings match
+ * the SPA (ladders.js / hebrewYear.js).
  */
 function wwtcMonthDates(): array
 {

@@ -11,7 +11,7 @@ import { compareSoldiers } from '@/lib/soldierBoard.js'
 import { medalState } from '@/lib/medals.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
 import * as mashpia from './mashpia.js'
-import { MONTHS } from '@/data/ladders.js'
+import { campaignMonths } from '@/lib/hebrewYear.js'
 import {
   ROSTER,
   CURRENT_MONTH,
@@ -240,7 +240,7 @@ export async function getCampaignCalendar(year) {
   return {
     year: y,
     years: [Number(CAMPAIGN_YEAR), Number(PRIOR_CAMPAIGN_YEAR)],
-    months: y === Number(CAMPAIGN_YEAR) ? ELAPSED_MONTHS : MONTHS,
+    months: y === Number(CAMPAIGN_YEAR) ? ELAPSED_MONTHS : campaignMonths(y),
     currentMonth: CURRENT_MONTH,
     holidayMonths: ['Rosh Hashana', 'Yom Kippur'],
   }
@@ -351,7 +351,7 @@ function demoKidProgress(id) {
       isCurrent: mo === CURRENT_MONTH,
     }
   })
-  const historyMonths = MONTHS.map((mo) => {
+  const historyMonths = campaignMonths(PRIOR_CAMPAIGN_YEAR).map((mo) => {
     const q = quotaFor(kid.grade, mo, kid.ladder)
     const said = kid.priorYearReports?.[mo]
     const reported = said != null

@@ -3,7 +3,8 @@
 // numbers are stable between reloads. This stands in for the live Mashpia
 // roster until the real API is wired; the api.js facade reads it in demo mode.
 
-import { MONTHS, GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
+import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
+import { campaignMonths } from '@/lib/hebrewYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 
 // Where the campaign "is" right now — driven by the REAL date so the demo always
@@ -18,11 +19,14 @@ function currentHebrewYear(d = new Date()) {
 }
 // The current reporting month is the one the MOST RECENT Shabbos Mevorchim
 // bentshed — what kids are reporting now — not the next upcoming one.
+// A leap year (two Adars) uses a 13-month list so Adar I and Adar II are both
+// real months; a plain year keeps the single Adar key.
 const _current = currentReportingMonth()
-export const CURRENT_MONTH_INDEX = Math.max(0, MONTHS.indexOf(_current ?? 'Cheshvan'))
-export const CURRENT_MONTH = MONTHS[CURRENT_MONTH_INDEX]
-export const ELAPSED_MONTHS = MONTHS.slice(0, CURRENT_MONTH_INDEX + 1)
 export const CAMPAIGN_YEAR = _current ? currentHebrewYear() : '5786'
+const YEAR_MONTHS = campaignMonths(CAMPAIGN_YEAR)
+export const CURRENT_MONTH_INDEX = Math.max(0, YEAR_MONTHS.indexOf(_current ?? 'Cheshvan'))
+export const CURRENT_MONTH = YEAR_MONTHS[CURRENT_MONTH_INDEX]
+export const ELAPSED_MONTHS = YEAR_MONTHS.slice(0, CURRENT_MONTH_INDEX + 1)
 
 // Tehillim said in prior years (so "all-time" reads bigger than this year).
 const PRIOR_YEARS_KAPITLACH = 1_240_000
@@ -102,7 +106,7 @@ function priorYearFor(seq, grade, ladder) {
   const rand = rng(800000 + seq)
   const reports = {}
   const minutes = {}
-  for (const mo of MONTHS) {
+  for (const mo of campaignMonths(Number(CAMPAIGN_YEAR) - 1)) {
     const q = quotaFor(grade, mo, ladder)
     if (!q) continue
     const r = rand()
