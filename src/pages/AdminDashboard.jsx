@@ -18,8 +18,11 @@ import {
   getHqVerify,
   getArmyDedication,
   setArmyDedication,
+  getFlagQueue,
+  reviewFlag,
   CURRENT_MONTH,
 } from '@/services/api.js'
+import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
 
 function HqTools() {
   const { data, error, reload } = useLiveData(() => getHqVerify(), [])
@@ -201,6 +204,116 @@ function LadderSetter({ schoolId, classes }) {
   )
 }
 
+function FlagQueue({ schoolId, all, actorName }) {
+  const { data, error, reload } = useLiveData(() => getFlagQueue({ schoolId, all }), [schoolId, all])
+  const [busy, setBusy] = useState(null)
+  const [note, setNote] = useState('')
+  async function decide(id, action) {
+    setBusy(`${id}:${action}`)
+    setNote('')
+    try {
+      await reviewFlag(id, action, actorName)
+      setNote(action === 'accept'
+        ? 'Accepted. It counts now.'
+        : 'Removed. The soldier is back to the earlier value, or not counted for the month.')
+      reload()
+    } catch (e) {
+      setNote(e?.message || 'Could not save that decision.')
+    } finally {
+      setBusy(null)
+    }
+  }
+  const pending = data?.pending ?? []
+  const recent = data?.recent ?? []
+  return (
+    <Card className="p-5 sm:p-6">
+      <div data-flag-queue>
+      <p className="sh">Flagged reports</p>
+      <p className="mt-1 text-sm text-muted">
+        These amounts do not count in totals, ranks, Perfect Platoon, or medals until you accept them.
+        Remove voids the entry and puts the soldier back to the value they had before, or to not counted for the month.
+      </p>
+      {error ? <p className="mt-3 text-sm text-navy">Couldn’t load the queue. <button type="button" className="underline" onClick={reload}>Try again</button></p> : null}
+      {!data && !error ? <p className="mt-3 text-sm text-muted">Getting flagged reports…</p> : null}
+      {data && pending.length === 0 ? <p className="mt-3 text-sm font-semibold text-green">No flagged reports waiting.</p> : null}
+      {pending.length > 0 ? (
+        <>
+          <ul className="mt-4 space-y-3 sm:hidden">
+            {pending.map((row) => (
+              <li key={row.id} className="rounded-xl border border-line p-3">
+                <p className="font-semibold text-navy">{row.kidName}</p>
+                <p className="text-sm text-muted">{row.className}{all ? ` · ${row.schoolName}` : ''}</p>
+                <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div><dt className="text-xs uppercase text-muted">Amount</dt><dd className="font-semibold text-navy">{amountLabel(row)}</dd></div>
+                  <div><dt className="text-xs uppercase text-muted">Threshold</dt><dd className="text-navy">above {thresholdLabel(row)}</dd></div>
+                  <div className="col-span-2"><dt className="text-xs uppercase text-muted">Date</dt><dd className="text-navy">{formatFlagWhen(row.createdAt)}</dd></div>
+                </dl>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button type="button" variant="navy" className="min-h-11" disabled={busy != null} onClick={() => decide(row.id, 'accept')}>{busy === `${row.id}:accept` ? 'Saving…' : 'Accept'}</Button>
+                  <Button type="button" variant="outline" className="min-h-11" disabled={busy != null} onClick={() => decide(row.id, 'remove')}>{busy === `${row.id}:remove` ? 'Saving…' : 'Remove'}</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead>
+                <tr className="bg-track/60 text-muted">
+                  <th className="px-3 py-2 font-cond uppercase">Kid</th>
+                  <th className="px-3 py-2 font-cond uppercase">Class</th>
+                  {all ? <th className="px-3 py-2 font-cond uppercase">Base</th> : null}
+                  <th className="px-3 py-2 font-cond uppercase">Amount</th>
+                  <th className="px-3 py-2 font-cond uppercase">Threshold</th>
+                  <th className="px-3 py-2 font-cond uppercase">Date</th>
+                  <th className="px-3 py-2 font-cond uppercase">Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((row) => (
+                  <tr key={row.id} className="border-t border-line">
+                    <td className="px-3 py-2 font-semibold text-navy">{row.kidName}</td>
+                    <td className="px-3 py-2">{row.className}</td>
+                    {all ? <td className="px-3 py-2">{row.schoolName}</td> : null}
+                    <td className="px-3 py-2">{amountLabel(row)}</td>
+                    <td className="px-3 py-2">above {thresholdLabel(row)}</td>
+                    <td className="px-3 py-2">{formatFlagWhen(row.createdAt)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <Button type="button" variant="navy" className="!px-3 !py-1 !text-sm" disabled={busy != null} onClick={() => decide(row.id, 'accept')}>Accept</Button>
+                        <Button type="button" variant="outline" className="!px-3 !py-1 !text-sm" disabled={busy != null} onClick={() => decide(row.id, 'remove')}>Remove</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+      {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
+      {recent.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-sm font-semibold text-navy">Recent decisions</p>
+          <ul className="mt-2 space-y-1 text-sm text-muted">
+            {recent.slice(0, 8).map((row) => {
+              const last = row.decisions?.[row.decisions.length - 1]
+              const verb = last?.action === 'accepted' ? 'Accepted' : 'Removed'
+              return (
+                <li key={`${row.id}-${last?.at || 'decision'}`}>
+                  {verb} {row.kidName}
+                  {last?.actorName ? ` · ${last.actorName}` : ''}
+                  {last?.at ? ` · ${formatFlagWhen(last.at, true)}` : ''}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
+      </div>
+    </Card>
+  )
+}
+
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
   const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools() : Promise.resolve([])), [isSuper])
@@ -232,6 +345,8 @@ export default function AdminDashboard() {
             <Button variant="ghost" className="!px-3 !text-[15px] max-sm:min-h-11" onClick={logoutAdmin}>Sign out</Button>
           </div>
         </div>
+
+        <FlagQueue schoolId={isSuper ? null : admin.schoolId} all={!!isSuper} actorName={admin.name} />
 
         {isSuper ? <HqTools /> : null}
 

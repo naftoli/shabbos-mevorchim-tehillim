@@ -42,6 +42,11 @@ export const ABOVE_QUOTA_METRIC = 'both'
  * D16. After the chayol confirms, a report at or above either threshold is
  * "exceptional": email the mashpia. Minutes are a flat cap. Kapitlach are a
  * multiple of that chayol's own quota (so a quota of 2 does not email at 3).
+ *
+ * Amounts past the grade line are a different path. Those are flagged and do
+ * not count until a base commander or HQ accepts them. The numbers live in
+ * api/over-entry.json (see src/lib/overEntry.js). This email is only for a
+ * high report that is still inside that line.
  */
 export const EXCEPTIONAL_MINUTES = 180
 export const EXCEPTIONAL_KAPITEL_MULTIPLE = 3

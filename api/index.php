@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/marking.php';
+require __DIR__ . '/overEntry.php';
+require __DIR__ . '/flags.php';
 require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
 require __DIR__ . '/soldierBoard.php';
@@ -640,7 +642,7 @@ function wwtcKidProgress(array $kid): array
     // Prefer lifetime − this-year SM months; never go negative if marks include
     // RH/YK or other occasions beyond the elapsed-month list.
     $priorMissions = max(0, $missionsTotal - $metThisYear);
-    return array_merge(wwtcSafeKid($kid), [
+    $out = array_merge(wwtcSafeKid($kid), [
         'months' => $months,
         'metThisYear' => $metThisYear,
         'missionsTotal' => $missionsTotal,
@@ -651,6 +653,12 @@ function wwtcKidProgress(array $kid): array
         'rank' => wwtcCurrentRank($MASHPIA_DB, (int) $kid['user_id']),
         'current' => $current,
     ]);
+    // An open flag is waiting for review and is not part of the counted mark.
+    $openFlag = wwtcOpenFlag((int) $kid['user_id'], (int) wwtcCurrentDate());
+    if ($openFlag) {
+        $out['flagged'] = $openFlag;
+    }
+    return $out;
 }
 
 
@@ -1637,13 +1645,83 @@ if ($method === 'POST' && $path === '/me/report') {
     }
 
     $userId = (int) $kid['user_id'];
+    // The grade line is enforced here, not in the browser. A direct call with
+    // no flagConfirmed is refused. flagConfirmed saves a FLAGGED row and, unless
+    // the config says flagged amounts count, does not write the counting mark.
+    $quotaKap = isset($tasksByGrid[WWTC_GRID_KAPITELACH]) ? (int) $tasksByGrid[WWTC_GRID_KAPITELACH]['quantity'] : 0;
+    $quotaMin = isset($tasksByGrid[WWTC_GRID_MINUTES]) ? (int) $tasksByGrid[WWTC_GRID_MINUTES]['quantity'] : 0;
+    $prior = wwtcPriorMark($MASHPIA_DB, $userId, (int) $date);
+    $effectiveKap = $hasKap ? $kapitlach : $prior['kapitlach'];
+    $effectiveMin = $hasMin ? $minutes : $prior['minutes'];
+    $plan = wwtcPlanReport(
+        $effectiveKap,
+        $effectiveMin,
+        $quotaKap,
+        $quotaMin,
+        (string) ($kid['class_grade'] ?? ''),
+        !empty($input['flagConfirmed'])
+    );
+    if ($plan['action'] === 'confirm') {
+        $overCfg = wwtcOverEntryConfig();
+        wwtcError((string) $overCfg['confirm'], 409, [
+            'code' => 'over_entry',
+            'threshold' => [
+                'kapitlach' => $plan['line']['kapitlach'],
+                'minutes' => $plan['line']['minutes'],
+            ],
+            'reasons' => $plan['reasons'],
+        ]);
+    }
+    if ($plan['action'] === 'flag' && !$plan['writeMark'] && !wwtcFlagsReady()) {
+        wwtcError('Flag review is not installed yet. Run api/sql/wwtc_flagged_entries.sql on mashpia.', 503);
+    }
+
+    $kidActor = [
+        'type' => 'kid',
+        'id' => $userId,
+        'name' => trim(($kid['first'] ?? '') . ' ' . ($kid['last'] ?? '')),
+    ];
     try {
         $MASHPIA_DB->beginTransaction();
-        if ($hasKap && isset($tasksByGrid[WWTC_GRID_KAPITELACH])) {
-            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_KAPITELACH], $kapitlach, true);
-        }
-        if ($hasMin && isset($tasksByGrid[WWTC_GRID_MINUTES])) {
-            wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_MINUTES], $minutes, false);
+        if ($plan['action'] === 'flag') {
+            wwtcSaveFlaggedEntry($MASHPIA_DB, [
+                'user_id' => $userId,
+                'school_id' => (int) ($kid['school_id'] ?? 0),
+                'class_id' => (int) ($kid['class_id'] ?? 0),
+                'mark_date' => (int) $date,
+                'campaign_year' => wwtcYear(),
+                'month_name' => wwtcMonthForDate((int) $date),
+                'grade' => $plan['line']['grade'],
+                'school_name' => (string) ($kid['school_name'] ?? ''),
+                'class_name' => trim((string) ($kid['class_grade'] ?? '') . (string) ($kid['class_sub'] ?? '')),
+                'kid_name' => $kidActor['name'],
+                'kapitlach' => $plan['kapitlach'],
+                'minutes' => $plan['minutes'],
+                'quota_kapitlach' => $quotaKap,
+                'quota_minutes' => $quotaMin,
+                'threshold_kapitlach' => (int) round((float) $plan['line']['kapitlach']),
+                'threshold_minutes' => (int) round((float) $plan['line']['minutes']),
+                'reasons' => $plan['reasons'],
+                'prior_kapitlach' => $prior['kapitlach'],
+                'prior_minutes' => $prior['minutes'],
+                'prior_reported' => !empty($prior['reported']),
+            ], $kidActor);
+            if ($plan['writeMark']) {
+                if (isset($tasksByGrid[WWTC_GRID_KAPITELACH])) {
+                    wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_KAPITELACH], $plan['kapitlach'], true);
+                }
+                if (isset($tasksByGrid[WWTC_GRID_MINUTES])) {
+                    wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_MINUTES], $plan['minutes'], false);
+                }
+            }
+        } else {
+            wwtcSupersedeOpenFlag($MASHPIA_DB, $userId, (int) $date, $kidActor);
+            if ($hasKap && isset($tasksByGrid[WWTC_GRID_KAPITELACH])) {
+                wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_KAPITELACH], $kapitlach, true);
+            }
+            if ($hasMin && isset($tasksByGrid[WWTC_GRID_MINUTES])) {
+                wwtcApplyMark($MASHPIA_DB, $userId, $date, $tasksByGrid[WWTC_GRID_MINUTES], $minutes, false);
+            }
         }
         $MASHPIA_DB->commit();
     } catch (\Throwable $e) {
@@ -1654,20 +1732,22 @@ if ($method === 'POST' && $path === '/me/report') {
         wwtcError('Could not save your report. Please try again.', 500);
     }
 
-    // The marks feed the cached ShabbosMevorchim reports — bump so they refresh.
-    if (class_exists('Cache')) {
+    // Counting marks feed the cached reports. A withheld flag does not.
+    if ($plan['writeMark'] && class_exists('Cache')) {
         Cache::bumpVersion('shabbos_mevorchim:v');
     }
 
     $progress = wwtcKidProgress(wwtcKidByUserId($userId) ?: $kid);
-    $quotaKap = (int) ($progress['current']['quota'] ?? 0);
-    $quotaMin = (int) ($progress['current']['minutes'] ?? 0);
     $exceptional = null;
-    if (!empty($input['exceptionalConfirmed'])) {
-        $kapHigh = $quotaKap > 0 && $kapitlach >= $quotaKap * 3;
-        $minHigh = $minutes >= 180 && ($quotaMin <= 0 || $minutes > $quotaMin);
+    // The grade-line flag replaces the mashpia email. Inside the line, a
+    // confirmed exceptional report still sends that note and still counts.
+    if ($plan['action'] === 'save' && !empty($input['exceptionalConfirmed'])) {
+        $progressQuotaKap = (int) ($progress['current']['quota'] ?? $quotaKap);
+        $progressQuotaMin = (int) ($progress['current']['minutes'] ?? $quotaMin);
+        $kapHigh = $progressQuotaKap > 0 && $kapitlach >= $progressQuotaKap * 3;
+        $minHigh = $minutes >= 180 && ($progressQuotaMin <= 0 || $minutes > $progressQuotaMin);
         if ($kapHigh || $minHigh) {
-            $exceptional = wwtcEmailExceptional($kid, $kapitlach, $minutes, $quotaKap, $quotaMin);
+            $exceptional = wwtcEmailExceptional($kid, $kapitlach, $minutes, $progressQuotaKap, $progressQuotaMin);
         }
     }
     if ($exceptional) {
@@ -1991,6 +2071,65 @@ if ($method === 'GET' && $path === '/hq/verify') {
             'Schools in missingLogos have no shield file yet. Upload it on mashpia (school logos).',
         ],
     ]);
+}
+
+/** null = every school (HQ). An array is the base commander's schools. */
+function wwtcFlagReviewSchools(array $actor): ?array
+{
+    if (($actor['type'] ?? '') !== 'admin') {
+        return [];
+    }
+    if (($actor['auth'] ?? '') === 'super') {
+        return null;
+    }
+    return wwtcAdminAuthIds((int) ($actor['id'] ?? 0), 'school');
+}
+
+function wwtcAdminDisplayName(int $adminId): string
+{
+    global $MASHPIA_DB;
+    if ($adminId <= 0) {
+        return 'Admin';
+    }
+    try {
+        $stmt = $MASHPIA_DB->prepare('SELECT first, last FROM admins WHERE admin_id = :id LIMIT 1');
+        $stmt->execute([':id' => $adminId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return 'Admin';
+    }
+    $name = trim(($row['first'] ?? '') . ' ' . ($row['last'] ?? ''));
+    return $name !== '' ? $name : 'Admin';
+}
+
+if ($method === 'GET' && $path === '/admin/flags') {
+    $actor = wwtcRequireActor(['admin']);
+    if (!wwtcFlagsReady()) {
+        wwtcError('Flag review is not installed yet. Run api/sql/wwtc_flagged_entries.sql on mashpia.', 503);
+    }
+    wwtcJson(wwtcListFlags(wwtcFlagReviewSchools($actor)));
+}
+
+if ($method === 'POST' && preg_match('#^/admin/flags/(\d+)/(accept|remove)$#', $path, $m)) {
+    $actor = wwtcRequireActor(['admin']);
+    if (!wwtcFlagsReady()) {
+        wwtcError('Flag review is not installed yet. Run api/sql/wwtc_flagged_entries.sql on mashpia.', 503);
+    }
+    $entry = wwtcFlagById((int) $m[1]);
+    if (!$entry) {
+        wwtcError('Flagged entry not found.', 404);
+    }
+    $schools = wwtcFlagReviewSchools($actor);
+    if ($schools !== null && !in_array((int) $entry['school_id'], $schools, true)) {
+        wwtcError('You do not have permission to perform this action.', 403);
+    }
+    $actor['type'] = 'admin';
+    $actor['name'] = wwtcAdminDisplayName((int) ($actor['id'] ?? 0));
+    $result = wwtcReviewStoredFlag((int) $m[1], $m[2], $actor);
+    if (!$result['ok']) {
+        wwtcError($result['error'], (int) $result['status']);
+    }
+    wwtcJson(['ok' => true, 'entry' => $result['entry']]);
 }
 
 wwtcError('Not found: ' . $method . ' ' . $path, 404);

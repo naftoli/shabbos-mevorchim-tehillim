@@ -20,6 +20,7 @@ import { asset } from '@/lib/asset.js'
 import { celebrate } from '@/lib/celebrate.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { isAboveQuota, isExceptional, LADDER_REENGAGE_MISSIONS } from '@/lib/decisions.js'
+import { OVER_ENTRY_CONFIRM, OVER_ENTRY_NO, OVER_ENTRY_YES, planReport } from '@/lib/overEntry.js'
 import { cueAboveConfirmed, cueAboveFixed, cueAboveQuota, cueInviteGentler, cueInviteHarder, cueLadder, cueMedalEarned, cueMedalInfo, cueMissionComplete, cueReport } from '@/lib/commanderCues.js'
 import { emitCue } from '@/lib/commanderBus.js'
 import { fillClimb, fillStand, standFacts, standPlaceCards, trainByGrade } from '@/lib/commanderScripts.js'
@@ -97,6 +98,7 @@ export default function KidDashboard() {
   const [mins, setMins] = useState('')
   const [confirming, setConfirming] = useState(null)
   const [notice, setNotice] = useState('')
+  const [noticeTone, setNoticeTone] = useState('ok')
   const [declined, setDeclined] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`wwtc.ladderInvite.${kid?.id}`) || 'null') } catch { return null }
   })
@@ -197,18 +199,54 @@ export default function KidDashboard() {
     const beforeMedal = progress.medal?.current?.name || null
     const kap = Number(said) || 0
     const minutes = Number(mins) || 0
-    const over = isAboveQuota({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    const plan = planReport({
+      grade: kid.grade,
+      kapitlach: kap,
+      minutes,
+      quotaKap: cur.quota,
+      quotaMin: cur.minutes,
+      flagConfirmed: !!extra.flagConfirmed,
+    })
+    // Past the grade line: the serious confirm, and the server will flag it.
+    // A smaller over-quota amount keeps the gentle “is that correct?” check.
+    if (plan.action === 'confirm') {
+      setConfirming({ kind: 'flag', kap, minutes, threshold: plan.line })
+      return
+    }
+    const over = plan.action === 'save' && isAboveQuota({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
     if (over && !extra.confirmed) {
-      setConfirming({ kap, minutes })
+      setConfirming({ kind: 'quota', kap, minutes })
       emitCue(`above-${cur.month}-${kap}`, cueAboveQuota(kap))
       return
     }
-    const exceptional = extra.confirmed && isExceptional({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
-    const prog = await recordMonth(kid.id, cur.month, kap, minutes, exceptional ? { exceptionalConfirmed: true } : {})
+    const exceptional = plan.action === 'save' && extra.confirmed && isExceptional({ kapitlach: kap, minutes, quotaKap: cur.quota, quotaMin: cur.minutes })
+    let prog
+    try {
+      prog = await recordMonth(kid.id, cur.month, kap, minutes, {
+        ...(exceptional ? { exceptionalConfirmed: true } : {}),
+        ...(plan.action === 'flag' ? { flagConfirmed: true } : {}),
+      })
+    } catch (err) {
+      if (err?.code === 'over_entry') {
+        setConfirming({ kind: 'flag', kap, minutes, threshold: err.threshold || plan.line })
+        return
+      }
+      setNoticeTone('warn')
+      setNotice(err?.message || 'Could not save your report. Please try again.')
+      return
+    }
     setConfirming(null)
     reloadProgress()
     reloadSocial()
+    if (prog?.flagged?.status === 'flagged') {
+      setSaid(prog.current?.said ? String(prog.current.said) : '')
+      setMins(prog.current?.saidMinutes ? String(prog.current.saidMinutes) : '')
+      setNoticeTone('warn')
+      setNotice('Saved as flagged. It does not count yet — your base commander and HQ will review it.')
+      return
+    }
     if (extra.confirmed) {
+      setNoticeTone('ok')
       setNotice(cueAboveConfirmed())
       emitCue(`above-yes-${cur.month}`, cueAboveConfirmed())
     }
@@ -221,6 +259,7 @@ export default function KidDashboard() {
       emitCue(`medal-${nextMedal}`, cueMedalEarned(nextMedal, prog.medal.current.threshold, prog.medal.next?.name, prog.medal.next?.threshold, earnBy))
     }
     if (prog?.exceptional) {
+      setNoticeTone('ok')
       setNotice(prog.exceptional.emailed
         ? 'Saved. Your mashpia will get a note so they can celebrate this with you.'
         : 'Saved. Your mashpia should confirm a report this large. The email is waiting on WWTC_MASHPIA_EMAIL.')
@@ -309,13 +348,26 @@ export default function KidDashboard() {
               <p className="mb-4 text-center text-sm text-muted">Tell us what you said — it’s counted for your class, school and army.</p>
             )}
             {switched ? <p className="mb-3 text-center text-sm font-semibold text-navy">Signed out of the last soldier. You’re signed in as {kid.name.split(' ')[0]}.</p> : null}
-            {notice ? <p className="mb-3 text-center text-sm font-semibold text-green">{notice}</p> : null}
-            {confirming ? (
+            {notice ? <p className={`mb-3 text-center text-sm font-semibold ${noticeTone === 'warn' ? 'text-navy' : 'text-green'}`}>{notice}</p> : null}
+            {progress.flagged?.status === 'flagged' ? (
+              <p className="mb-3 text-center text-sm font-semibold text-navy">
+                {progress.flagged.kapitlach} kapitlach{progress.flagged.minutes ? ` and ${progress.flagged.minutes} minutes` : ''} {progress.flagged.month ? <>for <span className="font-heb">{MONTH_HEB[progress.flagged.month] ?? progress.flagged.month}</span> </> : null}is flagged for review. It does not count yet.
+              </p>
+            ) : null}
+            {confirming?.kind === 'flag' ? (
+              <div data-over-entry-confirm className="mb-4 rounded-2xl border border-gold bg-gold/15 p-4 text-center">
+                <p className="font-display text-lg font-black leading-snug text-navy">{OVER_ENTRY_CONFIRM}</p>
+                <div className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
+                  <Button type="button" variant="navy" className="min-h-11" onClick={() => saveReport({ flagConfirmed: true })}>{OVER_ENTRY_YES}</Button>
+                  <Button type="button" variant="outline" className="min-h-11" onClick={() => setConfirming(null)}>{OVER_ENTRY_NO}</Button>
+                </div>
+              </div>
+            ) : confirming ? (
               <div className="mb-4 rounded-2xl bg-gold/15 p-4 text-center">
                 <p className="font-display text-lg font-black text-navy">{cueAboveQuota(confirming.kap)}</p>
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
-                  <Button variant="navy" onClick={() => saveReport({ confirmed: true })}>Yes, that’s correct</Button>
-                  <Button variant="outline" onClick={() => { setConfirming(null); setNotice(cueAboveFixed()); emitCue(`fix-${cur.month}`, cueAboveFixed()) }}>I’ll correct it</Button>
+                  <Button type="button" variant="navy" onClick={() => saveReport({ confirmed: true })}>Yes, that’s correct</Button>
+                  <Button type="button" variant="outline" onClick={() => { setConfirming(null); setNoticeTone('ok'); setNotice(cueAboveFixed()); emitCue(`fix-${cur.month}`, cueAboveFixed()) }}>I’ll correct it</Button>
                 </div>
               </div>
             ) : null}
