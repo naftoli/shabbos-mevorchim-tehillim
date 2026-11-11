@@ -126,7 +126,7 @@ export default function KidDashboard() {
     // Logged in but progress is still loading (or failed) — don't bounce to login.
     return (
       <>
-        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={progressError ? 'Couldn’t load your Tehillim' : kid.name}>
+        <PageHero eyebrow="My Tehillim · this year" title={progressError ? 'Couldn’t load your Tehillim' : kid.name}>
           {progressError ? 'Something went wrong. Please try again.' : <Pending label="Getting your Tehillim" />}
         </PageHero>
         <div className="mx-auto max-w-2xl px-4 py-10 text-center sm:px-6">
@@ -142,7 +142,7 @@ export default function KidDashboard() {
   if (!kid.ladder || !LADDERS.includes(kid.ladder)) {
     return (
       <>
-        <PageHero eyebrow={`My Tehillim · ${CAMPAIGN_YEAR}`} title={`Welcome, ${kid.name.split(' ')[0]}!`}>
+        <PageHero eyebrow="My Tehillim · this year" title={`Welcome, ${kid.name.split(' ')[0]}!`}>
           Let’s get you started — pick your ladder and you’re on your way up.
         </PageHero>
         <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -177,7 +177,7 @@ export default function KidDashboard() {
       else {
         for (const month of progress.months || []) {
           if (month.met) count += 1
-          if (count >= medal.threshold) { earnedOn = `${month.month} ${CAMPAIGN_YEAR}`; break }
+          if (count >= medal.threshold) { earnedOn = `${month.month} this year`; break }
         }
       }
     }
@@ -276,7 +276,7 @@ export default function KidDashboard() {
       <section className="hero-navy">
         <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6">
           <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · {CAMPAIGN_YEAR}</p>
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">My Tehillim · this year</p>
             <button onClick={logoutKid} className="min-h-11 rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-white/10 sm:min-h-0">Sign out</button>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -324,7 +324,7 @@ export default function KidDashboard() {
               <path d="M352 14l1.8 4.3 4.2.4-3.3 3 1 4.3-3.7-2.4-3.7 2.4 1-4.3-3.3-3 4.2-.4z" fill="#c3b1d6" opacity=".9" />
             </svg>
             <p className="relative text-center font-cond text-sm uppercase tracking-[0.14em] text-gold">You are reporting for</p>
-            <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">{CAMPAIGN_YEAR}</span></p>
+            <p className="relative mt-2 text-center font-heb text-4xl text-white">{MONTH_HEB[cur.month]} <span className="font-display text-3xl">this year</span></p>
             <div className="relative mt-5 grid grid-cols-2 gap-4 text-center">
               {[
                 ['design/icon-book.webp', 420, 280, 'Kapitlach', cur.quota, 'kapitlach'],

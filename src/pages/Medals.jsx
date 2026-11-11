@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Card, CrownIcon } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
-import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
+import { getKidProgress, CURRENT_MONTH } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
 import MedalCoin from '@/components/MedalCoin.jsx'
@@ -53,7 +53,7 @@ export default function Medals() {
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) {
     return (
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         One moment while your medals come up.
       </PageHero>
     )
@@ -64,7 +64,7 @@ export default function Medals() {
 
   return (
     <>
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         Earn one Shabbos Mevorchim Tehillim mission each month — by saying Tehillim on Shabbos Mevorchim.
       </PageHero>
 

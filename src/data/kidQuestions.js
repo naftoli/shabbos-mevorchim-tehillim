@@ -777,7 +777,7 @@ export const TOPICS = [
         "f": [
           {
             "q": "How many kapitlach has the whole army said?",
-            "a": "This month the army said {thisMonth} kapitlach, {thisYear} this year, and {allTime} all-time!"
+            "a": "This month the army said {thisMonth} kapitlach, {thisYear} this year, and {allTime} since 5778!"
           },
           {
             "q": "How many schools are in it?",
