@@ -348,32 +348,47 @@ arrives, add the number to this table too.
 Teacher, WhatsApp template body (four variables: filled, total, missing, link):
 
 ```text
-{{1}} out of {{2}} kids in your class filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. Here's the link to fill it out: {{4}}. Please follow up with them today and see why they didn't.
+{{1}} out of {{2}} kids in your class filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. See the full report here: {{4}}. Please follow up with them today and see why they didn't.
 ```
 
-Example: `2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. Here's the link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…. Please follow up with them today and see why they didn't.`
+Example: `2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…. Please follow up with them today and see why they didn't.`
 
 Base commander, WhatsApp template body (the same four variables). The per-class
 lines are not a fifth variable: a template cannot grow with the number of
 classes, and the body cap is about 1024 characters. Those lines are in the PDF
-and in the SMS:
+and in the SMS. The class sentence stays on this template only, after the
+report link, because the bubble itself does not list classes. SMS already
+prints each class, so it does not repeat the sentence.
 
 ```text
-{{1}} out of {{2}} kids in your base filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. Each class is in the attached report. Here's the link to fill it out: {{4}}. Please follow up with them today and see why they didn't.
+{{1}} out of {{2}} kids in your base filled out their Shabbos Mevorchim Tehillim, but {{3}} didn't. See the full report here: {{4}}. Each class is in the attached report. Please follow up with them today and see why they didn't.
 ```
 
-`{{4}}` is that recipient's signed PDF link, not a staff login. Sample values
-for Meta: `25`, `30`, `5`, and an `https://` URL on your domain.
+`{{4}}` is that recipient's signed PDF, the same file as the Document header.
+It is not the page where a soldier enters Tehillim. Sample values for Meta:
+`25`, `30`, `5`, and an `https://` URL on your domain.
 
-SMS, teacher: the same sentence, then a new line `Reply STOP to opt out.`
+SMS uses the same counts and the same report link, then a separate fill-out
+line. The fill-out URL is the public soldier sign-in page,
+`{WWTC_PUBLIC_BASE}/login`. There is no per-class public fill-out page.
+Teacher:
 
-SMS, base commander:
+```text
+2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
+See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
+Link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/login
+Please follow up with them today and see why they didn't.
+Reply STOP to opt out.
+```
+
+Base commander:
 
 ```text
 4 out of 5 kids in your base filled out their Shabbos Mevorchim Tehillim, but 1 didn't.
 Class 5-B: 2 of 3
 Class 6-A: 2 of 2
-Here's the link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
+See the full report here: https://mashpia.com/shabbos-mevorchim-tehillim/api/notify-report?t=…
+Link to fill it out: https://mashpia.com/shabbos-mevorchim-tehillim/login
 Please follow up with them today and see why they didn't.
 Reply STOP to opt out.
 ```

@@ -476,26 +476,31 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
     ];
 }
 
-function wwtcNotifyBodies(string $role, int $filled, int $total, int $missing, string $link, array $classLines): array
+function wwtcNotifyBodies(string $role, int $filled, int $total, int $missing, string $link, array $classLines, string $fillUrl = ''): array
 {
     $scope = $role === 'base' ? 'base' : 'class';
-    $whatsapp = $filled . ' out of ' . $total . ' kids in your ' . $scope
+    $counts = $filled . ' out of ' . $total . ' kids in your ' . $scope
         . ' filled out their Shabbos Mevorchim Tehillim, but ' . $missing
         . " didn't.";
+    // {{4}} / $link is the signed PDF. The public sign-in page is a separate
+    // SMS line, because the template has no fifth variable for it.
+    $whatsapp = $counts . ' See the full report here: ' . $link . '.';
     if ($role === 'base') {
+        // The short WhatsApp bubble does not list classes. SMS does, so this
+        // sentence stays on the template only and is not repeated in the text.
         $whatsapp .= ' Each class is in the attached report.';
     }
-    $whatsapp .= " Here's the link to fill it out: " . $link
-        . ". Please follow up with them today and see why they didn't.";
+    $whatsapp .= " Please follow up with them today and see why they didn't.";
 
-    $sms = $filled . ' out of ' . $total . ' kids in your ' . $scope
-        . ' filled out their Shabbos Mevorchim Tehillim, but ' . $missing
-        . " didn't.";
+    $sms = $counts;
     if ($role === 'base' && $classLines) {
         $sms .= "\n" . implode("\n", $classLines);
     }
-    $sms .= "\nHere's the link to fill it out: " . $link
-        . ". Please follow up with them today and see why they didn't.";
+    $sms .= "\nSee the full report here: " . $link;
+    if ($fillUrl !== '') {
+        $sms .= "\nLink to fill it out: " . $fillUrl;
+    }
+    $sms .= "\nPlease follow up with them today and see why they didn't.";
     $sms .= "\nReply STOP to opt out.";
     return ['whatsapp' => $whatsapp, 'sms' => $sms];
 }
@@ -1290,7 +1295,8 @@ function wwtcNotifyExecute(array $job, array $deps = []): array
             (int) $report['total'],
             (int) $report['missing'],
             $link,
-            $report['classLines']
+            $report['classLines'],
+            $fillUrl
         );
         $baseResult['bodyWhatsapp'] = $bodies['whatsapp'];
         $baseResult['bodySms'] = $bodies['sms'];

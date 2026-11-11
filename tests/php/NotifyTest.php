@@ -186,15 +186,27 @@ check('the guess text names the columns and says they are a guess', strpos(wwtcN
 // ---- messages --------------------------------------------------------------
 
 $link = 'https://mashpia.test/api/notify-report?t=abc';
-$teacherBody = wwtcNotifyBodies('class', 25, 30, 5, $link, []);
+$fill = 'https://mashpia.test/login';
+$teacherBody = wwtcNotifyBodies('class', 25, 30, 5, $link, [], $fill);
 check(
     'teacher WhatsApp text is the approved sentence',
-    $teacherBody['whatsapp'] === "25 out of 30 kids in your class filled out their Shabbos Mevorchim Tehillim, but 5 didn't. Here's the link to fill it out: $link. Please follow up with them today and see why they didn't."
+    $teacherBody['whatsapp'] === "25 out of 30 kids in your class filled out their Shabbos Mevorchim Tehillim, but 5 didn't. See the full report here: $link. Please follow up with them today and see why they didn't."
 );
-check('teacher SMS adds STOP and does not add a login route', strpos($teacherBody['sms'], "Reply STOP to opt out.") !== false && strpos($teacherBody['sms'], '/login') === false && strpos($teacherBody['sms'], '/reports') === false && strpos($teacherBody['sms'], '/my-class') === false);
-$baseBody = wwtcNotifyBodies('base', 25, 30, 5, $link, ['Class 5-B: 10 of 12', 'Class 6-A: 15 of 18']);
-check('base SMS lists each class', strpos($baseBody['sms'], "Class 5-B: 10 of 12\nClass 6-A: 15 of 18") !== false);
-check('base WhatsApp keeps the four-variable sentence and points at the report', strpos($baseBody['whatsapp'], 'Each class is in the attached report.') !== false && strpos($baseBody['whatsapp'], 'Class 5-B') === false);
+check('teacher WhatsApp does not call the PDF a fill-out link', strpos($teacherBody['whatsapp'], 'fill it out') === false && strpos($teacherBody['whatsapp'], $fill) === false);
+check(
+    'teacher SMS separates the report link from the fill-out link',
+    strpos($teacherBody['sms'], "See the full report here: $link") !== false
+    && strpos($teacherBody['sms'], "Link to fill it out: $fill") !== false
+    && strpos($teacherBody['sms'], "Reply STOP to opt out.") !== false
+    && strpos($teacherBody['sms'], '/reports') === false
+    && strpos($teacherBody['sms'], '/my-class') === false
+);
+$baseBody = wwtcNotifyBodies('base', 25, 30, 5, $link, ['Class 5-B: 10 of 12', 'Class 6-A: 15 of 18'], $fill);
+check('base SMS lists each class and both links', strpos($baseBody['sms'], "Class 5-B: 10 of 12\nClass 6-A: 15 of 18") !== false && strpos($baseBody['sms'], "Link to fill it out: $fill") !== false && strpos($baseBody['sms'], 'attached report') === false);
+check(
+    'base WhatsApp points at the report and keeps the class note only there',
+    $baseBody['whatsapp'] === "25 out of 30 kids in your base filled out their Shabbos Mevorchim Tehillim, but 5 didn't. See the full report here: $link. Each class is in the attached report. Please follow up with them today and see why they didn't."
+);
 
 $env = [
     'WHATSAPP_PROVIDER' => 'meta',
@@ -386,14 +398,14 @@ foreach ($sent['results'] as $result) {
 }
 check(
     'the teacher sentence uses that class count',
-    $byAdmin[4]['bodyWhatsapp'] === "2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. Here's the link to fill it out: " . wwtcNotifyReportUrl('https://mashpia.test', wwtcNotifySign([
+    $byAdmin[4]['bodyWhatsapp'] === "2 out of 3 kids in your class filled out their Shabbos Mevorchim Tehillim, but 1 didn't. See the full report here: " . wwtcNotifyReportUrl('https://mashpia.test', wwtcNotifySign([
         'v' => 1,
         'exp' => 1700000000 + 30 * 86400,
         'file' => wwtcNotifyFileId('admin:4:class:555', 5787, 'Cheshvan'),
         'name' => 'tehillim-cheshvan-5787.pdf',
     ], 'test-secret-test-secret-test-secret')) . ". Please follow up with them today and see why they didn't."
 );
-check('teacher SMS includes STOP', strpos($byAdmin[4]['bodySms'], 'Reply STOP to opt out.') !== false);
+check('teacher SMS includes STOP and the sign-in line', strpos($byAdmin[4]['bodySms'], 'Reply STOP to opt out.') !== false && strpos($byAdmin[4]['bodySms'], 'Link to fill it out: https://mashpia.test/login') !== false && strpos($byAdmin[4]['bodySms'], 'See the full report here:') !== false);
 check('base SMS lists both of that base\'s classes', strpos($byAdmin[9]['bodySms'], 'Class 5-B: 2 of 3') !== false && strpos($byAdmin[9]['bodySms'], 'Class 6-A: 2 of 2') !== false);
 check('base WhatsApp does not put the class lines in the template body', strpos($byAdmin[9]['bodyWhatsapp'], 'Class 5-B') === false && strpos($byAdmin[9]['bodyWhatsapp'], '4 out of 5 kids in your base') !== false);
 
