@@ -31,11 +31,17 @@ Reads — all implemented (same figures as the WWTC report pages):
   Reports take `?monthIdx=` for an elapsed month, or `?year=&month=`; default is the current month.
 - `GET /me/progress`, `GET /me/social`.
 
-Per-school / per-class "soldiers who completed" and "perfect platoons" come from
-the mission-mark signal (`date_tasks_mission_marks`) via cheap grouped queries
-(`wwtcCompletionCounts()`), not a per-student loop — so the home page and stats
-scale to the whole army. "Perfect platoon" here means every enrolled soldier in a
-class earned the mission this month (met === size), matching the SPA.
+Per-school "soldiers who completed" on the home race still comes from the
+mission-mark signal (`date_tasks_mission_marks`) via `wwtcCompletionCounts()`.
+A perfect platoon does not. The school classes view and `GET /perfect-platoons`
+(and the home/stats count) share one rule: every soldier on that class's month
+roster has live kapitlach said (`date_tasks_marks.done_qty`) at least their own
+quota (`date_tasks.quantity`, on the ladder they were on for that Shabbos
+Mevorchim). Mission marks are the medal signal and can be missing after a class
+has already finished, which used to hide perfect classes from the home list.
+The list is one row per class id — the teacher and the class-name spelling are
+labels, not keys — and it never includes student names. The "3 / 16" on a home
+card is perfect classes out of the classes on that roster.
 
 Send the token as `Authorization: Bearer <token>`.
 

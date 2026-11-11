@@ -221,6 +221,7 @@ function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
         out.push({
           schoolId: school.id,
           school: school.name,
+          classId: cls.id,
           className: cls.name,
           teacher: cls.teacher,
           grade: cls.grade,
@@ -707,7 +708,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
         accomplished += saidOf(kid, dataMonth, year)
         if (metAt(kid, dataMonth, year)) completed += 1
       }
-      return { id: cls.id, name: cls.name, grade: cls.grade, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
+      return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
     }),
   }
 }

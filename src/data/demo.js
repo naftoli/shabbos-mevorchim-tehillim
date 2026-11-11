@@ -244,7 +244,75 @@ function buildRoster() {
     }
   }
 
+  // A fixed school with three perfect platoons under three teachers, plus two
+  // that are not. Class names keep their case ("4-boys" and "4-Boys" are two
+  // classes). Fictional soldiers only — the public platoon chips never show them.
+  schools.push(sampleCheder())
+
   return schools
+}
+
+const SAMPLE_CHEDER_ID = 'sample-cheder'
+
+function sampleSoldier(n, grade, ladder, meetCurrent) {
+  const reports = {}
+  const minutesByMonth = {}
+  let minutes = 0
+  let metThisYear = 0
+  for (const mo of ELAPSED_MONTHS) {
+    const q = quotaFor(grade, mo, ladder)
+    if (!q) continue
+    const said = mo === CURRENT_MONTH && !meetCurrent ? Math.max(0, q.v - 1) : q.v * 3
+    reports[mo] = said
+    minutesByMonth[mo] = q.m
+    minutes += q.m
+    if (q.v > 0 && said >= q.v) metThisYear += 1
+  }
+  return {
+    id: `sample-k-${n}`,
+    serial: String(900000 + n),
+    dob: `2016-04-${String((n % 27) + 1).padStart(2, '0')}`,
+    name: `Fictional ${n} K.`,
+    gender: 'boy',
+    grade,
+    ladder,
+    reports,
+    minutesByMonth,
+    minutes,
+    priorMissions: 0,
+    metThisYear,
+    missionsTotal: metThisYear,
+  }
+}
+
+function sampleClass(id, grade, name, teacher, soldiers) {
+  return { id, grade, name, teacher, kids: soldiers }
+}
+
+function sampleCheder() {
+  let n = 0
+  const next = (grade, meet) => sampleSoldier(++n, grade, 8, meet)
+  const full = (grade, count) => Array.from({ length: count }, () => next(grade, true))
+  return {
+    id: SAMPLE_CHEDER_ID,
+    name: 'Sample Cheder',
+    city: 'Sample City',
+    color: '#1d4e89',
+    classes: [
+      sampleClass(`${SAMPLE_CHEDER_ID}-4-boys`, '4', '4-boys', 'Rabbi Adler', full('4', 4)),
+      sampleClass(`${SAMPLE_CHEDER_ID}-4-Boys`, '4', '4-Boys', 'Rabbi Berg', full('4', 4)),
+      sampleClass(`${SAMPLE_CHEDER_ID}-3-Boys`, '3', '3-Boys', 'Rabbi Klein', full('3', 4)),
+      sampleClass(`${SAMPLE_CHEDER_ID}-1-Boys`, '1', '1-Boys', 'Rabbi Dale', [
+        ...full('1', 3),
+        next('1', false),
+      ]),
+      sampleClass(`${SAMPLE_CHEDER_ID}-2-Boys`, '2', '2-Boys', 'Rabbi Engel', [
+        ...full('2', 2),
+        next('2', false),
+        next('2', false),
+      ]),
+    ],
+  }
 }
 
 export const ROSTER = buildRoster()
@@ -256,6 +324,7 @@ export const DEMO_ADMIN_PASSWORD = 'tehillim'
 export const DEMO_ADMINS = [
   { username: 'hq', kind: 'super', name: 'HQ Command', schoolId: null },
   ...SCHOOLS.map((s) => ({ username: s.id, kind: 'school', name: s.name, schoolId: s.id })),
+  { username: 'sample-cheder', kind: 'school', name: 'Sample Cheder', schoolId: 'sample-cheder' },
 ]
 
 // A sample monthly dedication per school + an army-wide one.
