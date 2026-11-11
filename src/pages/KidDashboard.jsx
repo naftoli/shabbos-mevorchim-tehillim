@@ -188,6 +188,7 @@ export default function KidDashboard() {
     months: progress.months,
     missionsTotal: progress.missionsTotal,
     declined,
+    openFlag: progress.flagged,
   })
   const switched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('wwtc.lastKid') && sessionStorage.getItem('wwtc.lastKid') !== kid.id
   if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('wwtc.lastKid', kid.id)
@@ -502,7 +503,7 @@ export default function KidDashboard() {
 
         {advice ? (
           <Card className="p-5 sm:p-6">
-            <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler()}</p>
+            <p className="font-display text-lg font-black text-navy">{advice.kind === 'harder' ? cueInviteHarder() : cueInviteGentler(advice.ladder)}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="navy" onClick={() => changeLadder(advice.ladder)}>Yes, Ladder {advice.ladder}</Button>
               <Button variant="outline" onClick={() => {
