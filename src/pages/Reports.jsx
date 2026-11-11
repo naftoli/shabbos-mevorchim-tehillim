@@ -19,6 +19,7 @@ import {
   overrideQuota,
   undoQuotaOverride,
 } from '@/services/api.js'
+import { platoonIsPerfect } from '@/lib/perfectPlatoons.js'
 import { QUOTA_ADJUSTED_LABEL, overrideAccessStatus } from '@/lib/quotaOverride.js'
 
 const COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b', '#2246a8', '#8b5cf6']
@@ -303,7 +304,7 @@ function PlatoonView({ data, error, loading, reload, admin, year }) {
   const [note, setNote] = useState('')
   if (error) return <ErrorNote error={error} onRetry={reload} what="this platoon" />
   if (!data) return loading ? <Pending label="Getting this platoon" /> : <ErrorNote error="This platoon has no soldiers on the report for that month." onRetry={reload} what="this platoon" />
-  const perfect = data.size > 0 && data.completed === data.size
+  const perfect = platoonIsPerfect(data)
   // Paint names only when the server (or the demo gate) set roll. A response
   // that still contains rows without that flag — an older API — stays hidden.
   const showRoll = data.roll === true && Array.isArray(data.rows)

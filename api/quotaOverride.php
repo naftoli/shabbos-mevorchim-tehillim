@@ -495,14 +495,6 @@ function wwtcOverlayHolidayBoard(array $board, int $year, string $monthName): ar
         }
         $studentsBySchool[$sid] = $adjusted;
     }
-    $perfect = 0;
-    foreach (($board['counts']['sizeByClass'] ?? []) as $sid => $byClass) {
-        foreach ($byClass as $cid => $size) {
-            if ((int) $size > 0 && (int) ($metByClass[(int) $sid][(int) $cid] ?? 0) >= (int) $size) {
-                $perfect++;
-            }
-        }
-    }
     $out = $board;
     $out['studentsBySchool'] = $studentsBySchool;
     $out['kapGoal'] = $kapGoal;
@@ -513,7 +505,7 @@ function wwtcOverlayHolidayBoard(array $board, int $year, string $monthName): ar
     $army = $board['army'] ?? [];
     $army['quota'] = $armyQuota;
     $army['metSoldiers'] = $armyMet;
-    $army['perfectPlatoons'] = $perfect;
+    $army['perfectPlatoons'] = count(wwtcPerfectPlatoonsFromSoldiers(wwtcBoardPlatoonSoldiers($out)));
     $out['army'] = $army;
     return $out;
 }

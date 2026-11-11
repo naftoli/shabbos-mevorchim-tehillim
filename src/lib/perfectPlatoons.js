@@ -3,6 +3,25 @@
 // "3 / 16" is perfect classes out of the classes on that school's roster
 // (schoolClasses), not a rank and not a page size.
 
+// Same test as api/perfectPlatoon.php. size 0 is not a Perfect Platoon.
+export function soldierMetQuota(quota, said) {
+  return quota > 0 && said >= quota
+}
+
+export function classIsPerfect(met, size) {
+  return size > 0 && met === size
+}
+
+// The report page used to recompute the star from completed === size, which
+// lights a class the server has already decided is not perfect. A boolean
+// `perfect` from the API is the shared roster. Older payloads without it
+// fall back to that same size test.
+export function platoonIsPerfect(data) {
+  if (!data) return false
+  if (typeof data.perfect === 'boolean') return data.perfect
+  return classIsPerfect(Number(data.completed) || 0, Number(data.size) || 0)
+}
+
 export function platoonKey(p) {
   if (p && p.classId != null && p.classId !== '') return `${p.schoolId}-${p.classId}`
   return `${p?.schoolId ?? ''}-${p?.className ?? ''}`

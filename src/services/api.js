@@ -13,6 +13,7 @@ import {
   OVER_ENTRY_CONFIRM,
   reviewSoldier,
 } from '@/lib/overEntry.js'
+import { classIsPerfect } from '@/lib/perfectPlatoons.js'
 import { cmpSchoolRace } from '@/lib/schoolRace.js'
 import { placeAmong } from '@/lib/placeRank.js'
 import { compareSoldiers } from '@/lib/soldierBoard.js'
@@ -274,7 +275,11 @@ function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {
       for (const kid of cls.kids) said += saidOf(kid, month, year)
     }
     for (const cls of school.classes) {
-      if (cls.kids.length > 0 && cls.kids.every((k) => metAt(k, month, year))) {
+      let met = 0
+      for (const kid of cls.kids) {
+        if (metAt(kid, month, year)) met += 1
+      }
+      if (classIsPerfect(met, cls.kids.length)) {
         out.push({
           schoolId: school.id,
           school: school.name,
@@ -677,7 +682,7 @@ export async function getKidSocial(id) {
     classSize: cls.kids.length,
     myRankInSchool: mySchoolPlace?.rank || 0,
     schoolSize: schoolKids.length,
-    classPerfect: mine?.size > 0 && mine.met === mine.size,
+    classPerfect: classIsPerfect(mine?.met || 0, mine?.size || 0),
     schoolName: school.name,
     schoolRank: schoolPlace?.rank || 0,
     totalSchools: schoolRanked.length,
@@ -731,7 +736,7 @@ function demoSchool(id) {
       pctMet: size > 0 ? Math.round((met / size) * 100) : 0,
       pctParticipated: size > 0 ? Math.round((participated / size) * 100) : 0,
       minutesPct: minsQuota > 0 ? Math.round((minsSaid / minsQuota) * 100) : 0,
-      perfect: size > 0 && met === size,
+      perfect: classIsPerfect(met, size),
     }
   })
   return { ...agg, classes, dedication: schoolDedication(id) }
@@ -846,7 +851,7 @@ export async function getBaseReport(schoolId, monthIdx = CURRENT_MONTH_INDEX, pe
         accomplished += snap.said
         if (snap.met) completed += 1
       }
-      return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: completed === cls.kids.length }
+      return { id: cls.id, name: cls.name, grade: cls.grade, teacher: cls.teacher, size: cls.kids.length, goal, accomplished, completed, perfect: classIsPerfect(completed, cls.kids.length) }
     }),
   }
 }
@@ -889,7 +894,7 @@ export async function getPlatoonReport(classId, monthIdx = CURRENT_MONTH_INDEX, 
       className: cls.name,
       completed,
       size: cls.kids.length,
-      perfect: cls.kids.length > 0 && completed === cls.kids.length,
+      perfect: classIsPerfect(completed, cls.kids.length),
       roll: false,
     }
     if (!canSeeClassRoll(readDemoStaff(), { classId: cls.id, schoolId: school.id })) return summary

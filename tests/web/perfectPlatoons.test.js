@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import './harness.mjs'
-import { groupPlatoonsBySchool, platoonKey } from '../../src/lib/perfectPlatoons.js'
+import { classIsPerfect, groupPlatoonsBySchool, platoonIsPerfect, platoonKey } from '../../src/lib/perfectPlatoons.js'
 
 const { ROSTER, CURRENT_MONTH } = await import('../../src/data/demo.js')
 const { quotaFor } = await import('../../src/data/ladders.js')
@@ -31,6 +31,17 @@ test('grouping keeps every perfect class, including names that differ only by ca
   assert.equal(new Set(keys).size, keys.length)
   assert.ok(keys.includes('61-401'))
   assert.ok(keys.includes('61-406'))
+})
+
+test('the report star follows the shared flag instead of recounting completed === size', () => {
+  // The engine can say 4 of 4 while the roster says this class is not perfect
+  // (a flagged amount, a missing soldier, a different quota). The page must
+  // not light the star from its own recount.
+  assert.equal(platoonIsPerfect({ perfect: false, completed: 4, size: 4 }), false)
+  assert.equal(platoonIsPerfect({ perfect: true, completed: 3, size: 4 }), true)
+  assert.equal(platoonIsPerfect({ completed: 4, size: 4 }), true)
+  assert.equal(platoonIsPerfect({ completed: 0, size: 0 }), false)
+  assert.equal(classIsPerfect(0, 0), false)
 })
 
 test('the fictional sample cheder has three perfect platoons and the chips do not name soldiers', () => {
