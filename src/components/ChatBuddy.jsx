@@ -6,7 +6,7 @@ import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
+import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn, stepLadder } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
 import { formatClassName } from '@/lib/formatClassName.js'
@@ -26,6 +26,7 @@ import {
   readTrainingAnswer,
   rememberScript,
   rememberTraining,
+  reviewMonthsFromProgress,
   selectCommanderScripts,
   standFacts,
   suppressLegacyGreeting,
@@ -85,7 +86,7 @@ function scriptPayload(scripts) {
 function buildReply(text, ctx) {
   const t = ` ${text.toLowerCase()} `
   const has = (...ks) => ks.some((k) => t.includes(k))
-  const { firstName, ladder, gradeLabel, progress, social, sMevorchim, monthHeb } = ctx
+  const { firstName, ladder, grade, gradeLabel, hiddenLadders, progress, social, sMevorchim, monthHeb } = ctx
   const cur = progress?.current
   const medal = progress?.medal
   const plural = (n) => (n === 1 ? '' : 's')
@@ -139,8 +140,8 @@ function buildReply(text, ctx) {
   }
   // --- harder / easier ladder ---
   if (has('harder', 'hardest', 'steep', 'fastest', 'easier', 'easiest', 'slower', 'gentler', 'move up', 'challenge', 'bigger', 'faster ladder')) {
-    const target = ladder && ladder > 5 ? ladder - 1 : ladder
-    if (ladder && ladder > 5) return `Want a bigger challenge? Ladder ${target} finishes training by ${GRADE_LABEL[String(target)]} grade — a bit more each month than Ladder ${ladder}. If you're beating your quota already, you'd do great! Tap “Switch my ladder” when you're ready. 🌟`
+    const target = ladder ? stepLadder(grade, ladder, 'harder', hiddenLadders) : null
+    if (ladder && target != null && target !== Number(ladder)) return `Want a bigger challenge? Ladder ${target} finishes training by ${GRADE_LABEL[String(target)]} grade — a bit more each month than Ladder ${ladder}. If you're beating your quota already, you'd do great! Tap “Switch my ladder” when you're ready. 🌟`
     if (ladder) return `You're already on the steepest ladder — the fastest climb there is! Incredible, ${firstName}. 🌟`
     return `A lower ladder number is a steeper, faster climb; a higher one is gentler. Pick what feels right — tap “Pick my ladder.” 🪜`
   }
@@ -353,8 +354,9 @@ export default function ChatBuddy() {
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
       monthEn,
       yearStart: progress.yearStart || kid.yearStart || 'Tishrei',
+      hiddenLadders: progress.hiddenLadders || kid.hiddenLadders || [],
       focusLadder,
-      ladderChoices: ladderMenu(kid.grade, monthEn, progress.yearStart || kid.yearStart || 'Tishrei'),
+      ladderChoices: ladderMenu(kid.grade, monthEn, progress.yearStart || kid.yearStart || 'Tishrei', progress.hiddenLadders || kid.hiddenLadders),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
@@ -396,6 +398,7 @@ export default function ChatBuddy() {
     streakLongest: streaks ? streaks.best : null,
     trackOpen,
     climbOpen,
+    reviewMonths: reviewMonthsFromProgress(progress),
   }
   const dueNow = ctx ? selectCommanderScripts(scriptInput) : []
   const suppressLegacy = ctx ? suppressLegacyGreeting(scriptInput) : false
@@ -415,6 +418,7 @@ export default function ChatBuddy() {
     progress?.customLadder?.finishGrade ?? '',
     trackOpen ? 'track' : '',
     climbOpen ? 'climb' : '',
+    (scriptInput.reviewMonths || []).map((row) => `${row.month}:${row.kapitlach}:${row.minutes}:${row.met ? 1 : 0}`).join(','),
   ].join('~')
   const quickReplies = !ctx
     ? []

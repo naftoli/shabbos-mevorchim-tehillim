@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { availableLadders, finishGrade, GRADE_LABEL, QUOTA } from '@/data/ladders.js'
+import { finishGrade, GRADE_LABEL, QUOTA } from '@/data/ladders.js'
+import { openLadders } from '@/lib/schoolLadders.js'
 import { DEFAULT_FIRST_MONTH, gradeEndSheetMonth } from '@/lib/schoolYear.js'
 import LadderBreakdown from './LadderBreakdown.jsx'
 import { CrownIcon } from '@/components/ui.jsx'
@@ -86,12 +87,17 @@ function LadderCard({ ladder, active, onPick, onBreakdown, preview, height, year
   )
 }
 
-export default function LadderCarousel({ grade, defaultLadder = 8, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
-  const ladders = useMemo(() => availableLadders(grade), [grade])
+export default function LadderCarousel({ grade, defaultLadder = 8, onPick, preview = false, height = 470, cardWidth = 300, spacing = 255, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null, hiddenLadders = null }) {
+  const ladders = useMemo(() => openLadders(grade, hiddenLadders), [grade, hiddenLadders])
   const preferred = ladders.indexOf(defaultLadder)
   const [active, setActive] = useState(preferred >= 0 ? preferred : Math.floor(ladders.length / 2))
   const [breakdown, setBreakdown] = useState(null)
   const go = (d) => setActive((i) => Math.min(ladders.length - 1, Math.max(0, i + d)))
+  if (ladders.length && active > ladders.length - 1) setActive(ladders.length - 1)
+
+  if (!ladders.length) {
+    return <p className="text-center text-sm font-semibold text-navy">Your school has turned these ladders off. A custom ladder is still available from your base commander.</p>
+  }
 
   return (
     <div>

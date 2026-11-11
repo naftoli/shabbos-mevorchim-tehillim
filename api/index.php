@@ -1164,6 +1164,16 @@ if ($method === 'GET' && $path === '/running-totals') {
     }));
 }
 
+// One row per Jewish year (all-time) and one row per elapsed month (this year).
+// Kapitlach and minutes. Cheshvan 5778 is the first Shabbos Mevorchim. A leap
+// year keeps Adar I and Adar II as two rows. Same month sources as /running-totals.
+if ($method === 'GET' && $path === '/running-totals/breakdown') {
+    $current = wwtcCurrentDate();
+    wwtcJson(wwtcCached('running_breakdown.' . wwtcYear() . '.' . $current, static function () {
+        return wwtcRunningBreakdown();
+    }));
+}
+
 // ---- nationwide school list ------------------------------------------------
 
 if ($method === 'GET' && $path === '/schools') {
@@ -1213,6 +1223,7 @@ if ($method === 'GET' && preg_match('#^/schools/(\d+)$#', $path, $m)) {
         'classes' => array_map('wwtcPresentClassLabel', $data['classes']),
         'dedication' => $dedication,
         'yearStart' => function_exists('wwtcSchoolFirstMonth') ? wwtcSchoolFirstMonth($id) : 'Tishrei',
+        'hiddenLadders' => function_exists('wwtcHiddenLaddersForSchool') ? wwtcHiddenLaddersForSchool($id) : [],
     ]);
 }
 
@@ -1988,6 +1999,12 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
     if ($ladder < 5 || $ladder > 12) {
         wwtcError("Choose a ladder between 5 and 12.", 422);
     }
+    $schoolHidden = function_exists('wwtcHiddenLaddersForSchool')
+        ? wwtcHiddenLaddersForSchool((int) ($kid['school_id'] ?? 0))
+        : [];
+    if ($schoolHidden && function_exists('wwtcLadderIsHidden') && wwtcLadderIsHidden($ladder, $schoolHidden)) {
+        wwtcError('That ladder is turned off for your school.', 422);
+    }
     $track = wwtcTrackFromLadder($ladder);
 
     // The target track must actually have a mission this month, or the soldier
@@ -2043,6 +2060,10 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
     $schoolId = (int) ($input['schoolId'] ?? 0);
     if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
         wwtcError('School not found.', 404);
+    }
+    $schoolHidden = function_exists('wwtcHiddenLaddersForSchool') ? wwtcHiddenLaddersForSchool($schoolId) : [];
+    if ($schoolHidden && function_exists('wwtcLadderIsHidden') && wwtcLadderIsHidden($ladder, $schoolHidden)) {
+        wwtcError('That ladder is turned off for this school.', 422);
     }
 
     $classId = (isset($input['classId']) && $input['classId'] !== '' && $input['classId'] !== null)
@@ -2147,6 +2168,32 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-year')
         'schoolId' => $schoolId,
         'firstMonth' => $firstMonth,
         'gradeEnds' => wwtcGradeEndMonth($firstMonth),
+    ]);
+}
+
+// Which ladders this school offers. HQ or that school's admin. Missing table
+// is a 503, same as the school-year setting. No student names.
+if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-ladders') {
+    $actor = wwtcRequireActor(['admin']);
+    $input = wwtcInput();
+    $schoolId = (int) ($input['schoolId'] ?? 0);
+    if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
+        wwtcError('School not found.', 404);
+    }
+    $schoolIds = (($actor['auth'] ?? '') === 'super') ? [] : wwtcAdminAuthIds((int) $actor['id'], 'school');
+    if (!wwtcCanManageSchool($actor, $schoolId, $schoolIds)) {
+        wwtcError('You do not have permission to perform this action.', 403);
+    }
+    if (!wwtcSchoolLaddersReady()) {
+        wwtcError('Ladder switches are not installed yet. Run api/sql/wwtc_school_ladders.sql on mashpia.', 503);
+    }
+    $hidden = wwtcNormalizeHiddenLadders($input['hidden'] ?? $input['ladders'] ?? []);
+    wwtcSaveHiddenLadders($schoolId, $hidden);
+    wwtcJson([
+        'ok' => true,
+        'schoolId' => $schoolId,
+        'hiddenLadders' => $hidden,
+        'ladders' => wwtcLadderSwitchList($hidden),
     ]);
 }
 

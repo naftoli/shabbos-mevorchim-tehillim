@@ -22,6 +22,8 @@ require_once __DIR__ . '/compat.php';
 require_once __DIR__ . '/hebrewYear.php';
 require_once __DIR__ . '/schoolYear.php';
 require_once __DIR__ . '/schoolSettings.php';
+require_once __DIR__ . '/schoolLadders.php';
+require_once __DIR__ . '/runningTotals.php';
 require_once __DIR__ . '/quotaOverride.php';
 require_once __DIR__ . '/className.php';
 require_once __DIR__ . '/teacherName.php';
@@ -1162,6 +1164,9 @@ function wwtcSafeKid(array $u): array
         'yearStart' => function_exists('wwtcSchoolFirstMonth')
             ? wwtcSchoolFirstMonth((int) ($u['school_id'] ?? 0))
             : 'Tishrei',
+        'hiddenLadders' => function_exists('wwtcHiddenLaddersForSchool')
+            ? wwtcHiddenLaddersForSchool((int) ($u['school_id'] ?? 0))
+            : [],
     ];
 }
 

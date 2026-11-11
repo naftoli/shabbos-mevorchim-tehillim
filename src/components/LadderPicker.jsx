@@ -4,9 +4,9 @@ import {
   MONTH_HEB,
   GRADES,
   GRADE_LABEL,
-  availableLadders,
   finishGrade,
 } from '@/data/ladders.js'
+import { openLadders } from '@/lib/schoolLadders.js'
 import { currentHebrewYear } from '@/lib/hebrewYear.js'
 import { DEFAULT_FIRST_MONTH, quotaForSchool, schoolYearMonthNames } from '@/lib/schoolYear.js'
 
@@ -33,10 +33,10 @@ function LadderButton({ ladder, active, onClick }) {
   )
 }
 
-export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
+export default function LadderPicker({ grade: fixedGrade, ladder: initialLadder, onChoose, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null, hiddenLadders = null }) {
   const months = schoolYearMonthNames(firstMonth, year ?? currentHebrewYear(), anchorMonth || 'Tishrei')
   const [grade, setGrade] = useState(fixedGrade ?? '5')
-  const ladders = availableLadders(grade)
+  const ladders = openLadders(grade, hiddenLadders)
   const [ladder, setLadder] = useState(initialLadder ?? ladders[ladders.length - 1])
   const activeLadder = ladders.includes(ladder) ? ladder : ladders[0]
 

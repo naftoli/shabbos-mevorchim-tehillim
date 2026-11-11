@@ -152,6 +152,33 @@ test('getRunningTotals reads /running-totals', async () => {
   assert.equal(lastCall().apiPath, '/running-totals')
 })
 
+test('getRunningTotalsBreakdown reads /running-totals/breakdown', async () => {
+  reset()
+  mock({
+    'GET /running-totals/breakdown': {
+      body: {
+        years: [{ year: 5778, kapitlach: 10, minutes: 4 }],
+        months: [{ year: 5787, month: 'Cheshvan', kapitlach: 3, minutes: 1 }],
+      },
+    },
+  })
+  const rows = await api.getRunningTotalsBreakdown()
+  assert.equal(rows.years[0].year, 5778)
+  assert.equal(rows.months[0].month, 'Cheshvan')
+  assert.equal(lastCall().apiPath, '/running-totals/breakdown')
+})
+
+test('setSchoolLadders puts the hidden ladders on /admin/school-ladders', async () => {
+  reset()
+  mock({ 'PUT /admin/school-ladders': { body: { ok: true, hiddenLadders: [5, 6] } } })
+  const saved = await api.setSchoolLadders(42, [5, 6])
+  assert.deepEqual(saved.hiddenLadders, [5, 6])
+  const call = lastCall()
+  assert.equal(call.method, 'PUT')
+  assert.equal(call.apiPath, '/admin/school-ladders')
+  assert.deepEqual(call.body, { schoolId: 42, hidden: [5, 6] })
+})
+
 test('getSchools unwraps {schools} into an array', async () => {
   reset()
   mock({ 'GET /schools': { body: { month: 'Cheshvan', schools: [{ id: 1, name: 'A', pctMet: 50, pct: 60, minutesPct: 40, saidMonth: 9 }] } } })

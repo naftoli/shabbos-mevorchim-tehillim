@@ -3,7 +3,7 @@
 // from the anonymized demo roster; when the PHP/Mashpia API lands, each function
 // branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
-import { quotaFor, availableLadders } from '@/data/ladders.js'
+import { quotaFor } from '@/data/ladders.js'
 import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
 import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
@@ -26,6 +26,8 @@ import { sortClasses, sortPlatoons } from '@/lib/classOrder.js'
 import { formatClassName } from '@/lib/formatClassName.js'
 import * as mashpia from './mashpia.js'
 import { campaignMonths } from '@/lib/hebrewYear.js'
+import { breakdownMonthNames, campaignYearsThrough, scaleMonthRows } from '@/lib/runningTotals.js'
+import { ladderIsOpen } from '@/lib/schoolLadders.js'
 import {
   ROSTER,
   CURRENT_MONTH,
@@ -42,6 +44,8 @@ import {
   setSchoolDedicationStore,
   schoolYearStart,
   setSchoolYearStartStore,
+  schoolHiddenLadders,
+  setSchoolHiddenLaddersStore,
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
@@ -285,6 +289,65 @@ export async function getRunningTotals() {
   return { thisMonth, thisYear, allTime: thisYear + PRIOR_YEARS_KAPITLACH }
 }
 
+// Month rows use the roster's own said kapitlach and minutes. This year's
+// rows are scaled so they add up to the headline YEAR_KAPITLACH. Earlier
+// years reuse that prior-year month shape (5778 starts at Cheshvan; a leap
+// year keeps both Adars) and add up to PRIOR_YEARS_KAPITLACH.
+function demoMonthArmy(month, year) {
+  const rows = schoolsFor(month, year)
+  return {
+    kapitlach: rows.reduce((sum, school) => sum + (school.saidMonth || 0), 0),
+    minutes: rows.reduce((sum, school) => sum + (school.minutesSaidMonth || 0), 0),
+  }
+}
+
+function demoPriorWeights() {
+  const weights = {}
+  for (const month of campaignMonths(PRIOR_CAMPAIGN_YEAR)) {
+    weights[month] = demoMonthArmy(month, PRIOR_CAMPAIGN_YEAR)
+  }
+  if (!weights['Adar I'] && weights.Adar) weights['Adar I'] = { ...weights.Adar }
+  if (!weights['Adar II'] && weights.Adar) weights['Adar II'] = { ...weights.Adar }
+  return weights
+}
+
+function demoRunningBreakdown() {
+  const year = Number(CAMPAIGN_YEAR)
+  const months = scaleMonthRows(
+    ELAPSED_MONTHS.map((month) => ({ year, month, ...demoMonthArmy(month, year) })),
+    YEAR_KAPITLACH,
+  )
+  const weights = demoPriorWeights()
+  const priorYears = campaignYearsThrough(year - 1).map((y) => {
+    let kapitlach = 0
+    let minutes = 0
+    for (const month of breakdownMonthNames(y)) {
+      const weight = weights[month] || { kapitlach: 0, minutes: 0 }
+      kapitlach += weight.kapitlach
+      minutes += weight.minutes
+    }
+    return { year: y, kapitlach, minutes }
+  })
+  const scaledPrior = scaleMonthRows(priorYears, PRIOR_YEARS_KAPITLACH)
+  const thisYear = {
+    year,
+    kapitlach: months.reduce((sum, row) => sum + row.kapitlach, 0),
+    minutes: months.reduce((sum, row) => sum + row.minutes, 0),
+  }
+  return {
+    firstYear: 5778,
+    firstMonth: 'Cheshvan',
+    year,
+    years: [...scaledPrior, thisYear],
+    months,
+  }
+}
+
+export async function getRunningTotalsBreakdown() {
+  if (!IS_DEMO) return mashpia.getRunningTotalsBreakdown()
+  return demoRunningBreakdown()
+}
+
 export async function getSchools(period) {
   if (!IS_DEMO) return mashpia.getSchools(period)
   const month = period?.month || CURRENT_MONTH
@@ -375,6 +438,7 @@ function safeKid(kid, school, cls) {
     schoolName: school.name,
     className: cls.name,
     yearStart: schoolYearStart(school.id),
+    hiddenLadders: schoolHiddenLadders(school.id),
   }
 }
 
@@ -606,7 +670,8 @@ export async function setKidLadder(id, ladder) {
   if (!found) return null
   const { kid } = found
   const next = Number(ladder)
-  if (!availableLadders(kid.grade).includes(next)) return null
+  const hidden = schoolHiddenLadders(found.school.id)
+  if (!ladderIsOpen(next, hidden)) return null
   // The dashboard re-applies the session ladder on every read. Skip the
   // notify when nothing changed, or that read refreshes itself forever.
   if (kid.ladder === next) return demoKidProgress(id)
@@ -629,9 +694,8 @@ export async function setKidLadder(id, ladder) {
 export async function adminSetLadder({ schoolId, classId = null, kidId = null, ladder }) {
   if (!IS_DEMO) return mashpia.adminSetLadder({ schoolId, classId, kidId, ladder })
   const next = Number(ladder)
-  if (next < 5 || next > 12) return { ok: false, matched: 0, updated: 0 }
   const school = ROSTER.find((s) => s.id === schoolId)
-  if (!school) return { ok: false, matched: 0, updated: 0 }
+  if (!school || !ladderIsOpen(next, schoolHiddenLadders(schoolId))) return { ok: false, matched: 0, updated: 0 }
   const targets = []
   for (const cls of school.classes) {
     if (classId && cls.id !== classId) continue
@@ -772,7 +836,13 @@ function demoSchool(id) {
       perfect: classIsPerfect(met, size),
     }
   })
-  return { ...agg, classes: sortClasses(classes), dedication: schoolDedication(id), yearStart: schoolYearStart(id) }
+  return {
+    ...agg,
+    classes: sortClasses(classes),
+    dedication: schoolDedication(id),
+    yearStart: schoolYearStart(id),
+    hiddenLadders: schoolHiddenLadders(id),
+  }
 }
 
 // n omitted returns the whole board. The page shows ten at a time; ranking
@@ -1014,6 +1084,14 @@ export async function setSchoolYearStart(schoolId, firstMonth) {
   setSchoolYearStartStore(schoolId, firstMonth)
   invalidate()
   return { ok: true, schoolId, firstMonth: schoolYearStart(schoolId), gradeEnds: null }
+}
+
+export async function setSchoolLadders(schoolId, hidden) {
+  if (!IS_DEMO) return mashpia.setSchoolLadders({ schoolId, hidden })
+  setSchoolHiddenLaddersStore(schoolId, hidden)
+  invalidate()
+  const hiddenLadders = schoolHiddenLadders(schoolId)
+  return { ok: true, schoolId, hiddenLadders }
 }
 
 export function removeSchoolDedication(schoolId) {
