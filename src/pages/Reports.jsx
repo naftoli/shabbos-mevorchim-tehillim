@@ -138,7 +138,7 @@ export default function Reports() {
           <label className="text-sm font-semibold text-navy">
             Year
             <select className="ml-2 rounded-xl border border-line bg-card px-3 py-2" value={year} onChange={(e) => write({ y: e.target.value, m: null, school: null, class: null })}>
-              {(calendar?.years || [year]).map((y) => <option key={y} value={y}>{y}</option>)}
+              {(calendar?.years || [year]).map((y) => <option key={y} value={y}>{String(y) === String(CAMPAIGN_YEAR) ? 'this year' : y}</option>)}
             </select>
           </label>
           <div className={MONTH_CHOOSER === 'scroll' ? 'flex gap-1 overflow-x-auto pb-1' : 'flex flex-wrap gap-1'}>

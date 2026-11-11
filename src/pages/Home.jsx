@@ -250,7 +250,7 @@ export default function Home() {
                 ))}
               </div>
               <Eyebrow icon={asset(CAMPAIGN_ICON)} iconClass="h-6 sm:h-7" className="mt-3">
-                Army Report: <span className="font-heb">{MONTH_HEB[monthLabel] || monthLabel}</span> {year}
+                Army Report: <span className="font-heb">{MONTH_HEB[monthLabel] || monthLabel}</span> this year
               </Eyebrow>
             </div>
             {stats?.pct >= 100 ? <QuotaReached /> : null}
@@ -281,10 +281,10 @@ export default function Home() {
         <p className="sh mb-3">Kapitlach Said</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
-            { value: totals?.thisYear, label: year, sub: 'this year', heb: true, emoji: '📖' },
-            { value: totals?.allTime, label: 'All-Time', sub: 'every year', heb: false, emoji: '🌍' },
+            { value: totals?.thisYear, label: 'this year', emoji: '📖' },
+            { value: totals?.allTime, label: 'Since 5778', emoji: '🌍' },
           ].map((c) => (
-            <Card key={c.sub} className="relative overflow-hidden p-5 sm:p-6">
+            <Card key={c.label} className="relative overflow-hidden p-5 sm:p-6">
               <span aria-hidden="true" className="pointer-events-none absolute -right-3 -bottom-4 select-none text-[86px] leading-none opacity-[0.07]">{c.emoji}</span>
               <div className="relative flex items-center gap-4">
                 <span className="h-11 w-1.5 flex-none rounded-full" style={{ background: 'var(--grad-cta-green)' }} />
@@ -292,8 +292,7 @@ export default function Home() {
                   <div className="font-display text-[30px] font-black leading-none tabular-nums text-navy sm:text-[38px]">
                     {c.value != null ? fmt(c.value) : (totalsLoading ? '…' : '—')}
                   </div>
-                  <div className={`mt-1.5 text-sm font-semibold uppercase tracking-wide text-green ${c.heb ? 'font-heb text-base' : ''}`}>{c.label}</div>
-                  <div className="text-xs text-muted">{c.sub}</div>
+                  <div className="mt-1.5 text-sm font-semibold uppercase tracking-wide text-green">{c.label}</div>
                 </div>
               </div>
             </Card>
@@ -385,7 +384,7 @@ export default function Home() {
       {dedication?.text ? (
         <section className="mx-auto max-w-[1400px] px-4 pt-8 sm:px-6 lg:px-10">
           <Card className="border-l-4 border-gold p-5 sm:p-6">
-            <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[dedication.month] || MONTH_HEB[monthLabel]}</span> {dedication.year || year}</p>
+            <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[dedication.month] || MONTH_HEB[monthLabel]}</span> this year</p>
             <p className="mt-1 font-display text-lg italic text-navy">{dedication.text}</p>
           </Card>
         </section>
