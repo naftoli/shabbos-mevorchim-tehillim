@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "test": "npm run test:web && npm run test:php",
     "test:web": "node --import ./tests/web/register.mjs --test 'tests/web/*.test.js'",
-    "test:php": "php tests/php/MarkingTest.php && php tests/php/SchoolLogoTest.php && php tests/php/CommanderPromptTest.php && php tests/php/PlatoonRollTest.php && php tests/php/SoldierBoardTest.php && php tests/php/SoldierRankTest.php && php tests/php/LeapYearTest.php && php tests/php/QuotaOverrideTest.php"
+    "test:php": "php tests/php/MarkingTest.php && php tests/php/SchoolLogoTest.php && php tests/php/CommanderPromptTest.php && php tests/php/PlatoonRollTest.php && php tests/php/SoldierBoardTest.php && php tests/php/SoldierRankTest.php && php tests/php/LeapYearTest.php && php tests/php/NotifyTest.php && php tests/php/QuotaOverrideTest.php"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
