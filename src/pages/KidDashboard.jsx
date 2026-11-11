@@ -29,7 +29,6 @@ import { streakMissions } from '@/lib/trainingBoard.js'
 import { ladderAdvice } from '@/lib/ladderAdvice.js'
 import { IconImg, Pending } from '@/components/campaignBits.jsx'
 import PerfectPlatoonBanner from '@/components/PerfectPlatoonBanner.jsx'
-import { COMMANDER_AUTO_DEFAULT } from '@/lib/decisions.js'
 
 // Shared ladder glyph (gold on navy). Module-scope so it keeps a stable
 // component identity across renders.
@@ -99,9 +98,6 @@ export default function KidDashboard() {
   const [notice, setNotice] = useState('')
   const [declined, setDeclined] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`wwtc.ladderInvite.${kid?.id}`) || 'null') } catch { return null }
-  })
-  const [commanderAuto, setCommanderAuto] = useState(() => {
-    try { return localStorage.getItem('wwtc.commander.auto') || COMMANDER_AUTO_DEFAULT } catch { return COMMANDER_AUTO_DEFAULT }
   })
   // General 613 walks a new soldier through the ladder out loud. Don't also
   // pop the ladder modal over him; the button below still opens it.
@@ -481,17 +477,7 @@ export default function KidDashboard() {
                 <span className="font-normal text-muted"> — finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</span>
               </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
-              <label className="flex items-center gap-2 text-sm font-semibold text-navy">
-                <input type="checkbox" checked={commanderAuto === 'on'} onChange={(e) => {
-                  const next = e.target.checked ? 'on' : 'off'
-                  setCommanderAuto(next)
-                  try { localStorage.setItem('wwtc.commander.auto', next) } catch { /* ignore */ }
-                }} />
-                Pop up my commander when I sign in
-              </label>
-            </div>
+            <Button variant="navy" onClick={() => { emitCue('ladder-screen', cueLadder()); navigate('/ladders') }}>Switch my ladder</Button>
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
