@@ -3,6 +3,7 @@
 // A sentence whose number is missing is left out. Nothing is invented.
 
 import { GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { cellFor } from './customLadder.js'
 import { fmt } from './format.js'
 
 const MONTH_SCRIPT_IDS = ['welcome', 'choosing', 'mission', 'stand', 'streak']
@@ -87,8 +88,8 @@ export function trainByGrade(ladder) {
 }
 
 /** This month's kapitlach and minutes from the ladder table. Null when absent. */
-export function missionQuota(grade, month, ladder) {
-  const cell = quotaFor(grade, month, ladder)
+export function missionQuota(grade, month, ladder, customGrid = null) {
+  const cell = customGrid ? cellFor(customGrid, grade, month) : quotaFor(grade, month, ladder)
   if (!cell) return { kapitlach: null, minutes: null }
   return {
     kapitlach: readyNumber(cell.v),
@@ -108,18 +109,23 @@ export function fillWelcome(name) {
   return [`Welcome, ${who}`, ...body].join('\n\n')
 }
 
-export function fillMission({ name, ladder, gradeLabel, kapitlach, minutes } = {}) {
+export function fillMission({ name, ladder, gradeLabel, kapitlach, minutes, customTarget, customFinish } = {}) {
   const parts = []
   const who = cleanName(name)
   if (who) parts.push(`Hi ${who}, I'm your virtual commander!`)
   parts.push('New month, new mission!')
   const ladderNum = readyNumber(ladder)
-  const grade = cleanName(gradeLabel)
-  const chosen = ladderNum != null ? `You've chosen Ladder ${formatNum(ladderNum)}.` : null
-  const pace = grade ? `That means you're training toward saying the entire Tehillim by ${grade}.` : null
-  if (chosen && pace) parts.push(`${chosen} ${pace}`)
-  else if (chosen) parts.push(chosen)
-  else if (pace) parts.push(pace)
+  const grade = cleanName(customFinish) || cleanName(gradeLabel)
+  const target = readyNumber(customTarget)
+  if (target != null && grade) {
+    parts.push(`You're on a custom ladder. You're training to finish ${formatNum(target)} kapitlach by ${grade}.`)
+  } else {
+    const chosen = ladderNum != null ? `You've chosen Ladder ${formatNum(ladderNum)}.` : null
+    const pace = grade ? `That means you're training toward saying the entire Tehillim by ${grade}.` : null
+    if (chosen && pace) parts.push(`${chosen} ${pace}`)
+    else if (chosen) parts.push(chosen)
+    else if (pace) parts.push(pace)
+  }
   const kap = formatNum(kapitlach)
   const min = formatNum(minutes)
   if (kap != null && min != null) {
@@ -316,6 +322,8 @@ export function selectCommanderScripts(input = {}) {
         gradeLabel: input.gradeLabel,
         kapitlach: quota.kapitlach,
         minutes: quota.minutes,
+        customTarget: input.customTarget,
+        customFinish: input.customFinish,
       }),
     })
   }
@@ -356,12 +364,14 @@ export function filledScripts(input = {}) {
   return {
     welcome: fillWelcome(input.name),
     choosing: CHOOSING_SCRIPT,
-    mission: readyNumber(input.ladder) == null ? null : fillMission({
+    mission: readyNumber(input.ladder) == null && readyNumber(input.customTarget) == null ? null : fillMission({
       name: input.name,
       ladder: input.ladder,
       gradeLabel: input.gradeLabel,
       kapitlach: quota.kapitlach,
       minutes: quota.minutes,
+      customTarget: input.customTarget,
+      customFinish: input.customFinish,
     }),
     stand,
     streak,

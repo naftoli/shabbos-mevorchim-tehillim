@@ -163,6 +163,43 @@ Writes — admin (bearer from `POST /admin/login`):
    report cache does not have to be flushed. The soldier's ladder row is not
    changed.
 
+### Custom ladder
+
+- `GET /admin/custom-ladders?schoolId=` — soldiers in that school (names are
+  admin-only) with the quota they are on now and any custom ladder.
+- `POST /admin/custom-ladder` — `{ kidId, targetKapitlach, finishGrade, reason? }`.
+  The server builds the grade × month grid: "finish N kapitlach by that grade",
+  continuing from the soldier's current quota so it does not drop. Stored in
+  `wwtc_custom_ladders` (run `api/sql/wwtc_custom_ladders.sql` once; the route
+  returns **503** until that table and `wwtc_audit_log` exist).
+- `POST /admin/custom-ladder/remove` — `{ kidId }` puts them back on the normal ladder.
+
+  Same permission as a quota override: HQ any school, a base commander only
+  their own school. A class teacher is refused. Set and remove are rows in
+  `wwtc_audit_log` (`custom_ladder_set`, `custom_ladder_remove`).
+
+  Precedence for one month: the one-month quota override wins for the kapitel
+  quota (that month counts as met). Otherwise the custom ladder supplies
+  kapitel and minutes. Otherwise the normal ladder. The stored grid is what
+  reports use, so the numbers stay put if the generator changes later.
+
+  A monthly quota above 150 is not capped. It is shown as
+  `KAPITEL_ABOVE_TEHILLIM_DISPLAY = 'tehillim-plus-count'`
+  (see `src/lib/customLadder.js`): 190 is "1 Tehillim + 40 kapitlach" with the
+  plain number beside it, 300 is "2 Tehillim". Sholem is confirming whether a
+  target above 150 means that many kapitlach in the month.
+
+### What Naftoli does for custom ladders
+
+1. Run `api/sql/wwtc_custom_ladders.sql` once on the mashpia database.
+   It creates `wwtc_custom_ladders` only. It does not alter Mashpia tables.
+   Set/remove also write `wwtc_audit_log`. If that table is missing, run
+   `api/sql/wwtc_quota_overrides.sql` once too. Do not run either file from
+   the app. Until both exist, Save returns **503**.
+2. Deploy `api/customLadder.php`, `api/bootstrap.php`, `api/index.php`, and
+   `api/perfectPlatoon.php` with the app. No new secret. HQ and a school admin
+   sign in with the existing admin login.
+
 > Writes have been verified read-only (the mission/task lookups resolve correctly
 > against live data) but the INSERT/UPDATE/DELETE path has NOT been exercised
 > against a database yet — test on `test.mashpia.com` before master.

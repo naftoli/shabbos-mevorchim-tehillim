@@ -256,6 +256,7 @@ function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null):
                 'classId' => (int) $classId,
                 'className' => (string) $m['grade'],
                 'quota' => $q,
+                'minutesQuota' => $mq,
                 'said' => $d,
                 'met' => $isMet,
             ];
@@ -309,14 +310,21 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
-    $data = wwtcOverlaySchoolData(wwtcSchoolDataRaw($schoolId, $date, $year), $date, $year);
+    $data = wwtcSchoolDataRaw($schoolId, $date, $year);
+    // Custom ladder replaces the engine quota. The one-month override then
+    // replaces that month's kapitel quota. See api/customLadder.php.
+    if (function_exists('wwtcOverlayCustomLaddersOnSchool')) {
+        $data = wwtcOverlayCustomLaddersOnSchool($data, $date, $year);
+    }
+    $data = wwtcOverlaySchoolData($data, $date, $year);
     return wwtcApplyPerfectRosterToSchool($data, $schoolId, $date, $year);
 }
 
 /**
- * Shrink army kapitlach goals by each active override. The engine quota is the
- * figure already inside the cached school report — for Cheshvan that is today's
- * ladder — and the override replaces it.
+ * Army goals after a custom ladder and a one-month override.
+ * The override's delta is final-minus-engine for kapitel (it wins). A custom
+ * ladder with no override adds its own kapitel delta. Minutes move only for
+ * the custom ladder; the override does not change them.
  */
 function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
 {
@@ -325,9 +333,6 @@ function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
         return $agg;
     }
     $overs = wwtcActiveOverridesForMonth($year, $month);
-    if (!$overs) {
-        return $agg;
-    }
     $bySchool = [];
     foreach ($overs as $uid => $row) {
         $bySchool[(int) $row['school_id']][(int) $uid] = $row;
@@ -351,16 +356,34 @@ function wwtcAdjustArmyAggregates(array $agg, int $date, int $year): array
             $deltas[$sid] = ($deltas[$sid] ?? 0) + ((int) $row['overridden_quota'] - (int) $row['original_quota']);
         }
     }
-    if (!$deltas) {
+    $customKap = [];
+    $customMin = [];
+    if (function_exists('wwtcCustomLadderArmyDeltas')) {
+        [$customKap, $customMin] = wwtcCustomLadderArmyDeltas($date, $year, $overs);
+    }
+    foreach ($customKap as $sid => $delta) {
+        $deltas[$sid] = ($deltas[$sid] ?? 0) + (int) $delta;
+    }
+    if (!$deltas && !$customMin) {
         return $agg;
     }
     $out = $agg;
-    $out['kapGoal'] = wwtcOverlayKapGoals($agg['kapGoal'] ?? [], $deltas);
-    $army = $agg['army'] ?? [];
-    $kap = $army['Kapitelach'] ?? [];
-    $kap[$date] = (int) ($kap[$date] ?? 0) + array_sum($deltas);
-    $army['Kapitelach'] = $kap;
-    $out['army'] = $army;
+    if ($deltas) {
+        $out['kapGoal'] = wwtcOverlayKapGoals($agg['kapGoal'] ?? [], $deltas);
+        $army = $out['army'] ?? [];
+        $kap = $army['Kapitelach'] ?? [];
+        $kap[$date] = (int) ($kap[$date] ?? 0) + array_sum($deltas);
+        $army['Kapitelach'] = $kap;
+        $out['army'] = $army;
+    }
+    if ($customMin) {
+        $out['minGoal'] = wwtcOverlayKapGoals($out['minGoal'] ?? [], $customMin);
+        $army = $out['army'] ?? [];
+        if (isset($army['Minutes']) && is_array($army['Minutes'])) {
+            $army['Minutes'][$date] = (int) ($army['Minutes'][$date] ?? 0) + array_sum($customMin);
+            $out['army'] = $army;
+        }
+    }
     return $out;
 }
 
@@ -582,10 +605,14 @@ function wwtcKidMonths(array $kid): array
     }
 
     ksort($byDate);
-    // Cheshvan's quota above may be today's ladder (wwtcTrackAsOf falls back to
-    // the current track). An override for that month replaces it here.
+    // Custom ladder replaces the ladder quota. A one-month override then
+    // replaces that month's kapitel quota (Cheshvan included).
+    $months = array_values($byDate);
+    if (function_exists('wwtcApplyCustomLadderToKidMonths')) {
+        $months = wwtcApplyCustomLadderToKidMonths($kid, $months);
+    }
     return wwtcOverlayKidMonthList(
-        array_values($byDate),
+        $months,
         wwtcActiveOverridesForUserYear((int) $kid['user_id'], wwtcYear())
     );
 }
@@ -692,6 +719,9 @@ function wwtcKidProgress(array $kid): array
         }
     }
     $missionsTotal = wwtcKidMissionsLifetime((int) $kid['user_id']);
+    if (function_exists('wwtcUnmarkedCustomLadderMissions')) {
+        $missionsTotal += wwtcUnmarkedCustomLadderMissions((int) $kid['user_id'], $months, wwtcYear());
+    }
     // Prefer lifetime − this-year SM months; never go negative if marks include
     // RH/YK or other occasions beyond the elapsed-month list.
     $priorMissions = max(0, $missionsTotal - $metThisYear);
@@ -706,6 +736,12 @@ function wwtcKidProgress(array $kid): array
         'rank' => wwtcCurrentRank($MASHPIA_DB, (int) $kid['user_id']),
         'current' => $current,
     ]);
+    if (function_exists('wwtcActiveCustomLadderForUser')) {
+        $custom = wwtcPublicCustomLadder(wwtcActiveCustomLadderForUser((int) $kid['user_id']));
+        if ($custom) {
+            $out['customLadder'] = $custom;
+        }
+    }
     // An open flag is waiting for review and is not part of the counted mark.
     $openFlag = wwtcOpenFlag((int) $kid['user_id'], (int) wwtcCurrentDate());
     if ($openFlag) {
@@ -2098,10 +2134,11 @@ if ($method === 'GET' && $path === '/hq/verify') {
 
 /**
  * The quota and kapitlach the monthly report is showing for this soldier.
- * That figure is the report engine's own quota — Cheshvan included, which the
- * engine reprices from today's ladder. A flagged amount that does not count
- * yet is not the number the override adopts. Null month means it is not on
- * the calendar.
+ * That figure is the quota the report is using before the override: the custom
+ * ladder when the soldier has one, otherwise the engine (Cheshvan included,
+ * which the engine reprices from today's ladder). A flagged amount that does
+ * not count yet is not the number the override adopts. Null month means it
+ * is not on the calendar.
  *
  * @return array{engineQuota:int,said:int,reported:bool}|null
  */
@@ -2124,8 +2161,19 @@ function wwtcOverrideEngineFigures(array $kid, int $year, string $month): ?array
                 $said = wwtcCountedKapitlach($said, (int) ($flag['kapitlach'] ?? 0), 'flagged');
             }
         }
+        $engine = (int) $student['quota'];
+        if (function_exists('wwtcActiveCustomLadderForUser')) {
+            $cell = wwtcCustomLadderCell(
+                wwtcActiveCustomLadderForUser((int) $kid['user_id']),
+                (string) ($kid['class_grade'] ?? ''),
+                $month
+            );
+            if ($cell) {
+                $engine = wwtcCustomQuotaInt($cell['v']);
+            }
+        }
         return [
-            'engineQuota' => (int) $student['quota'],
+            'engineQuota' => $engine,
             'said' => $said,
             'reported' => $said > 0,
         ];
@@ -2139,6 +2187,143 @@ function wwtcOverrideActorSchools(array $actor): array
         return [];
     }
     return wwtcAdminAuthIds((int) $actor['id'], 'school');
+}
+
+/**
+ * Quota the soldier is on right now, before a new custom ladder is saved.
+ * An existing custom ladder is that quota, so a new target does not drop it.
+ * Otherwise it is the engine (or today's ladder, for Cheshvan).
+ *
+ * @return array{grade:string,month:string,kapitlach:float,minutes:int}
+ */
+function wwtcCustomLadderAnchorForKid(array $kid, int $year, string $month): array
+{
+    $grade = wwtcGradeKeyFrom((string) ($kid['class_grade'] ?? ''));
+    $sheetMonth = wwtcCustomMonthName($month);
+    $existing = wwtcActiveCustomLadderForUser((int) ($kid['user_id'] ?? 0));
+    if ($existing) {
+        $cell = wwtcCustomLadderCell($existing, $grade, $month);
+        if ($cell) {
+            return [
+                'grade' => $grade,
+                'month' => $sheetMonth,
+                'kapitlach' => $cell['v'],
+                'minutes' => (int) $cell['m'],
+            ];
+        }
+    }
+    $dates = wwtcMonthDatesForYear($year);
+    $jd = (int) ($dates[$month] ?? 0);
+    $kap = 0;
+    $min = 0;
+    if ($jd > 0) {
+        $raw = wwtcSchoolDataRaw((int) ($kid['school_id'] ?? 0), $jd, $year);
+        foreach ($raw['students'] ?? [] as $student) {
+            if ((int) $student['id'] !== (int) $kid['user_id']) {
+                continue;
+            }
+            $kap = (int) ($student['quota'] ?? 0);
+            $min = (int) ($student['minutesQuota'] ?? 0);
+            break;
+        }
+    }
+    return ['grade' => $grade, 'month' => $sheetMonth, 'kapitlach' => $kap, 'minutes' => $min];
+}
+
+function wwtcCustomLadderActor(array $actor): array
+{
+    if (trim((string) ($actor['name'] ?? '')) === '') {
+        $actor['name'] = function_exists('wwtcAdminDisplayName')
+            ? wwtcAdminDisplayName((int) ($actor['id'] ?? 0))
+            : '';
+    }
+    return $actor;
+}
+
+// Admin picks one soldier and a "finish N kapitlach by grade G" target.
+// The server builds the grid. HQ: any school. Base commander: their school.
+if ($method === 'GET' && $path === '/admin/custom-ladders') {
+    $actor = wwtcRequireActor(['admin']);
+    $schoolId = (int) ($_GET['schoolId'] ?? 0);
+    if ($schoolId <= 0 || !isset(wwtcEligibleSchools()[$schoolId])) {
+        wwtcError('School not found.', 404);
+    }
+    if (wwtcOverrideStatus($actor, $schoolId, wwtcOverrideActorSchools($actor)) !== 200) {
+        wwtcError('You can only set a custom ladder for soldiers in your own school.', 403);
+    }
+    $year = wwtcYear();
+    $date = wwtcCurrentDate();
+    $month = wwtcMonthForDate($date);
+    $raw = wwtcSchoolDataRaw($schoolId, $date, $year);
+    $engineById = [];
+    foreach ($raw['students'] ?? [] as $student) {
+        $engineById[(int) $student['id']] = $student;
+    }
+    $soldiers = wwtcCustomLadderRoster($schoolId);
+    foreach ($soldiers as $i => $soldier) {
+        if (!empty($soldier['customLadder'])) {
+            $cell = wwtcCustomLadderCell(
+                ['grid' => $soldier['customLadder']],
+                (string) $soldier['grade'],
+                $month
+            );
+            $kap = $cell ? $cell['v'] : 0;
+            $min = $cell ? (int) $cell['m'] : 0;
+        } else {
+            $engine = $engineById[(int) $soldier['id']] ?? null;
+            $kap = (int) ($engine['quota'] ?? 0);
+            $min = (int) ($engine['minutesQuota'] ?? 0);
+        }
+        $soldiers[$i]['month'] = $month;
+        $soldiers[$i]['currentKapitlach'] = $kap;
+        $soldiers[$i]['currentMinutes'] = $min;
+    }
+    wwtcJson(['schoolId' => $schoolId, 'month' => $month, 'year' => $year, 'soldiers' => $soldiers]);
+}
+
+if ($method === 'POST' && $path === '/admin/custom-ladder') {
+    $actor = wwtcCustomLadderActor(wwtcRequireActor(['admin']));
+    $input = wwtcInput();
+    $kidId = (int) ($input['kidId'] ?? 0);
+    if ($kidId <= 0) {
+        wwtcError('A soldier is required.', 422);
+    }
+    $kid = wwtcKidByUserId($kidId);
+    if (!$kid || !isset(wwtcEligibleSchools()[(int) $kid['school_id']])) {
+        wwtcError('Soldier not found.', 404);
+    }
+    $year = wwtcYear();
+    $month = wwtcMonthForDate(wwtcCurrentDate());
+    $result = wwtcPerformCustomLadder($MASHPIA_DB, $actor, $kid, $input, wwtcOverrideActorSchools($actor), [
+        'ready' => wwtcCustomLaddersReady() && wwtcAuditReady(),
+        'anchor' => wwtcCustomLadderAnchorForKid($kid, $year, $month),
+        'now' => date('Y-m-d H:i:s'),
+    ]);
+    if ($result['status'] !== 200) {
+        wwtcError($result['error'], $result['status']);
+    }
+    wwtcJson($result['body']);
+}
+
+if ($method === 'POST' && $path === '/admin/custom-ladder/remove') {
+    $actor = wwtcCustomLadderActor(wwtcRequireActor(['admin']));
+    $input = wwtcInput();
+    $kidId = (int) ($input['kidId'] ?? 0);
+    if ($kidId <= 0) {
+        wwtcError('A soldier is required.', 422);
+    }
+    $kid = wwtcKidByUserId($kidId);
+    if (!$kid || !isset(wwtcEligibleSchools()[(int) $kid['school_id']])) {
+        wwtcError('Soldier not found.', 404);
+    }
+    $result = wwtcPerformRemoveCustomLadder($MASHPIA_DB, $actor, $kid, wwtcOverrideActorSchools($actor), [
+        'ready' => wwtcCustomLaddersReady() && wwtcAuditReady(),
+        'active' => wwtcActiveCustomLadderForUser($kidId) !== null,
+    ]);
+    if ($result['status'] !== 200) {
+        wwtcError($result['error'], $result['status']);
+    }
+    wwtcJson($result['body']);
 }
 
 // Base commander (or HQ) sets one soldier's quota for one month to the

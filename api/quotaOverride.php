@@ -10,6 +10,10 @@
  * replaces that number; it is not fed back into the ladder.
  *
  * Storage is api/sql/wwtc_quota_overrides.sql. This file does not run it.
+ *
+ * Precedence: this one-month override wins over a custom ladder for the
+ * kapitel quota of that month. Minutes stay on the custom ladder. See
+ * api/customLadder.php.
  */
 
 /**
@@ -194,6 +198,11 @@ function wwtcOverlayKidMonthList(array $months, array $overridesByMonth): array
         $months[$i]['originalQuota'] = $next['originalQuota'];
         $months[$i]['quotaAdjusted'] = $next['quotaAdjusted'];
         $months[$i]['met'] = $next['met'];
+        // The override replaces the kapitel number, so the Aleph-Beis / custom
+        // label from the ladder no longer describes this month.
+        if ($next['quotaAdjusted']) {
+            $months[$i]['quotaLabel'] = (string) $next['quota'];
+        }
     }
     return $months;
 }

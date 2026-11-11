@@ -334,3 +334,20 @@ test('undoQuotaOverride posts to the undo route as admin', async () => {
   assert.deepEqual(lastCall().body, { kidId: 42, year: 5787, month: 'Cheshvan' })
   api.endSession('admin')
 })
+
+test('setCustomLadder posts the soldier, target, and finish grade as admin', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok9', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
+    'POST /admin/custom-ladder': { body: { ok: true, customLadder: { targetKapitlach: 300, finishGrade: '8' } } },
+  })
+  await api.verifyAdmin('base', 'pw')
+  const saved = await api.setCustomLadder({ kidId: 42, targetKapitlach: 300, finishGrade: '8', reason: 'longer ramp' })
+  assert.equal(saved.customLadder.targetKapitlach, 300)
+  assert.equal(lastCall().method, 'POST')
+  assert.equal(lastCall().apiPath, '/admin/custom-ladder')
+  assert.deepEqual(lastCall().body, { kidId: 42, targetKapitlach: 300, finishGrade: '8', reason: 'longer ramp' })
+  assert.match(lastCall().headers.Authorization, /^Bearer atok9$/)
+  api.endSession('admin')
+})

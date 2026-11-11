@@ -23,6 +23,7 @@ require_once __DIR__ . '/hebrewYear.php';
 require_once __DIR__ . '/quotaOverride.php';
 require_once __DIR__ . '/className.php';
 require_once __DIR__ . '/teacherName.php';
+require_once __DIR__ . '/customLadder.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
@@ -1037,6 +1038,10 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null, ?stri
         ];
     });
     if ($monthName !== null && $monthName !== '') {
+        // Custom ladder first, then the one-month override (the override wins).
+        if (function_exists('wwtcApplyCustomLaddersToBoard')) {
+            $board = wwtcApplyCustomLaddersToBoard($board, (string) $monthName);
+        }
         return wwtcOverlayHolidayBoard($board, $year, (string) $monthName);
     }
     return $board;
