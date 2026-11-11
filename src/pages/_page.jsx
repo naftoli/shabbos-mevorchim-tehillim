@@ -3,15 +3,18 @@ import { Card } from '@/components/ui.jsx'
 // Shared page chrome for the scaffold. Real pages replace <Scaffold> bodies with
 // live content ported/adapted from Mivtza Lulav.
 
-export function PageHero({ eyebrow, title, children }) {
+export function PageHero({ eyebrow, title, mark, children }) {
   return (
     <section className="hero-navy">
-      <div className="mx-auto max-w-[1400px] px-4 py-12 text-white sm:px-6 lg:px-10">
-        {eyebrow ? (
-          <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">{eyebrow}</p>
-        ) : null}
-        <h1 className="mt-1 font-display text-4xl font-black text-white md:text-5xl">{title}</h1>
-        {children ? <div className="mt-3 max-w-2xl text-white/85">{children}</div> : null}
+      <div className={`mx-auto max-w-[1400px] px-4 py-12 text-white sm:px-6 lg:px-10 ${mark ? 'flex items-center gap-4 sm:gap-5' : ''}`}>
+        {mark || null}
+        <div className="min-w-0">
+          {eyebrow ? (
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold sm:text-[15px]">{eyebrow}</p>
+          ) : null}
+          <h1 className="mt-1 font-display text-4xl font-black text-white md:text-5xl">{title}</h1>
+          {children ? <div className="mt-3 max-w-2xl text-white/85">{children}</div> : null}
+        </div>
       </div>
     </section>
   )
