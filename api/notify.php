@@ -239,8 +239,18 @@ function wwtcNotifySchoolFromReport(array $data, string $schoolName): array
         $name = trim((string) ($class['name'] ?? ''));
         if (!isset($byClass[$classId])) {
             $byClass[$classId] = ['id' => $classId, 'name' => $name, 'students' => []];
-        } elseif ($byClass[$classId]['name'] === '' && $name !== '') {
+        } elseif ($name !== '') {
+            // Class label from the shared roster, not the report engine's grade.
             $byClass[$classId]['name'] = $name;
+        }
+        // The shared roster's star. When it is present it wins over recounting
+        // this class's students, which can be a different set than home.
+        if (array_key_exists('perfect', $class)) {
+            $byClass[$classId]['perfect'] = (bool) $class['perfect'];
+        }
+        if (array_key_exists('size', $class)) {
+            $byClass[$classId]['rosterSize'] = (int) $class['size'];
+            $byClass[$classId]['rosterMet'] = (int) ($class['met'] ?? 0);
         }
     }
     return ['name' => $schoolName, 'classes' => array_values($byClass)];
@@ -357,7 +367,26 @@ function wwtcNotifyComposeReport(array $recipient, array $schools, string $month
         usort($students, function ($a, $b) {
             return strcmp($a['name'], $b['name']);
         });
-        $isPerfect = $classTotal > 0 && $classFull === $classTotal;
+        // A class the report engine omitted still has a roster size. List it
+        // when the shared rule says it is perfect, without inventing names.
+        if ($classTotal === 0 && !empty($class['perfect']) && (int) ($class['rosterSize'] ?? 0) > 0) {
+            $classTotal = (int) $class['rosterSize'];
+            $classFull = (int) ($class['rosterMet'] ?? 0);
+            $classFilled = $classFull;
+            $gap = $classTotal - $classFull;
+            if ($gap < 0) {
+                $gap = 0;
+            }
+            $total += $classTotal;
+            $full += $classFull;
+            $filled += $classFilled;
+            $missing += $gap;
+        }
+        if (array_key_exists('perfect', $class)) {
+            $isPerfect = (bool) $class['perfect'];
+        } else {
+            $isPerfect = $classTotal > 0 && $classFull === $classTotal;
+        }
         if ($isPerfect) {
             $perfect++;
         }

@@ -299,12 +299,18 @@ function wwtcSchoolDataRaw(int $schoolId, ?int $date = null, ?int $year = null):
     });
 }
 
-/** Engine school report with quota overrides applied on the way out. */
+/**
+ * Engine school report, then quota overrides, then the shared Perfect Platoon
+ * roster. Kapitlach totals stay the engine's. The star, met/size, and the
+ * class label come from wwtcCanonicalPlatoonSoldiers(), the same rows as
+ * GET /perfect-platoons.
+ */
 function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): array
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
-    return wwtcOverlaySchoolData(wwtcSchoolDataRaw($schoolId, $date, $year), $date, $year);
+    $data = wwtcOverlaySchoolData(wwtcSchoolDataRaw($schoolId, $date, $year), $date, $year);
+    return wwtcApplyPerfectRosterToSchool($data, $schoolId, $date, $year);
 }
 
 /**
@@ -419,32 +425,10 @@ function wwtcHolidayArmyRows(array $board): array
     return $rows;
 }
 
-/** Perfect-platoon rows for a holiday — matches the /perfect-platoons shape. */
+/** Perfect-platoon rows for a holiday — same rule as GET /perfect-platoons. */
 function wwtcHolidayPlatoons(array $board): array
 {
-    $counts = $board['counts'];
-    $out = [];
-    foreach ($counts['sizeByClass'] as $sid => $byClass) {
-        foreach ($byClass as $cid => $size) {
-            if (!wwtcClassIsPerfect((int) ($counts['metByClass'][$sid][$cid] ?? 0), (int) $size)) {
-                continue;
-            }
-            $meta = $board['classMeta'][$cid] ?? ['grade' => '', 'teacher' => '', 'sub' => ''];
-            $grade = (string) $meta['grade'];
-            $sub = (string) ($meta['sub'] ?? '');
-            $out[] = [
-                'schoolId' => (int) $sid,
-                'school' => (string) ($board['schools'][$sid] ?? ''),
-                'classId' => (int) $cid,
-                'className' => wwtcPlatoonClassName($grade, $sub),
-                'teacher' => (string) ($meta['teacher'] ?? ''),
-                'grade' => $grade,
-                'size' => (int) $size,
-                'schoolClasses' => count($counts['sizeByClass'][$sid]),
-            ];
-        }
-    }
-    return $out;
+    return wwtcPerfectPlatoonsFromSoldiers(wwtcBoardPlatoonSoldiers($board));
 }
 
 /** One school's class + student breakdown for a holiday — matches wwtcSchoolData. */
@@ -493,6 +477,9 @@ function wwtcHolidaySchoolData(array $board, int $schoolId): array
             'className' => $s['className'], 'quota' => $s['quota'], 'said' => $s['said'], 'met' => $s['met'],
         ];
     }, $students);
+    $roster = wwtcPlatoonRoster(wwtcBoardPlatoonSoldiers($board));
+    $classes = wwtcAlignSchoolClasses($classes, $roster, $schoolId);
+    $srows = wwtcApplyRosterToStudents($srows, $roster, $schoolId);
     return ['classes' => $classes, 'students' => $srows, 'minutes' => $minDone, 'minutesQuota' => $minQuota];
 }
 
@@ -1349,14 +1336,32 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
             'quotaAdjusted' => !empty($s['quotaAdjusted']),
         ];
     }
+    $classRow = null;
+    foreach ($data['classes'] as $c) {
+        if ((int) $c['id'] === $classId) {
+            $classRow = $c;
+            break;
+        }
+    }
+    if ($classRow) {
+        if ((string) ($classRow['name'] ?? '') !== '') {
+            $className = (string) $classRow['name'];
+        }
+        $completed = (int) ($classRow['met'] ?? 0);
+        $size = (int) ($classRow['size'] ?? 0);
+        $perfect = !empty($classRow['perfect']);
+    } else {
+        $size = count($rows);
+        $perfect = wwtcClassIsPerfect($completed, $size);
+    }
     $summary = [
         'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
         'schoolId' => $schoolId,
         'className' => $className,
         'completed' => $completed,
-        'size' => count($rows),
-        'perfect' => wwtcClassIsPerfect($completed, count($rows)),
+        'size' => $size,
+        'perfect' => $perfect,
     ];
     wwtcJson(wwtcPlatoonResponse($summary, $rows, wwtcPlatoonRollAllowed($classId, $schoolId)));
 }

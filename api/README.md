@@ -33,12 +33,16 @@ Reads — all implemented (same figures as the WWTC report pages):
 
 Per-school "soldiers who completed" on the home race still comes from the
 mission-mark signal (`date_tasks_mission_marks`) via `wwtcCompletionCounts()`.
-A perfect platoon does not. The school classes view and `GET /perfect-platoons`
-(and the home/stats count) share one rule: every soldier on that class's month
-roster has live kapitlach said (`date_tasks_marks.done_qty`) at least their own
-quota (`date_tasks.quantity`, on the ladder they were on for that Shabbos
-Mevorchim). Mission marks are the medal signal and can be missing after a class
-has already finished, which used to hide perfect classes from the home list.
+A perfect platoon does not. Home (`GET /perfect-platoons` and the stats count),
+the school classes view, the base and platoon reports, the holiday board, and
+the Wednesday follow-up PDF (`api/notify-wednesday.php`) share one roster: every
+soldier on that class has live kapitlach said (`date_tasks_marks.done_qty`) at
+least their own quota (`date_tasks.quantity`, on the ladder they were on for
+that Shabbos Mevorchim). An unaccepted over-entry flag is put back to the prior
+mark. A base-commander quota override replaces that month's quota with what the
+soldier entered. The report engine still supplies kapitlach totals; it does not
+decide the star. Mission marks are the medal signal and can be missing after a
+class has already finished, which used to hide perfect classes from the home list.
 The list is one row per class id — the teacher and the class-name spelling are
 labels, not keys — and it never includes student names. The "3 / 16" on a home
 card is perfect classes out of the classes on that roster.
