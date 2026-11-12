@@ -203,6 +203,15 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
     $report->setClassResults();
     $report->setStudentResults($schoolId, $date);
 
+    // "Completed" is the mission mark — the one signal shared with the home/army
+    // totals — not a re-derivation of said >= quota here. $counts gives the
+    // authoritative per-class size/met (same enrolled roster as the army page);
+    // $marked flags each soldier for the per-student rows and the platoon roll.
+    $counts = wwtcCompletionCounts($date);
+    $sizeByClassCounts = $counts['sizeByClass'][$schoolId] ?? [];
+    $metByClassCounts = $counts['metByClass'][$schoolId] ?? [];
+    $marked = wwtcMarkedUserIds($date, $schoolId);
+
     $meta = (array) $report->getClasses();                 // [class_id => ['grade','teacher']]
     $classQuota = $report->getClassResults()['Kapitelach'][$date] ?? [];      // [class_id => goal]
     $classDone = $report->getClassDoneResults()['Kapitelach'][$date] ?? [];   // [class_id => done]
@@ -227,7 +236,10 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
         foreach ($usersByKey as $uid => $byKey) {
             $q = (int) ($byKey['Kapitelach'] ?? 0);
             $d = (int) ($doneRows[$date][$classId][$uid]['Kapitelach'] ?? 0);
-            $isMet = $q > 0 && $d >= $q;
+            // Met = the soldier earned the mission mark, the shared completion
+            // signal — not a local said >= quota recompute, which could disagree
+            // with the home/army board for the same soldier.
+            $isMet = isset($marked[(int) $uid]);
             $mq = (int) ($byKey['Minutes'] ?? 0);
             $md = (int) ($doneRows[$date][$classId][$uid]['Minutes'] ?? 0);
             $minQuota += $mq;
@@ -256,8 +268,12 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
     foreach ($meta as $classId => $m) {
         $quota = (int) ($classQuota[$classId] ?? 0);
         $said = (int) ($classDone[$classId] ?? 0);
-        $size = (int) ($sizeBy[$classId] ?? 0);
-        $met = (int) ($metBy[$classId] ?? 0);
+        // Size and met come from the shared completion counts (enrolled roster,
+        // distinct soldiers) so this class shows exactly what the home and army
+        // pages show; fall back to the per-student tally only when a class is
+        // absent from the counts (e.g. it has no enrolled rows).
+        $size = (int) ($sizeByClassCounts[$classId] ?? ($sizeBy[$classId] ?? 0));
+        $met = (int) ($metByClassCounts[$classId] ?? ($metBy[$classId] ?? 0));
         $minQ = (int) ($minQuotaBy[$classId] ?? 0);
         $minD = (int) ($minDoneBy[$classId] ?? 0);
         $classes[] = [
@@ -276,7 +292,7 @@ function wwtcSchoolData(int $schoolId, ?int $date = null, ?int $year = null): ar
             'minutesSaid' => $minD,
             'minutesQuota' => $minQ,
             'minutesPct' => wwtcPct($minD, $minQ),
-            'perfect' => $size > 0 && $met === $size,
+            'perfect' => $size > 0 && $met >= $size,
         ];
     }
     return [
@@ -1304,13 +1320,21 @@ if ($method === 'GET' && preg_match('#^/reports/platoon/(\d+)$#', $path, $m)) {
             'met' => $s['met'],
         ];
     }
+    // Header counts come from the same authoritative class row the school's
+    // Perfect Platoons list and star use, so the roll's "X of Y · perfect" can
+    // never contradict the badge that opened it. The rows above stay as the
+    // per-soldier detail. Fall back to the roll tally if the class is unlisted.
+    $classRow = null;
+    foreach ($data['classes'] as $cRow) {
+        if ((int) $cRow['id'] === $classId) { $classRow = $cRow; break; }
+    }
     $summary = [
         'month' => $monthLabel,
         'school' => wwtcEligibleSchools()[$schoolId] ?? null,
         'className' => $className,
-        'completed' => $completed,
-        'size' => count($rows),
-        'perfect' => count($rows) > 0 && $completed === count($rows),
+        'completed' => $classRow ? (int) $classRow['met'] : $completed,
+        'size' => $classRow ? (int) $classRow['size'] : count($rows),
+        'perfect' => $classRow ? !empty($classRow['perfect']) : (count($rows) > 0 && $completed === count($rows)),
     ];
     wwtcJson(wwtcPlatoonResponse($summary, $rows, wwtcPlatoonRollAllowed($classId, $schoolId)));
 }
@@ -1598,6 +1622,17 @@ if ($method === 'POST' && $path === '/me/report') {
     $kapitlach = max(0, min(150, (int) round((float) ($input['kapitlach'] ?? $input['kapitelach'] ?? 0))));
     $minutes = max(0, min(770, (int) round((float) ($input['minutes'] ?? 0))));
 
+    // Price this week on the ladder the soldier was on AS OF this Shabbos
+    // Mevorchim, not whatever ladder they are on right now. A ladder change made
+    // after this week's SM day takes effect only from the NEXT SM — the same
+    // wwtcTrackAsOf rule the report/recompute side uses. Without this, a soldier
+    // who switched ladders mid-window and then reported would write the mark (and
+    // its mission mark) on the NEW ladder for a week the recompute still prices on
+    // the OLD one: a second mission mark for the same week, and a home/school
+    // mismatch. Resolving the mission by the as-of track keeps the write on the
+    // same ladder the read side uses, so there is nothing to double up.
+    $asOfTrack = wwtcTrackAsOf((int) $kid['user_id'], $date, (int) $kid['track_id']);
+
     // The soldier's mission for this Shabbos Mevorchim, matched exactly as the
     // read side (wwtcKidMonths) and mark_tehillim2 do.
     $missionStmt = $MASHPIA_DB->prepare(
@@ -1609,7 +1644,7 @@ if ($method === 'POST' && $path === '/me/report') {
     );
     $missionStmt->execute([
         ':d' => $date, ':st' => (int) $kid['school_type_id'],
-        ':track' => (int) $kid['track_id'], ':lvl' => (int) $kid['level'], ':lang' => (int) $kid['lang_id'],
+        ':track' => $asOfTrack, ':lvl' => (int) $kid['level'], ':lang' => (int) $kid['lang_id'],
     ]);
     $missionId = (int) ($missionStmt->fetchColumn() ?: 0);
     if (!$missionId) {
