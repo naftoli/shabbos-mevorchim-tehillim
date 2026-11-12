@@ -314,6 +314,25 @@ test('setSchoolDedication PUTs scope=school with the school id and text, as admi
   api.endSession('admin')
 })
 
+test('removeSchoolDedication PUTs empty text as admin so the live row is deleted', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok5b', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
+    'PUT /dedication': { body: { dedication: null } },
+  })
+  await api.verifyAdmin('x', 'y')
+  const d = await api.removeSchoolDedication(89)
+  assert.equal(d, null)
+  assert.equal(lastCall().method, 'PUT')
+  assert.equal(lastCall().apiPath, '/dedication')
+  assert.equal(lastCall().body.scope, 'school')
+  assert.equal(lastCall().body.schoolId, 89)
+  assert.equal(lastCall().body.text, '')
+  assert.match(lastCall().headers.Authorization, /^Bearer atok5b$/)
+  api.endSession('admin')
+})
+
 test('setArmyDedication PUTs scope=army as admin', async () => {
   reset()
   api.endSession('admin')
@@ -367,14 +386,14 @@ test('setCustomLadder posts the soldier, target, and finish grade as admin', asy
   api.endSession('admin')
   mock({
     'POST /admin/login': { body: { token: 'atok9', expiresIn: 43200, admin: { kind: 'school', schoolId: 89 } } },
-    'POST /admin/custom-ladder': { body: { ok: true, customLadder: { targetKapitlach: 300, finishGrade: '8' } } },
+    'POST /admin/custom-ladder': { body: { ok: true, customLadder: { targetKapitlach: 150, finishGrade: '8' } } },
   })
   await api.verifyAdmin('base', 'pw')
-  const saved = await api.setCustomLadder({ kidId: 42, targetKapitlach: 300, finishGrade: '8', reason: 'longer ramp' })
-  assert.equal(saved.customLadder.targetKapitlach, 300)
+  const saved = await api.setCustomLadder({ kidId: 42, targetKapitlach: 150, finishGrade: '8', reason: 'longer ramp' })
+  assert.equal(saved.customLadder.targetKapitlach, 150)
   assert.equal(lastCall().method, 'POST')
   assert.equal(lastCall().apiPath, '/admin/custom-ladder')
-  assert.deepEqual(lastCall().body, { kidId: 42, targetKapitlach: 300, finishGrade: '8', reason: 'longer ramp' })
+  assert.deepEqual(lastCall().body, { kidId: 42, targetKapitlach: 150, finishGrade: '8', reason: 'longer ramp' })
   assert.match(lastCall().headers.Authorization, /^Bearer atok9$/)
   api.endSession('admin')
 })

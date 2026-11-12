@@ -20,6 +20,7 @@ import QuotaBars from '@/components/QuotaBars.jsx'
 import { IconImg, QuotaReached, RaceToggle, StarMark, Pending } from '@/components/campaignBits.jsx'
 import { PerfectPlatoonLogo, TopBaseBadge } from '@/components/brandMarks.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
+import { schoolCampaignPath } from '@/lib/useCampaignClock.js'
 import { CAMPAIGN_MARK, MONTH_CHOOSER } from '@/lib/decisions.js'
 import { baseRanks, compareBasesInAction } from '@/lib/baseRank.js'
 import { PERFECT_PLATOON_ART } from '@/lib/perfectPlatoonBanner.js'
@@ -29,10 +30,6 @@ import { teacherName } from '@/lib/teacherName.js'
 import ClassName from '@/components/ClassName.jsx'
 
 const CAMPAIGN_ICON = CAMPAIGN_MARK === 'target' ? 'design/icon-target.png' : 'design/flag.png'
-
-function Skeleton({ className = '' }) {
-  return <span className={`inline-block animate-pulse rounded-md bg-track ${className}`} aria-hidden="true" />
-}
 
 const RACE_FILLS = [
   'linear-gradient(90deg, #86a8db 0%, var(--color-race-blue) 55%, #1f4f9e 100%)',
@@ -69,7 +66,7 @@ function Stat({ value, label, icon, hint, iconBox = 'h-[60px] w-[72px] lg:h-[76p
   )
 }
 
-function SchoolsRace({ schools }) {
+function SchoolsRace({ schools, period }) {
   const [sort, setSort] = useState('finished')
   const [visible, setVisible] = useState(10)
   const ranked = rankSchools(schools, sort)
@@ -89,7 +86,7 @@ function SchoolsRace({ schools }) {
         {shown.map((s, i) => (
           <Link
             key={s.id}
-            to={`/s/${s.id}`}
+            to={schoolCampaignPath(s.id, period)}
             className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-2 py-2.5 transition hover:bg-black/[0.03] sm:flex sm:gap-4 sm:px-3 lg:gap-5"
           >
             <span className="grid w-9 flex-none place-items-center sm:w-12 lg:w-14">
@@ -121,9 +118,9 @@ function SchoolsRace({ schools }) {
   )
 }
 
-function SchoolCard({ s, color, rank }) {
+function SchoolCard({ s, color, rank, period }) {
   return (
-    <Link to={`/s/${s.id}`} className="group block">
+    <Link to={schoolCampaignPath(s.id, period)} className="group block">
       <Card className="h-full transition group-hover:-translate-y-[3px] group-hover:shadow-hover">
         <div className="flex items-start gap-3 px-5 pt-5">
           <SchoolLogo school={{ ...s, color }} size={48} />
@@ -363,7 +360,7 @@ export default function Home() {
             <Pending label="Getting the school race" />
           </Card>
         ) : (
-          <SchoolsRace schools={schools} />
+          <SchoolsRace schools={schools} period={period} />
         )}
       </section>
 
@@ -419,7 +416,7 @@ export default function Home() {
                           return (
                             <Link
                               key={platoonKey(p)}
-                              to={`/s/${p.schoolId}`}
+                              to={schoolCampaignPath(p.schoolId, period)}
                               className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#c3b1d6]/40 px-3 py-1.5 text-sm ring-1 ring-[#8464a6]/40 transition hover:-translate-y-px hover:bg-[#c3b1d6]/70 sm:min-h-0"
                               title={`${displayClassName(p.className)} · ${teacher || p.school} · ${p.size} soldiers`}
                             >
@@ -470,7 +467,7 @@ export default function Home() {
           <Pending label="Getting the bases" />
         ) : filtered.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((s, i) => <SchoolCard key={s.id} s={s} rank={rankById.get(String(s.id))} color={SCHOOL_COLORS[i % SCHOOL_COLORS.length]} />)}
+            {filtered.map((s, i) => <SchoolCard key={s.id} s={s} rank={rankById.get(String(s.id))} color={SCHOOL_COLORS[i % SCHOOL_COLORS.length]} period={period} />)}
           </div>
         ) : (
           <p className="font-display text-[16px] italic text-muted">No schools match “{query}”.</p>

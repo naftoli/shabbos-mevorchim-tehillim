@@ -251,13 +251,15 @@ function wwtcOverlayKapGoals(array $kapGoal, array $deltas): array
     return $kapGoal;
 }
 
-function wwtcMonthNameForJd(int $jd, int $year): string
-{
-    if (!function_exists('wwtcMonthDatesForYear')) {
-        return '';
+if (!function_exists('wwtcMonthNameForJd')) {
+    function wwtcMonthNameForJd(int $jd, int $year): string
+    {
+        if (!function_exists('wwtcMonthDatesForYear')) {
+            return '';
+        }
+        $found = array_search($jd, wwtcMonthDatesForYear($year), true);
+        return $found === false ? '' : (string) $found;
     }
-    $found = array_search($jd, wwtcMonthDatesForYear($year), true);
-    return $found === false ? '' : (string) $found;
 }
 
 function &wwtcOverrideCacheBag(): array

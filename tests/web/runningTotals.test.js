@@ -7,7 +7,6 @@ import {
   campaignYearsThrough,
   scaleAmounts,
   scaleMonthRows,
-  yearKeepsBothAdars,
 } from '../../src/lib/runningTotals.js'
 
 test('the campaign starts at Cheshvan 5778', () => {
@@ -21,7 +20,6 @@ test('the campaign starts at Cheshvan 5778', () => {
 })
 
 test('a leap year lists Adar I and Adar II, and a plain year lists one Adar', () => {
-  assert.equal(yearKeepsBothAdars(5784), true)
   const leap = breakdownMonthNames(5784)
   assert.equal(leap.includes('Adar I'), true)
   assert.equal(leap.includes('Adar II'), true)

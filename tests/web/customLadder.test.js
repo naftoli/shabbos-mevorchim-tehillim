@@ -3,8 +3,11 @@ import assert from 'node:assert/strict'
 import { GRADES, LADDERS, MONTHS, quotaFor } from '../../src/data/ladders.js'
 import { metKap } from '../../src/lib/quotaOverride.js'
 import { streakFromMissions } from '../../src/lib/streaks.js'
+import QUOTA from '../../src/data/ladders-quota.json' with { type: 'json' }
 import {
   KAPITEL_ABOVE_TEHILLIM_DISPLAY,
+  MAX_TARGET_KAPITLACH,
+  TEHILLIM_KAPITLACH,
   cellFor,
   formatKapitlachQuota,
   generateCustomLadder,
@@ -44,12 +47,17 @@ test('the same ladder is reproduced when the anchor already matches that cell', 
   assert.equal(anchored.anchored, false)
 })
 
-test('a higher target scales the ladder and does not cap at 150', () => {
-  const grid = generateCustomLadder({ targetKapitlach: 300, finishGrade: 8 })
-  assert.equal(cellFor(grid, '8', 'Elul').v, 300)
-  assert.equal(cellFor(grid, '4', 'Tishrei').v, 108)
-  assert.equal(cellFor(grid, '4', 'Tishrei').m, minutesForKapitlach(108))
-  assert.equal(ladderProblems(grid).length, 0)
+test('the shared quota json has 13 grades and 12 months', () => {
+  assert.equal(Object.keys(QUOTA).length, 13)
+  assert.equal(Object.keys(QUOTA.pre1a).length, 12)
+  assert.equal(MAX_TARGET_KAPITLACH, TEHILLIM_KAPITLACH)
+})
+
+test('a target above 150 is refused', () => {
+  assert.throws(
+    () => generateCustomLadder({ targetKapitlach: 300, finishGrade: 8 }),
+    /1 to 150/,
+  )
   const shown = formatKapitlachQuota(300)
   assert.equal(shown.label, '2 Tehillim')
   assert.equal(shown.plain, '300')
@@ -86,12 +94,17 @@ test('the climb never drops below the quota the soldier has now', () => {
     anchor: { grade: '6', month: 'Cheshvan', kapitlach: 200, minutes: 130 },
   })
   assert.equal(grid.anchored, true)
-  assert.ok(cellFor(grid, '6', 'Cheshvan').v >= 200)
-  assert.ok(cellFor(grid, '6', 'Elul').v >= 200)
-  assert.equal(cellFor(grid, '12', 'Elul').v, 200)
+  assert.equal(cellFor(grid, '6', 'Cheshvan').v, 150)
+  assert.equal(cellFor(grid, '6', 'Elul').v, 150)
+  assert.equal(cellFor(grid, '12', 'Elul').v, 150)
   const untouched = generateCustomLadder({ targetKapitlach: 150, finishGrade: 12 })
   assert.equal(cellFor(grid, '5', 'Elul').v, cellFor(untouched, '5', 'Elul').v)
   assert.equal(ladderProblems(grid).length, 0)
+  for (const months of Object.values(grid.cells)) {
+    for (const cell of Object.values(months)) {
+      assert.ok(cell.v <= 150, `cell ${cell.v} is above one Tehillim`)
+    }
+  }
 })
 
 test('a one-month override wins; the custom ladder still sets the minutes', () => {

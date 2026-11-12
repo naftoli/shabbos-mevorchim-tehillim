@@ -6,10 +6,6 @@
 import { sortClasses } from './classOrder.js'
 
 // Same test as api/perfectPlatoon.php. size 0 is not a Perfect Platoon.
-export function soldierMetQuota(quota, said) {
-  return quota > 0 && said >= quota
-}
-
 export function classIsPerfect(met, size) {
   return size > 0 && met === size
 }

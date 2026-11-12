@@ -155,7 +155,7 @@ function wwtcKidMonthSlots(string $firstMonth): array
 
 /**
  * jd → [gradeKey, occasion] for every grade of a rotated school year.
- * Tishrei schools keep the Hebrew-year map in index.php.
+ * Tishrei schools keep the Hebrew-year map in kidProgress.php.
  *
  * @return array<int,array{0:string,1:string}>
  */

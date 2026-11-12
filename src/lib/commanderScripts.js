@@ -369,7 +369,7 @@ export function readTrainingAnswer(text) {
  */
 export function selectCommanderScripts(input = {}) {
   const heard = { ...emptyHeard(), ...(input.heard || {}) }
-  const hasLadder = readyNumber(input.ladder) != null
+  const hasLadder = readyNumber(input.ladder) != null || readyNumber(input.customTarget) != null
   const out = []
 
   if (!hasLadder) {
@@ -377,12 +377,6 @@ export function selectCommanderScripts(input = {}) {
       out.push({ id: 'choosing', text: CHOOSING_SCRIPT })
     } else if (input.training !== 'yes' && input.training !== 'no' && !heard.welcome) {
       out.push({ id: 'welcome', text: fillWelcome(input.name) })
-    }
-    // A custom ladder is still training. The numbered-ladder branch below is
-    // where a regular ladder hears this; a custom-only soldier hears it here.
-    if (readyNumber(input.customTarget) != null && !heard.review) {
-      const review = fillReview(input.reviewMonths)
-      if (review) out.push({ id: 'review', text: review })
     }
     return out
   }

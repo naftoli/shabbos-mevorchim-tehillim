@@ -14,8 +14,7 @@ declare(strict_types=1);
  *
  * Reads mirror the WWTC report pages. Writes are scoped by the bearer token to
  * the signed-in soldier's own record: POST /me/report (kapitlach/minutes marks,
- * the mark_tehillim2.php logic) and PUT /me/ladder (user_tracks.track_id). Only
- * dedications stay a 405 — the SPA keeps those client-side for now.
+ * the mark_tehillim2.php logic) and PUT /me/ladder (user_tracks.track_id).
  */
 
 require_once __DIR__ . '/compat.php';
@@ -241,6 +240,29 @@ function wwtcColdCompute(string $file, callable $producer)
  * (or, where the response can't be flushed early, rebuild inline). Cold: build
  * once, under a lock. $producer must return a JSON-serializable array.
  */
+/** Drop every wwtcCached file so the next read rebuilds from live marks. */
+function wwtcFlushFileCache(): void
+{
+    $dir = wwtcCacheDir();
+    if (!is_dir($dir)) {
+        return;
+    }
+    foreach (glob($dir . '/*') ?: [] as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+    }
+    if (function_exists('wwtcForgetOverrideCache')) {
+        wwtcForgetOverrideCache();
+    }
+}
+
+/** Call after a write that changes public campaign numbers. */
+function wwtcAfterWrite(): void
+{
+    wwtcFlushFileCache();
+}
+
 function wwtcCached(string $key, callable $producer)
 {
     $file = wwtcCacheFile($key);
@@ -289,8 +311,8 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
             'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
         ];
     });
-    // index.php defines this once the school report is available. Overrides are
-    // applied on the way out so the file cache stays the engine's own totals.
+    // campaignBoard.php defines this once the school report is available. Overrides
+    // are applied on the way out so the file cache stays the engine's own totals.
     if (function_exists('wwtcAdjustArmyAggregates')) {
         $raw = wwtcAdjustArmyAggregates($raw, $date, $year);
     }
@@ -546,14 +568,11 @@ function wwtcRateLimit(string $bucket, int $limit, int $windowSeconds): void
     }
 }
 
-function wwtcActor(bool $required = true): ?array
+function wwtcActor(): array
 {
     $token = wwtcBearerToken();
     if (!$token) {
-        if ($required) {
-            wwtcError('Authentication required.', 401);
-        }
-        return null;
+        wwtcError('Authentication required.', 401);
     }
     $payload = wwtcVerifySignedPayload($token);
     if (!$payload || !in_array($payload['type'], ['kid', 'admin'], true)) {
@@ -592,29 +611,7 @@ function wwtcYear(): int
  */
 function wwtcMonthDates(): array
 {
-    static $dates;
-    if ($dates !== null) {
-        return $dates;
-    }
-    // SPA month spellings (ladders.js). The class uses "Cheshvon/Kisleiv/
-    // Shevat/Tamuz"; normalize to the app's forms so JSON keys line up.
-    $names = [
-        0 => 'Tishrei', 1 => 'Cheshvan', 2 => 'Kislev', 3 => 'Teves',
-        4 => 'Shvat', 5 => 'Adar', 6 => 'Adar II', 7 => 'Nissan',
-        8 => 'Iyar', 9 => 'Sivan', 10 => 'Tammuz', 11 => 'Av', 12 => 'Elul',
-    ];
-    $sm = calculateSM(wwtcYear());
-    $dates = [];
-    foreach ($sm as $index => $jd) {
-        if ($sm[6] != $sm[7] && $index == 5) {      // leap year: index 5 is Adar I
-            $dates['Adar I'] = $jd;
-            continue;
-        } elseif ($sm[6] == $sm[7] && $index == 6) { // plain year: skip the duplicate
-            continue;
-        }
-        $dates[$names[$index]] = $jd;
-    }
-    return $dates;
+    return wwtcMonthDatesForYear(wwtcYear());
 }
 
 /** The most-recent Shabbos-Mevorchim jd (the month soldiers report now). */
@@ -654,10 +651,33 @@ function wwtcReportWindowOpen(): bool
 }
 
 /** English month name for a Shabbos-Mevorchim jd, '' if unknown. */
-function wwtcMonthForDate(int $jd): string
+function wwtcMonthForDate(int $jd, ?int $year = null): string
 {
-    $month = array_search($jd, wwtcMonthDates(), true);
-    return $month === false ? '' : (string) $month;
+    if ($year !== null) {
+        return wwtcMonthNameForJd($jd, $year);
+    }
+    $name = wwtcMonthNameForJd($jd, wwtcYear());
+    if ($name !== '') {
+        return $name;
+    }
+    for ($y = wwtcYear() - 8; $y <= wwtcYear() + 1; $y++) {
+        if ($y === wwtcYear()) {
+            continue;
+        }
+        $name = wwtcMonthNameForJd($jd, $y);
+        if ($name !== '') {
+            return $name;
+        }
+    }
+    return '';
+}
+
+if (!function_exists('wwtcMonthNameForJd')) {
+    function wwtcMonthNameForJd(int $jd, int $year): string
+    {
+        $found = array_search($jd, wwtcMonthDatesForYear($year), true);
+        return $found === false ? '' : (string) $found;
+    }
 }
 
 /**
@@ -695,6 +715,46 @@ function wwtcTrackAsOf(int $userId, int $jd, int $fallbackTrack): int
     $stmt->execute([':uid' => $userId, ':boundary' => $boundary]);
     $track = $stmt->fetchColumn();
     return $track === false ? $fallbackTrack : (int) $track;
+}
+
+/** Mission id for this soldier on Shabbos-Mevorchim $date, priced as-of. */
+function wwtcMissionIdAsOf(PDO $db, array $kid, int $date): int
+{
+    $track = wwtcTrackAsOf((int) $kid['user_id'], $date, (int) ($kid['track_id'] ?? 0));
+    $stmt = $db->prepare(
+        'SELECT date_tasks_mission_id FROM date_tasks_missions
+          WHERE subject_id = ' . WWTC_SUBJECT_ID . '
+            AND start_date = :d AND end_date = :d AND school_type_id = :st
+            AND track_id = :track AND level = :lvl AND lang_id = :lang
+          LIMIT 1'
+    );
+    $stmt->execute([
+        ':d' => $date,
+        ':st' => (int) $kid['school_type_id'],
+        ':track' => $track,
+        ':lvl' => (int) $kid['level'],
+        ':lang' => (int) $kid['lang_id'],
+    ]);
+    return (int) ($stmt->fetchColumn() ?: 0);
+}
+
+/** Kapitel and minutes task rows for one mission. */
+function wwtcMissionTasks(PDO $db, int $missionId): array
+{
+    if ($missionId <= 0) {
+        return [];
+    }
+    $stmt = $db->prepare(
+        'SELECT date_task_id, grid_id, quantity, description, points
+           FROM date_tasks WHERE date_tasks_mission_id = :mid
+            AND grid_id IN (' . WWTC_GRID_KAPITELACH . ', ' . WWTC_GRID_MINUTES . ')'
+    );
+    $stmt->execute([':mid' => $missionId]);
+    $tasksByGrid = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $t) {
+        $tasksByGrid[(int) $t['grid_id']] = $t;
+    }
+    return $tasksByGrid;
 }
 
 /** The elapsed months this year, oldest first: [ ['month'=>, 'jd'=>], ... ]. */
@@ -750,16 +810,15 @@ function wwtcReport(?int $jd = null, ?int $year = null): ShabbosMevorchim
     return $byDate[$key];
 }
 
-/** English month => jd for one campaign year. Current year reuses wwtcMonthDates(). */
+/** English month => jd for one campaign year. */
 function wwtcMonthDatesForYear(int $year): array
 {
     static $cache = [];
     if (isset($cache[$year])) {
         return $cache[$year];
     }
-    if ($year === wwtcYear()) {
-        return $cache[$year] = wwtcMonthDates();
-    }
+    // SPA month spellings (ladders.js). The class uses "Cheshvon/Kisleiv/
+    // Shevat/Tamuz"; normalize to the app's forms so JSON keys line up.
     $names = [
         0 => 'Tishrei', 1 => 'Cheshvan', 2 => 'Kislev', 3 => 'Teves',
         4 => 'Shvat', 5 => 'Adar', 6 => 'Adar II', 7 => 'Nissan',
@@ -768,10 +827,10 @@ function wwtcMonthDatesForYear(int $year): array
     $sm = calculateSM($year);
     $dates = [];
     foreach ($sm as $index => $jd) {
-        if ($sm[6] != $sm[7] && $index == 5) {
+        if ($sm[6] != $sm[7] && $index == 5) {      // leap year: index 5 is Adar I
             $dates['Adar I'] = $jd;
             continue;
-        } elseif ($sm[6] == $sm[7] && $index == 6) {
+        } elseif ($sm[6] == $sm[7] && $index == 6) { // plain year: skip the duplicate
             continue;
         }
         $dates[$names[$index]] = $jd;
@@ -797,7 +856,7 @@ function wwtcQueryPeriod(): array
         $month = $aliases[$month];
     }
     if (wwtcIsHolidayMonth($month)) {
-        $name = ($month === 'Rosh Hashona' || $month === 'Rosh Hashanah') ? 'Rosh Hashana' : $month;
+        $name = $month === 'Yom Kippur' ? 'Yom Kippur' : 'Rosh Hashana';
         // A holiday boards off its own day(s) for "said", but the quota is the
         // Shabbos-Mevorchim Tishrei quota of the same year (see wwtcHolidayBoard).
         $jds = wwtcHolidayDates($year)[$name] ?? [];

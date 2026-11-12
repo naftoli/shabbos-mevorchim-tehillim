@@ -336,7 +336,7 @@ export default function ChatBuddy() {
   const trainingRef = useRef(null)
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social, loading: socialLoading } = useLiveData(
-    () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
+    () => (kid ? getKidSocial(kid.id) : Promise.resolve(null)),
     [kid],
   )
   const [scriptRev, setScriptRev] = useState(0)
@@ -985,7 +985,7 @@ export default function ChatBuddy() {
       releaseCallMic()
       return
     }
-    if (kid.ladder && socialLoading) return
+    if (kid && socialLoading) return
     const input = scriptInputRef.current
     const due = input ? selectCommanderScripts(input) : []
     const suppress = input ? suppressLegacyGreeting(input) : false

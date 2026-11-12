@@ -8,10 +8,6 @@ const HOLIDAY_OCCASIONS = [
   { key: 'Yom Kippur', heb: 'יו״כ', holiday: true },
 ]
 
-// A plain year (the default when no campaign year is passed). Leap years swap
-// the single Adar for Adar I then Adar II.
-export const OCCASIONS = occasionsForYear(5785, new Set(['Rosh Hashana', 'Yom Kippur']))
-
 function occasionList(year, firstMonth) {
   const y = year == null ? 5785 : Number(year)
   const first = normalizeFirstMonth(firstMonth)

@@ -25,8 +25,8 @@ import {
   setArmyDedication,
   getFlagQueue,
   reviewFlag,
-  CURRENT_MONTH,
 } from '@/services/api.js'
+import { schoolCampaignPath, useCampaignClock } from '@/lib/useCampaignClock.js'
 import { amountLabel, formatFlagWhen, thresholdLabel } from '@/lib/overEntry.js'
 import { notDoneHeading, notDoneView } from '@/lib/notCompleted.js'
 import ClassName, { HebrewClassName } from '@/components/ClassName.jsx'
@@ -186,7 +186,7 @@ function SchoolLadderSetting({ school, onSaved }) {
 }
 
 // School admins add / edit / remove their school's monthly dedication.
-function DedicationEditor({ school, onSaved }) {
+function DedicationEditor({ school, onSaved, month }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(school.dedication?.text || '')
   const open = () => { setText(school.dedication?.text || ''); setEditing(true) }
@@ -195,7 +195,7 @@ function DedicationEditor({ school, onSaved }) {
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
+        <p className="sh">Dedication · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></p>
         {!editing ? (
           <div className="flex gap-2">
             <Button variant="outline" className="!px-3 !py-1 !text-sm max-sm:!min-h-11" onClick={open}>{school.dedication ? 'Edit' : 'Add dedication'}</Button>
@@ -459,8 +459,8 @@ function FlagQueue({ schoolId, all, actorName }) {
 
 // Soldier names come only from the staff platoon roll. A public response
 // has roll:false and no rows, so this list stays empty for anyone else.
-function ClassKids({ classId }) {
-  const { data, loading, error, reload } = useLiveData(() => getPlatoonReport(classId), [classId])
+function ClassKids({ classId, period }) {
+  const { data, loading, error, reload } = useLiveData(() => getPlatoonReport(classId, null, period), [classId, period?.year, period?.month])
   const showRoll = data?.roll === true && Array.isArray(data.rows)
   if (error) {
     return (
@@ -485,7 +485,7 @@ function ClassKids({ classId }) {
   )
 }
 
-function ClassReport({ rows }) {
+function ClassReport({ rows, month, period }) {
   const [open, setOpen] = useState(() => new Set())
   function toggle(id) {
     const key = String(id)
@@ -499,7 +499,7 @@ function ClassReport({ rows }) {
   const list = rows ?? []
   return (
     <Card className="overflow-hidden">
-      <div className="border-b border-line px-5 py-3"><h3 className="font-display font-black text-navy">Class Report · {CURRENT_MONTH}</h3></div>
+      <div className="border-b border-line px-5 py-3"><h3 className="font-display font-black text-navy">Class Report · {month}</h3></div>
       <ul className="sm:hidden">
         {list.map((c) => {
           const isOpen = open.has(String(c.id))
@@ -517,7 +517,7 @@ function ClassReport({ rows }) {
                 </dl>
                 <p className="mt-2 text-xs font-semibold text-navy">{isOpen ? 'Hide soldiers' : 'Show soldiers'}</p>
               </button>
-              {isOpen ? <ClassKids classId={c.id} /> : null}
+                {isOpen ? <ClassKids classId={c.id} period={period} /> : null}
             </li>
           )
         })}
@@ -550,7 +550,7 @@ function ClassReport({ rows }) {
                 </tr>
                 {isOpen ? (
                   <tr>
-                    <td colSpan={5} className="p-0"><ClassKids classId={c.id} /></td>
+                    <td colSpan={5} className="p-0"><ClassKids classId={c.id} period={period} /></td>
                   </tr>
                 ) : null}
               </tbody>
@@ -605,16 +605,18 @@ function NotDoneList({ classes }) {
 
 export default function AdminDashboard() {
   const { admin, isSuper, logoutAdmin } = useAuth()
-  const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools() : Promise.resolve([])), [isSuper])
+  const clock = useCampaignClock()
+  const period = { year: clock.year, month: clock.currentMonth }
+  const { data: allSchoolsData } = useLiveData(() => (isSuper ? getSchools(period) : Promise.resolve([])), [isSuper, period.year, period.month])
   const allSchools = allSchoolsData ?? []
   const [schoolId, setSchoolId] = useState(admin?.schoolId || null)
   const activeId = isSuper ? schoolId : (admin?.schoolId ?? null)
   // reloadSchool re-reads after editing the dedication (and on the live poll).
   const { data: school, error: schoolError, reload: reloadSchool } = useLiveData(
-    () => (activeId ? getSchool(activeId) : Promise.resolve(null)),
-    [activeId],
+    () => (activeId ? getSchool(activeId, period) : Promise.resolve(null)),
+    [activeId, period.year, period.month],
   )
-  const { data: base } = useLiveData(() => (activeId ? getBaseReport(activeId) : Promise.resolve(null)), [activeId])
+  const { data: base } = useLiveData(() => (activeId ? getBaseReport(activeId, null, period) : Promise.resolve(null)), [activeId, period.year, period.month])
   const { data: missingData } = useLiveData(() => (activeId ? notCompleted(activeId) : Promise.resolve([])), [activeId])
   const missing = missingData ?? []
 
@@ -681,7 +683,7 @@ export default function AdminDashboard() {
                   <SchoolLogo school={school} size={52} />
                   <div>
                     <h2 className="font-display text-2xl font-black text-navy">{school.name}</h2>
-                    <p className="text-sm text-muted">{fmt(school.kids)} soldiers · {CURRENT_MONTH}</p>
+                    <p className="text-sm text-muted">{fmt(school.kids)} soldiers · {clock.currentMonth}</p>
                   </div>
                 </div>
                 <div className="grid w-full grid-cols-3 gap-2 text-left sm:flex sm:w-auto sm:gap-6 sm:text-right">
@@ -690,7 +692,7 @@ export default function AdminDashboard() {
                   <div><p className="text-xs uppercase text-muted sm:max-w-[9rem]">% of soldiers that met their quota</p><p className="font-display text-xl font-black text-navy sm:text-2xl">{school.pctMet}%</p></div>
                 </div>
               </div>
-              <Link to={`/s/${school.id}`} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
+              <Link to={schoolCampaignPath(school.id, period)} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
             </Card>
 
             <SchoolYearSetting key={school.id} school={school} onSaved={reloadSchool} />
@@ -698,14 +700,14 @@ export default function AdminDashboard() {
             <SchoolLadderSetting key={`ladders-${school.id}`} school={school} onSaved={reloadSchool} />
 
             {/* Dedication — add / edit / remove */}
-            <DedicationEditor school={school} onSaved={reloadSchool} />
+            <DedicationEditor school={school} onSaved={reloadSchool} month={clock.currentMonth} />
 
             {/* Set a school / class / child onto a ladder */}
             <LadderSetter key={`set-${school.id}`} schoolId={school.id} classes={base?.rows ?? []} hiddenLadders={school.hiddenLadders} />
 
             <CustomLadderTool schoolId={school.id} />
 
-            <ClassReport rows={base?.rows} />
+            <ClassReport rows={base?.rows} month={clock.currentMonth} period={period} />
 
             {/* Teacher deadline email */}
             <Card className="p-5 sm:p-6">
@@ -713,7 +715,7 @@ export default function AdminDashboard() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="sh">Teacher Deadline Email</p>
-                  <h3 className="font-display text-xl font-black text-navy">{notDoneHeading(CURRENT_MONTH)}</h3>
+                  <h3 className="font-display text-xl font-black text-navy">{notDoneHeading(clock.currentMonth)}</h3>
                 </div>
                 <Button variant="gold">✉ Send to teachers</Button>
               </div>

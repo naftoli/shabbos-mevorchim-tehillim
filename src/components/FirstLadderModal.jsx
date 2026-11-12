@@ -3,7 +3,7 @@ import LadderCarousel from './LadderCarousel.jsx'
 
 // A graphic "pick your ladder" welcome shown the first time a soldier logs in,
 // before they've chosen a ladder. It presents the 3-card ladder coverflow
-// (centered on Ladder 4). Picking a card chooses it; X / Maybe later dismisses.
+// (centered on Ladder 8). Picking a card chooses it; X / Maybe later dismisses.
 export default function FirstLadderModal({ open, name, grade, onPick, onClose, hiddenLadders = null }) {
   useEffect(() => {
     if (!open) return

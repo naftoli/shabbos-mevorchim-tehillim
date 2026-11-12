@@ -19,10 +19,10 @@ export function hiddenLadderList(hidden) {
   return out
 }
 
-/** Ladders a soldier at `grade` may still pick. Default: every ladder. */
-export function openLadders(grade, hidden) {
+/** Ladders this school still offers. Grade does not restrict the list. */
+export function openLadders(_grade, hidden) {
   const off = new Set(hiddenLadderList(hidden))
-  return availableLadders(grade).filter((ladder) => !off.has(ladder))
+  return availableLadders().filter((ladder) => !off.has(ladder))
 }
 
 export function ladderIsOpen(ladder, hidden) {

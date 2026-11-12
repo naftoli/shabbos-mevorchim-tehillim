@@ -180,16 +180,32 @@ $flaggedStudent = wwtcApplyOverrideToStudent(
     ['original_quota' => 10, 'overridden_quota' => $counted, 'undone_at' => null]
 );
 check('override adopts the counted 5, not the flagged 200', $flaggedStudent['quota'] === 5 && $flaggedStudent['met'] === true);
-check('the flagged amount does not meet the original quota', wwtcMissionEarned(5, 10, 200, 'flagged') === false);
-check('the counted 5 meets the overridden quota', wwtcMissionEarned(5, 5, 200, 'flagged') === true);
-check('perfect platoon uses the overridden quota and ignores the withheld flag', wwtcPlatoonIsPerfect([
+check('the flagged amount does not meet the original quota', wwtcCountedKapitlach(5, 200, 'flagged') < 10);
+check('the counted 5 meets the overridden quota', wwtcCountedKapitlach(5, 200, 'flagged') >= 5);
+$withOverride = [
     ['counted' => 5, 'flagged' => 200, 'status' => 'flagged', 'quota' => 5],
     ['counted' => 8, 'flagged' => 0, 'status' => null, 'quota' => 8],
-]) === true);
-check('without the override that platoon is not perfect', wwtcPlatoonIsPerfect([
+];
+$withoutOverride = [
     ['counted' => 5, 'flagged' => 200, 'status' => 'flagged', 'quota' => 10],
     ['counted' => 8, 'flagged' => 0, 'status' => null, 'quota' => 8],
-]) === false);
+];
+$withOverrideMet = true;
+foreach ($withOverride as $s) {
+    $said = wwtcCountedKapitlach((int) $s['counted'], (int) $s['flagged'], $s['status']);
+    if ((int) $s['quota'] <= 0 || $said < (int) $s['quota']) {
+        $withOverrideMet = false;
+    }
+}
+$withoutOverrideMet = true;
+foreach ($withoutOverride as $s) {
+    $said = wwtcCountedKapitlach((int) $s['counted'], (int) $s['flagged'], $s['status']);
+    if ((int) $s['quota'] <= 0 || $said < (int) $s['quota']) {
+        $withoutOverrideMet = false;
+    }
+}
+check('perfect platoon uses the overridden quota and ignores the withheld flag', $withOverrideMet === true);
+check('without the override that platoon is not perfect', $withoutOverrideMet === false);
 
 $shared = wwtcPerfectPlatoonsFromSoldiers([
     ['schoolId' => 1, 'school' => 'A', 'classId' => 7, 'grade' => '1', 'sub' => '', 'teacher' => '', 'quota' => 5, 'said' => 5, 'userId' => 2],

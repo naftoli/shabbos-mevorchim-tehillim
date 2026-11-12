@@ -287,23 +287,17 @@ function wwtcListFlags(?array $schoolIds): array
 
 function wwtcFlagTasks(PDO $db, array $kid, int $date): array
 {
-    $missionStmt = $db->prepare(
-        'SELECT date_tasks_mission_id FROM date_tasks_missions
-          WHERE subject_id = ' . WWTC_SUBJECT_ID . '
-            AND start_date = :d AND end_date = :d AND school_type_id = :st
-            AND track_id = :track AND level = :lvl AND lang_id = :lang
-          LIMIT 1'
-    );
-    $missionStmt->execute([
-        ':d' => $date,
-        ':st' => (int) $kid['school_type_id'],
-        ':track' => (int) $kid['track_id'],
-        ':lvl' => (int) $kid['level'],
-        ':lang' => (int) $kid['lang_id'],
-    ]);
-    $missionId = (int) ($missionStmt->fetchColumn() ?: 0);
+    $missionId = function_exists('wwtcMissionIdAsOf')
+        ? wwtcMissionIdAsOf($db, $kid, $date)
+        : 0;
     if (!$missionId) {
         return [];
+    }
+    $tasksByGrid = function_exists('wwtcMissionTasks')
+        ? wwtcMissionTasks($db, $missionId)
+        : [];
+    if ($tasksByGrid) {
+        return $tasksByGrid;
     }
     $taskStmt = $db->prepare(
         'SELECT date_task_id, grid_id, quantity, description, points
@@ -323,7 +317,7 @@ function wwtcFlagTasks(PDO $db, array $kid, int $date): array
  * (the reviewed numbers, or the prior value / a cleared month).
  * A flagged row can go either way. An accepted row can be removed and a
  * removed row can be accepted. The mark, the status, and the decision log
- * are one transaction. The cache is bumped after it commits.
+ * are one transaction. The file cache is flushed after it commits.
  */
 function wwtcReviewStoredFlag(int $entryId, string $action, array $actor): array
 {
@@ -372,8 +366,8 @@ function wwtcReviewStoredFlag(int $entryId, string $action, array $actor): array
         return ['ok' => false, 'status' => 500, 'error' => 'Could not save that decision. Please try again.'];
     }
 
-    if (class_exists('Cache')) {
-        Cache::bumpVersion('shabbos_mevorchim:v');
+    if (function_exists('wwtcAfterWrite')) {
+        wwtcAfterWrite();
     }
     $saved = wwtcFlagById($entryId);
     $decisions = $saved ? wwtcFlagDecisions($MASHPIA_DB, [$entryId]) : [];

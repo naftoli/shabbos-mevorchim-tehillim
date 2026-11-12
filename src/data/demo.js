@@ -4,7 +4,7 @@
 // roster until the real API is wired; the api.js facade reads it in demo mode.
 
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
-import { campaignMonths } from '@/lib/hebrewYear.js'
+import { campaignMonths, currentHebrewYear } from '@/lib/hebrewYear.js'
 import { firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 import { applySoldierReport, planReport } from '@/lib/overEntry.js'
@@ -13,18 +13,12 @@ import { applySoldierReport, planReport } from '@/lib/overEntry.js'
 // agrees with the live Shabbos-Mevorchim countdown. The current month is the one
 // the next Shabbos Mevorchim bentches (what you say on it); months up to and
 // including it count as elapsed. Falls back to Kislev 5786 if Intl can't resolve.
-function currentHebrewYear(d = new Date()) {
-  const y = new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' })
-    .formatToParts(d)
-    .find((p) => p.type === 'year')?.value
-  return (y || '').replace(/[^0-9]/g, '') || '5786'
-}
 // The current reporting month is the one the MOST RECENT Shabbos Mevorchim
 // bentshed — what kids are reporting now — not the next upcoming one.
 // A leap year (two Adars) uses a 13-month list so Adar I and Adar II are both
 // real months; a plain year keeps the single Adar key.
 const _current = currentReportingMonth()
-export const CAMPAIGN_YEAR = _current ? currentHebrewYear() : '5786'
+export const CAMPAIGN_YEAR = _current ? String(currentHebrewYear()) : '5786'
 const YEAR_MONTHS = campaignMonths(CAMPAIGN_YEAR)
 export const CURRENT_MONTH_INDEX = Math.max(0, YEAR_MONTHS.indexOf(_current ?? 'Cheshvan'))
 export const CURRENT_MONTH = YEAR_MONTHS[CURRENT_MONTH_INDEX]
@@ -166,7 +160,7 @@ function buildRoster() {
       const girlSchool = s.id === 'bais-chaya-mushka-sample'
       const teacher = pick(girlSchool ? GIRL_TEACHERS : TEACHERS)
       const classDiligence = 0.55 + rand() * 0.42
-      const ladders = availableLadders(grade)
+      const ladders = availableLadders()
       const gradeNum = grade === 'pre1a' ? 0 : Number(grade)
       const birthYear = 2026 - (gradeNum + 6)
 
@@ -235,8 +229,7 @@ function buildRoster() {
   })
 
   // Make the first demo soldier a BRAND-NEW kid who hasn't picked a ladder yet,
-  // so the first-login "pick your ladder" flow can be demoed (this is the kid
-  // demoKidCredentials() hands the login screen).
+  // so the first-login "pick your ladder" flow can be demoed.
   const fresh = schools[0]?.classes?.[0]?.kids?.[0]
   if (fresh) {
     fresh.isDemoNew = true // reset to ladderless on every sign-in (see verifyKid)

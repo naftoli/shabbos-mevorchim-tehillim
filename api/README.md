@@ -8,6 +8,19 @@ Mashpia roster and admin accounts. Campaign numbers come from
 `shabbos_mevorchim_by_student.php`, `battlefront/api/getWWTC.php`) — so the API
 returns the figures those reports show.
 
+Apache rewrites `/api/*` to `api/index.php`. That file is the router. Helpers
+and HTTP handlers live beside it:
+
+- `bootstrap.php` — tokens, Mashpia DB, calendar, cache
+- `campaignBoard.php` — school rows, Race ranking, one-school reports, holiday shapes
+- `kidProgress.php` — signed-in soldier months and `/me/progress`
+- `dedications.php` — army/school dedication helpers
+- `routes/auth.php` — soldier, parent, and admin login
+- `routes/public.php` — calendar, stats, schools, boards
+- `routes/reports.php` — army / base / platoon reports and not-completed
+- `routes/soldier.php` — progress, social, chat, self-report, own ladder
+- `routes/admin.php` — ladders, school year, dedications, custom ladders, overrides, flags
+
 ## Status
 
 Reads — all implemented (same figures as the WWTC report pages):
@@ -96,8 +109,8 @@ Writes — the signed-in soldier's own, scoped by the bearer token to their
 - `POST /me/report` — `{ kapitlach, minutes }` for the **current** Shabbos
   Mevorchim → fresh `/me/progress`. Writes `date_tasks_marks` (grids 8001/8002)
   and keeps the kapitelach mission mark (`date_tasks_mission_marks`) in sync with
-  the quota, exactly as `mark_tehillim2.php` does, in one transaction, then bumps
-  `Cache::bumpVersion('shabbos_mevorchim:v')` so the reports refresh.
+  the quota, exactly as `mark_tehillim2.php` does, in one transaction, then
+  flushes the file cache so the reports refresh.
   A report past the grade line in `api/over-entry.json` is not written there.
   The API returns 409 `over_entry` unless the body includes `flagConfirmed: true`,
   and then it stores a `flagged` row (`api/sql/wwtc_flagged_entries.sql`, run once
@@ -183,11 +196,8 @@ Writes — admin (bearer from `POST /admin/login`):
   kapitel and minutes. Otherwise the normal ladder. The stored grid is what
   reports use, so the numbers stay put if the generator changes later.
 
-  A monthly quota above 150 is not capped. It is shown as
-  `KAPITEL_ABOVE_TEHILLIM_DISPLAY = 'tehillim-plus-count'`
-  (see `src/lib/customLadder.js`): 190 is "1 Tehillim + 40 kapitlach" with the
-  plain number beside it, 300 is "2 Tehillim". Sholem is confirming whether a
-  target above 150 means that many kapitlach in the month.
+  A monthly quota cannot go above 150 (one Tehillim). The generator refuses a
+  higher target and clamps any cell that would pass that line.
 
 ### What Naftoli does for custom ladders
 

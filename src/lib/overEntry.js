@@ -1,4 +1,5 @@
 import config from '../../api/over-entry.json' with { type: 'json' }
+import { TEHILLIM_KAPITLACH } from './customLadder.js'
 
 // Same file the API reads (api/over-entry.json). HQ changes the numbers there.
 // The confirm sentence is `confirm` in that file — the one line the page and
@@ -26,13 +27,17 @@ export function overEntryLine({ grade, quotaKap = 0, quotaMin = 0 } = {}) {
   const multiple = Number(config.kapitlachMultiple) || 2
   const ladderTop = Number(row?.ladderTopKapitlach) || 46
   const quota = Number(quotaKap) || 0
+  const askedMinutes = Number(quotaMin) || 0
+  const gradeMinutes = Number(row?.minutes) || 170
   return {
     grade: config.grades[key] ? key : 'pre1a',
     kapitlach: Math.max(multiple * quota, ladderTop),
-    minutes: Number(row?.minutes) || 170,
+    // Same 2× rule as kapitlach so a custom ladder that asks more minutes
+    // than the engine grade cap is not flagged for meeting its own quota.
+    minutes: Math.max(multiple * askedMinutes, gradeMinutes),
     ladderTopKapitlach: ladderTop,
     quotaKapitlach: quota,
-    quotaMinutes: Number(quotaMin) || 0,
+    quotaMinutes: askedMinutes,
   }
 }
 
@@ -51,9 +56,21 @@ export function countsInPublicTotals(status) {
   return false
 }
 
+// One Tehillim. There are not more kapitlach than this to say.
+export const REPORT_KAPITELACH_CAP = TEHILLIM_KAPITLACH
+export const REPORT_MINUTES_CAP = 770
+
+export function clampReportKapitlach(kapitlach) {
+  return Math.max(0, Math.min(REPORT_KAPITELACH_CAP, Math.round(Number(kapitlach) || 0)))
+}
+
+export function clampReportMinutes(minutes) {
+  return Math.max(0, Math.min(REPORT_MINUTES_CAP, Math.round(Number(minutes) || 0)))
+}
+
 export function planReport({ kapitlach, minutes, quotaKap, quotaMin, grade, flagConfirmed = false }) {
-  const kap = Math.max(0, Math.min(150, Math.round(Number(kapitlach) || 0)))
-  const min = Math.max(0, Math.min(770, Math.round(Number(minutes) || 0)))
+  const kap = clampReportKapitlach(kapitlach)
+  const min = clampReportMinutes(minutes)
   const line = overEntryLine({ grade, quotaKap, quotaMin })
   const reasons = overEntryReasons(kap, min, line)
   if (reasons.length === 0) {

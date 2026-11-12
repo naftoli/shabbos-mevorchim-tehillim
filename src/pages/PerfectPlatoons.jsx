@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { PageHero } from './_page.jsx'
 import { Input } from '@/components/ui.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { getPerfectPlatoons, getSchool, CURRENT_MONTH } from '@/services/api.js'
+import { getPerfectPlatoons, getSchool } from '@/services/api.js'
+import { schoolCampaignPath, useCampaignClock } from '@/lib/useCampaignClock.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
@@ -20,11 +21,17 @@ import { PerfectPlatoonLogo } from '@/components/brandMarks.jsx'
 export default function PerfectPlatoons() {
   const [params] = useSearchParams()
   const schoolId = params.get('school')
+  const yearParam = params.get('year')
+  const monthParam = params.get('month')
+  const clock = useCampaignClock(yearParam || undefined)
+  const year = yearParam || clock.year
+  const month = monthParam || clock.currentMonth
+  const period = { year, month }
   const perSchool = !!schoolId
-  const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId) : Promise.resolve(null)), [schoolId])
+  const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId, period) : Promise.resolve(null)), [schoolId, year, month])
   const schoolName = school?.name ?? null
 
-  const { data: platoonsData, loading } = useLiveData(() => getPerfectPlatoons(), [])
+  const { data: platoonsData, loading } = useLiveData(() => getPerfectPlatoons(period), [year, month])
   const all = useMemo(() => {
     const list = platoonsData ?? []
     return schoolId ? list.filter((p) => String(p.schoolId) === String(schoolId)) : list
@@ -54,9 +61,9 @@ export default function PerfectPlatoons() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 rounded-full bg-green/15 px-4 py-1.5 font-cond text-base font-bold uppercase tracking-wide text-green">
             {stillLoading ? (
-              <><span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+              <><span className="font-heb">{MONTH_HEB[month] ?? month}</span></>
             ) : (
-              <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+              <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></>
             )}
           </span>
           {!stillLoading && all.length ? (
@@ -87,7 +94,7 @@ export default function PerfectPlatoons() {
                   return (
                     <Link
                       key={platoonKey(p)}
-                      to={`/s/${p.schoolId}`}
+                      to={schoolCampaignPath(p.schoolId, period)}
                       className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
                       title={`${displayClassName(p.className)}${teacher ? ' · ' + teacher : ''} · ${p.size} soldiers`}
                     >

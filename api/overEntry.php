@@ -10,7 +10,32 @@ declare(strict_types=1);
  * Counting decision: a flagged report does not count in public totals, ranks,
  * Perfect Platoon, or medals until it is accepted. Removed is void. The
  * default is recorded as flaggedCountsBeforeReview=false in the JSON file.
+ *
+ * Self-report kapitlach stop at one Tehillim. There are 150 kapitlach to say.
+ * Custom-ladder monthly quotas stop there too.
  */
+
+/** Highest kapitlach a self-report may store. One Tehillim. */
+function wwtcReportKapitlachCap(): int
+{
+    return defined('WWTC_TEHILLIM_KAPITLACH') ? (int) WWTC_TEHILLIM_KAPITLACH : 150;
+}
+
+/** Teacher-tool minutes cap. Custom-ladder monthly minutes stay under this. */
+function wwtcReportMinutesCap(): int
+{
+    return 770;
+}
+
+function wwtcClampReportKapitlach($kapitlach): int
+{
+    return max(0, min(wwtcReportKapitlachCap(), (int) round((float) $kapitlach)));
+}
+
+function wwtcClampReportMinutes($minutes): int
+{
+    return max(0, min(wwtcReportMinutesCap(), (int) round((float) $minutes)));
+}
 
 function wwtcOverEntryConfig(): array
 {
@@ -70,10 +95,14 @@ function wwtcOverEntryLine(string $grade, int $quotaKap, int $quotaMin): array
     }
     $ladderTop = (float) ($row['ladderTopKapitlach'] ?? 46);
     $kapLine = max($multiple * $quotaKap, $ladderTop);
+    $gradeMinutes = (float) ($row['minutes'] ?? 170);
+    // Same 2× rule as kapitlach so a custom ladder that asks more minutes
+    // than the engine grade cap is not flagged for meeting its own quota.
+    $minLine = max($multiple * $quotaMin, $gradeMinutes);
     return [
         'grade' => isset($grades[$key]) ? $key : 'pre1a',
         'kapitlach' => $kapLine,
-        'minutes' => (float) ($row['minutes'] ?? 170),
+        'minutes' => $minLine,
         'ladderTopKapitlach' => $ladderTop,
         'quotaKapitlach' => $quotaKap,
         'quotaMinutes' => $quotaMin,
@@ -118,8 +147,8 @@ function wwtcCountsInPublicTotals($status): bool
  */
 function wwtcPlanReport(int $kapitlach, int $minutes, int $quotaKap, int $quotaMin, string $grade, bool $flagConfirmed): array
 {
-    $kapitlach = max(0, min(150, $kapitlach));
-    $minutes = max(0, min(770, $minutes));
+    $kapitlach = wwtcClampReportKapitlach($kapitlach);
+    $minutes = wwtcClampReportMinutes($minutes);
     $line = wwtcOverEntryLine($grade, $quotaKap, $quotaMin);
     $reasons = wwtcOverEntryReasons($kapitlach, $minutes, $line);
     if (!$reasons) {
@@ -232,29 +261,4 @@ function wwtcCountedKapitlach(int $liveMark, int $flaggedAmount, $status): int
         return $flaggedAmount;
     }
     return $liveMark;
-}
-
-function wwtcMissionEarned(int $liveMark, int $quota, int $flaggedAmount, $status): bool
-{
-    $said = wwtcCountedKapitlach($liveMark, $flaggedAmount, $status);
-    return $quota > 0 && $said >= $quota;
-}
-
-function wwtcPlatoonIsPerfect(array $soldiers): bool
-{
-    if (!$soldiers) {
-        return false;
-    }
-    foreach ($soldiers as $s) {
-        $said = wwtcCountedKapitlach(
-            (int) ($s['counted'] ?? 0),
-            (int) ($s['flagged'] ?? 0),
-            $s['status'] ?? null
-        );
-        $quota = (int) ($s['quota'] ?? 0);
-        if ($quota <= 0 || $said < $quota) {
-            return false;
-        }
-    }
-    return true;
 }

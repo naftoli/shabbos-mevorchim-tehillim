@@ -67,10 +67,10 @@ $platoons = wwtcPerfectPlatoonsFromSoldiers([
 ]);
 check('a public platoon does not publish a placeholder teacher', $platoons[0]['teacher'] === '');
 
-$index = file_get_contents(__DIR__ . '/../../api/index.php');
+$board = file_get_contents(__DIR__ . '/../../api/campaignBoard.php');
 $bootstrap = file_get_contents(__DIR__ . '/../../api/bootstrap.php');
-check('school class meta trims the teacher', is_string($index) && strpos($index, 'wwtcTeacherName($m[\'teacher\']') !== false);
-check('holiday class meta trims the teacher', is_string($index) && strpos($index, 'wwtcTeacherName($meta[\'teacher\']') !== false);
+check('school class meta trims the teacher', is_string($board) && strpos($board, 'wwtcTeacherName($m[\'teacher\']') !== false);
+check('holiday class meta trims the teacher', is_string($board) && strpos($board, 'wwtcTeacherName($meta[\'teacher\']') !== false);
 check('board class meta trims the teacher', is_string($bootstrap) && strpos($bootstrap, 'wwtcTeacherName($row[\'class_teacher\']') !== false);
 
 echo "\n" . ($failed === 0 ? 'ok' : "$failed failed") . "\n";

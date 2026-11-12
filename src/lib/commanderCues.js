@@ -82,27 +82,6 @@ export function cueMedalEarned(name, threshold, nextName, nextThreshold, when) {
   return line
 }
 
-export function cuePromotion(rank) {
-  const title = String(rank || '').toUpperCase()
-  if (!title) return ''
-  const nice = title.charAt(0) + title.slice(1).toLowerCase()
-  return `Attention! You've been promoted to ${title}. Congratulations, ${nice}.`
-}
-
-export function cueJourney() {
-  return "See that bar? That's your whole training path. You're here now. At the end: the entire Tehillim, every Shabbos Mevorchim."
-}
-
-export function cueRankings({ myRank, classRank, schoolRank } = {}) {
-  const bits = []
-  if (myRank) bits.push(`You're #${myRank} in your platoon`)
-  if (classRank) bits.push(`your platoon is #${classRank} in your base`)
-  if (schoolRank) bits.push(`your base is #${schoolRank} in the whole army`)
-  if (!bits.length) return 'Your rankings are on your page. Every kapitel you say lifts your platoon and your base.'
-  const text = bits.join(', ').replace(/^your/, 'Your')
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`
-}
-
 export function cueAheadOne() {
   return "You did more than your mission. Above and beyond — that's what a real soldier looks like."
 }

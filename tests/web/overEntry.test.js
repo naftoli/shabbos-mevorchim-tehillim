@@ -11,13 +11,18 @@ import {
   OVER_ENTRY_YES,
   amountLabel,
   applySoldierReport,
+  clampReportKapitlach,
+  clampReportMinutes,
   countsInPublicTotals,
   kapitlachInTotals,
   missionCounts,
   planReport,
+  REPORT_KAPITELACH_CAP,
+  REPORT_MINUTES_CAP,
   reviewSoldier,
   thresholdLabel,
 } from '../../src/lib/overEntry.js'
+import { TEHILLIM_KAPITLACH } from '../../src/lib/customLadder.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (path) => readFileSync(join(root, path), 'utf8')
@@ -210,4 +215,47 @@ test('the admin queue shows kid, class, amount, threshold, and the two decisions
   assert.match(page, /amountLabel/)
   assert.match(page, /getFlagQueue/)
   assert.match(page, /reviewFlag/)
+})
+
+test('self-report kapitlach stop at one Tehillim', () => {
+  assert.equal(REPORT_KAPITELACH_CAP, TEHILLIM_KAPITLACH)
+  assert.equal(REPORT_KAPITELACH_CAP, 150)
+  assert.equal(REPORT_MINUTES_CAP, 770)
+  assert.equal(clampReportKapitlach(150), 150)
+  assert.equal(clampReportKapitlach(190), 150)
+  assert.equal(clampReportKapitlach(300), 150)
+  assert.equal(clampReportKapitlach(-3), 0)
+  assert.equal(clampReportKapitlach(10000), 150)
+  assert.equal(clampReportKapitlach(118.6), 119)
+  assert.equal(clampReportKapitlach('190'), 150)
+  assert.equal(clampReportKapitlach(''), 0)
+  assert.equal(clampReportMinutes(771), 770)
+  assert.equal(clampReportMinutes(-1), 0)
+
+  const wholeTehillim = planReport({ grade: '8', kapitlach: 190, minutes: 187, quotaKap: 190, quotaMin: 187 })
+  assert.equal(wholeTehillim.action, 'save')
+  assert.equal(wholeTehillim.kapitlach, 150)
+  assert.equal(wholeTehillim.minutes, 187)
+  assert.equal(wholeTehillim.line.kapitlach, 380)
+  assert.equal(wholeTehillim.line.minutes, 374)
+
+  const twoBooksTyped = planReport({ grade: '8', kapitlach: 300, minutes: 120, quotaKap: 300, quotaMin: 370 })
+  assert.equal(twoBooksTyped.action, 'save')
+  assert.equal(twoBooksTyped.kapitlach, 150)
+
+  const overCustomMinutes = planReport({ grade: '8', kapitlach: 150, minutes: 375, quotaKap: 190, quotaMin: 187 })
+  assert.equal(overCustomMinutes.action, 'confirm')
+  assert.deepEqual(overCustomMinutes.reasons, ['minutes'])
+
+  const engineMinutesStillHold = planReport({ grade: '8', kapitlach: 40, minutes: 241, quotaKap: 40, quotaMin: 120 })
+  assert.equal(engineMinutesStillHold.action, 'confirm')
+  assert.equal(engineMinutesStillHold.line.minutes, 240)
+
+  const pre1aStillFlags150 = planReport({ grade: 'pre1a', kapitlach: 150, minutes: 10, quotaKap: 2, quotaMin: 10 })
+  assert.equal(pre1aStillFlags150.action, 'confirm')
+  assert.equal(pre1aStillFlags150.kapitlach, 150)
+
+  const pre1aTypedPastTheBook = planReport({ grade: 'pre1a', kapitlach: 190, minutes: 10, quotaKap: 2, quotaMin: 10, flagConfirmed: true })
+  assert.equal(pre1aTypedPastTheBook.action, 'flag')
+  assert.equal(pre1aTypedPastTheBook.kapitlach, 150)
 })

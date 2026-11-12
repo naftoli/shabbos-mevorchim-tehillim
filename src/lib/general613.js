@@ -28,7 +28,7 @@ function priorMonths(progress) {
 
 export function readSituation(ctx) {
   const { ladder, progress } = ctx ?? {}
-  if (!ladder) return 'pick'
+  if (!ladder && !progress?.customLadder) return 'pick'
   const prior = priorMonths(progress)
   const last = prior[prior.length - 1]
   const quota = Number(last?.quota)

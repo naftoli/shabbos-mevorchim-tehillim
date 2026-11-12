@@ -67,6 +67,24 @@ check('flagConfirmed cannot flag an amount inside the line', $forced['action'] =
 $whole = wwtcPlanReport(150, 20, 150, 120, '12', false);
 check('a 12th grader saying the whole Tehillim is inside the line', $whole['action'] === 'save');
 
+check('the report cap is one Tehillim', wwtcReportKapitlachCap() === 150);
+check('190 kapitlach are stored as 150', wwtcClampReportKapitlach(190) === 150);
+check('a negative report is stored as 0', wwtcClampReportKapitlach(-3) === 0);
+check('an amount past one Tehillim is clamped to 150', wwtcClampReportKapitlach(10000) === 150);
+check('half kapitlach round half up', wwtcClampReportKapitlach(118.6) === 119);
+check('minutes still cap at 770', wwtcClampReportMinutes(771) === 770);
+
+$customMet = wwtcPlanReport(190, 187, 190, 187, '8', false);
+check('typing 190 on a custom quota stores 150', $customMet['action'] === 'save' && $customMet['kapitlach'] === 150);
+check('the custom kapitlach line is 2× the asked quota', (int) $customMet['line']['kapitlach'] === 380);
+check('the custom minutes line is 2× the asked minutes', (int) $customMet['line']['minutes'] === 374);
+$customMinOver = wwtcPlanReport(150, 375, 190, 187, '8', false);
+check('one past 2× custom minutes must be confirmed', $customMinOver['action'] === 'confirm' && in_array('minutes', $customMinOver['reasons'], true));
+$engineMin = wwtcPlanReport(40, 241, 40, 120, '8', false);
+check('an engine 8th-grade minutes line is still 240', $engineMin['action'] === 'confirm' && (int) $engineMin['line']['minutes'] === 240);
+$pre1aHigh = wwtcPlanReport(190, 10, 2, 10, 'pre1a', true);
+check('a Pre-1A 190 is flagged at 150, the whole Tehillim', $pre1aHigh['action'] === 'flag' && $pre1aHigh['kapitlach'] === 150);
+
 check('a flagged amount is excluded from totals', wwtcCountsInPublicTotals('flagged') === false);
 check('an accepted amount counts', wwtcCountsInPublicTotals('accepted') === true);
 check('an ordinary mark counts', wwtcCountsInPublicTotals(null) === true);
@@ -75,16 +93,30 @@ check('a removed amount does not count', wwtcCountsInPublicTotals('removed') ===
 check('totals keep the prior 0, not the flagged 150', wwtcCountedKapitlach(0, 150, 'flagged') === 0);
 check('totals keep a prior 4 while 150 is flagged', wwtcCountedKapitlach(4, 150, 'flagged') === 4);
 check('ranks use that same counted kapitlach', wwtcCountedKapitlach(0, 150, 'flagged') === 0);
-check('a flagged 150 does not earn the mission or the medal', wwtcMissionEarned(0, 2, 150, 'flagged') === false);
-check('the prior 4 still earns its own mission', wwtcMissionEarned(4, 2, 150, 'flagged') === true);
+check('a flagged 150 does not earn the mission or the medal', wwtcCountedKapitlach(0, 150, 'flagged') < 2);
+check('the prior 4 still earns its own mission', wwtcCountedKapitlach(4, 150, 'flagged') >= 2);
 
 $platoon = [
     ['counted' => 10, 'quota' => 10, 'flagged' => 0, 'status' => null],
     ['counted' => 0, 'quota' => 2, 'flagged' => 150, 'status' => 'flagged'],
 ];
-check('Perfect Platoon ignores the flagged 150', wwtcPlatoonIsPerfect($platoon) === false);
+$platoonMet = true;
+foreach ($platoon as $s) {
+    $said = wwtcCountedKapitlach((int) $s['counted'], (int) $s['flagged'], $s['status']);
+    if ((int) $s['quota'] <= 0 || $said < (int) $s['quota']) {
+        $platoonMet = false;
+    }
+}
+check('Perfect Platoon ignores the flagged 150', $platoonMet === false);
 $platoon[1] = ['counted' => 150, 'quota' => 2, 'flagged' => 150, 'status' => 'accepted'];
-check('Perfect Platoon counts the amount after it is accepted', wwtcPlatoonIsPerfect($platoon) === true);
+$platoonMet = true;
+foreach ($platoon as $s) {
+    $said = wwtcCountedKapitlach((int) $s['counted'], (int) $s['flagged'], $s['status']);
+    if ((int) $s['quota'] <= 0 || $said < (int) $s['quota']) {
+        $platoonMet = false;
+    }
+}
+check('Perfect Platoon counts the amount after it is accepted', $platoonMet === true);
 
 $actor = ['type' => 'admin', 'id' => 9, 'name' => 'HQ Command'];
 $at = '2026-11-11T15:04:00+00:00';
@@ -138,11 +170,28 @@ check('removing an accepted entry with no prior value clears the month', $clearA
 $flags = file_get_contents(__DIR__ . '/../../api/flags.php');
 check('stored review re-plans inside the transaction', is_string($flags) && strpos($flags, 'wwtcPlanReview($fresh') !== false);
 check('stored review no longer refuses every non-flagged row', is_string($flags) && strpos($flags, "['status'] !== 'flagged'") === false);
-check('stored review still applies the mark, logs the decision, and bumps the cache', is_string($flags) && strpos($flags, 'wwtcApplyMark') !== false && strpos($flags, 'wwtcInsertFlagDecision') !== false && strpos($flags, "Cache::bumpVersion('shabbos_mevorchim:v')") !== false);
+check('stored review still applies the mark, logs the decision, and flushes the file cache', is_string($flags) && strpos($flags, 'wwtcApplyMark') !== false && strpos($flags, 'wwtcInsertFlagDecision') !== false && strpos($flags, 'wwtcAfterWrite') !== false);
+check('flag review no longer bumps Redis', is_string($flags) && strpos($flags, 'Cache::bumpVersion') === false);
 
-$route = file_get_contents(__DIR__ . '/../../api/index.php');
-check('the flag route still accepts and removes, including a reversal', is_string($route) && strpos($route, '#^/admin/flags/(\d+)/(accept|remove)$#') !== false);
-check('top base rank keys are pctMet first, then the existing tie-breakers', is_string($route) && strpos($route, "return ['pctMet', 'saidMonth', 'pct', 'minutesPct'];") !== false && strpos($route, 'wwtcBaseRankKeys()') !== false);
+$index = file_get_contents(__DIR__ . '/../../api/index.php');
+$board = file_get_contents(__DIR__ . '/../../api/campaignBoard.php');
+$soldier = file_get_contents(__DIR__ . '/../../api/routes/soldier.php');
+$admin = file_get_contents(__DIR__ . '/../../api/routes/admin.php');
+$reports = file_get_contents(__DIR__ . '/../../api/routes/reports.php');
+$public = file_get_contents(__DIR__ . '/../../api/routes/public.php');
+$bootstrap = file_get_contents(__DIR__ . '/../../api/bootstrap.php');
+$apiPhp = $index . $board . $soldier . $admin . $reports . $public . $flags;
+check('the flag route still accepts and removes, including a reversal', is_string($admin) && strpos($admin, '#^/admin/flags/(\d+)/(accept|remove)$#') !== false);
+check('top base rank keys are pctMet first, then the existing tie-breakers', is_string($board) && strpos($board, "return ['pctMet', 'saidMonth', 'pct', 'minutesPct'];") !== false && strpos($board, 'wwtcBaseRankKeys()') !== false);
+check('self-report writes the as-of ladder, not today\'s track_id', is_string($soldier) && strpos($soldier, 'wwtcMissionIdAsOf') !== false);
+check('self-report clamps kapitlach through the one-Tehillim helper', is_string($soldier) && strpos($soldier, 'wwtcClampReportKapitlach') !== false);
+check('self-report prices over-entry on the custom-ladder quota', is_string($soldier) && strpos($soldier, 'wwtcReportQuotaFromEngine') !== false);
+check('flag review looks up tasks on the as-of ladder', is_string($flags) && strpos($flags, 'wwtcMissionIdAsOf') !== false);
+check('writes flush the file cache, not Redis', is_string($soldier) && strpos($soldier, 'wwtcAfterWrite()') !== false && strpos($apiPhp, 'Cache::bumpVersion') === false);
+check('not-completed is scoped to the admin\'s school', is_string($reports) && preg_match('/not-completed[\s\S]{0,500}wwtcRequireSchoolAdmin/', $reports) === 1);
+check('month names accept a historical year', is_string($bootstrap) && strpos($bootstrap, 'function wwtcMonthForDate(int $jd, ?int $year = null)') !== false);
+check('reports pass the year into the month helper', is_string($public) && strpos($public, 'wwtcMonthForDate($current, $year)') !== false);
+check('the router loads the split route files', is_string($index) && strpos($index, '/routes/admin.php') !== false);
 
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);

@@ -275,6 +275,17 @@ test('each script is chosen once for its moment, per child per month', () => {
     streakLongest: 5,
   }
   assert.deepEqual(selectCommanderScripts(withLadder).map((item) => item.id), ['mission', 'stand', 'streak'])
+  const customOnly = {
+    name: 'Dovi',
+    customTarget: 150,
+    customFinish: '8th grade',
+    quota: { kapitlach: 40, minutes: 80 },
+    heard: {},
+    resultsReady: false,
+    streakCurrent: null,
+  }
+  assert.equal(selectCommanderScripts(customOnly)[0].id, 'mission')
+  assert.equal(selectCommanderScripts(customOnly).some((item) => item.id === 'welcome'), false)
   assert.deepEqual(
     selectCommanderScripts({ ...withLadder, resultsReady: false }).map((item) => item.id),
     ['mission', 'streak'],

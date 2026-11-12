@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 // Custom ladder: 150 by an existing finish grade reproduces that ladder.
-// A higher target is not capped. A one-month override still wins for kapitlach.
-// Run: php tests/php/CustomLadderTest.php
+// A target or monthly cell above 150 is refused. A one-month override still
+// wins for kapitlach. Run: php tests/php/CustomLadderTest.php
 
 require __DIR__ . '/../../api/customLadder.php';
 require __DIR__ . '/../../api/quotaOverride.php';
@@ -25,6 +25,8 @@ function check(string $label, bool $cond): void
 }
 
 $quota = wwtcParsedLadderQuota();
+check('the shared quota table has 13 grades', count($quota) === 13);
+check('Pre-1A has 12 months', isset($quota['pre1a']) && count($quota['pre1a']) === 12);
 $mismatch = 0;
 foreach ([5, 6, 7, 8, 9, 10, 11, 12] as $ladder) {
     $grid = wwtcGenerateCustomLadder(150, (string) $ladder);
@@ -56,11 +58,13 @@ $same = wwtcGenerateCustomLadder(150, '8', [
 check('a matching half-kapitel anchor does not lift the cell', (float) $same['cells']['7']['Teves']['v'] === 118.5);
 check('that anchor leaves the ladder unanchored', $same['anchored'] === false);
 
-$scaled = wwtcGenerateCustomLadder(300, '8');
-check('300 by 8th grade ends at 300', (float) $scaled['cells']['8']['Elul']['v'] === 300.0);
-check('300 scales 4th-grade Tishrei from 54 to 108', (float) $scaled['cells']['4']['Tishrei']['v'] === 108.0);
-check('scaled minutes come from the kapitel relationship', (int) $scaled['cells']['4']['Tishrei']['m'] === wwtcMinutesForKapitlach(108));
-check('the scaled climb does not drop', wwtcLadderProblems($scaled) === []);
+$threw300 = false;
+try {
+    wwtcGenerateCustomLadder(300, '8');
+} catch (InvalidArgumentException $e) {
+    $threw300 = strpos($e->getMessage(), '150') !== false;
+}
+check('a target of 300 is refused', $threw300);
 
 check('minutes at 150 stay 120', wwtcMinutesForKapitlach(150) === 120);
 check('minutes keep climbing past one Tehillim', wwtcMinutesForKapitlach(190) === 187 && wwtcMinutesForKapitlach(300) === 370);
@@ -82,9 +86,18 @@ $plain = wwtcGenerateCustomLadder(150, '12');
 $lifted = wwtcGenerateCustomLadder(150, '12', [
     'grade' => '6', 'month' => 'Cheshvan', 'kapitlach' => 200, 'minutes' => 130,
 ]);
-check('a higher current quota is kept', (float) $lifted['cells']['6']['Cheshvan']['v'] >= 200);
-check('the finish does not drop below that quota', (float) $lifted['cells']['12']['Elul']['v'] === 200.0);
+check('a current quota past one Tehillim is clamped to 150', (float) $lifted['cells']['6']['Cheshvan']['v'] === 150.0);
+check('the finish does not go above one Tehillim', (float) $lifted['cells']['12']['Elul']['v'] === 150.0);
 check('months before the anchor stay on the curve', (float) $lifted['cells']['5']['Elul']['v'] === (float) $plain['cells']['5']['Elul']['v']);
+$overCell = 0;
+foreach ($lifted['cells'] as $months) {
+    foreach ($months as $cell) {
+        if ((float) ($cell['v'] ?? 0) > 150) {
+            $overCell++;
+        }
+    }
+}
+check('no generated month is above 150', $overCell === 0);
 
 $hq = ['type' => 'admin', 'auth' => 'super', 'id' => 1, 'name' => 'HQ Command'];
 $own = ['type' => 'admin', 'auth' => 'school', 'id' => 9, 'name' => 'Base Commander'];
@@ -128,7 +141,7 @@ function ran(CustomLadderFakePDO $db, string $needle, $key = null, $val = null):
 $kid = ['user_id' => 2, 'school_id' => 90, 'class_grade' => '4'];
 $db = new CustomLadderFakePDO();
 $denied = wwtcPerformCustomLadder($db, $other, $kid, [
-    'targetKapitlach' => 300, 'finishGrade' => '8',
+    'targetKapitlach' => 150, 'finishGrade' => '8',
 ], [89], [
     'ready' => true,
     'anchor' => ['grade' => '4', 'month' => 'Cheshvan', 'kapitlach' => 54, 'minutes' => 90],
@@ -138,15 +151,26 @@ check('perform returns 403 for another school', $denied['status'] === 403);
 check('403 writes nothing', count($db->queries) === 0);
 
 $db = new CustomLadderFakePDO();
-$saved = wwtcPerformCustomLadder($db, $hq, $kid, [
+$tooHigh = wwtcPerformCustomLadder($db, $hq, $kid, [
     'targetKapitlach' => 300, 'finishGrade' => '8', 'reason' => 'needs longer',
 ], [], [
     'ready' => true,
     'anchor' => ['grade' => '4', 'month' => 'Cheshvan', 'kapitlach' => 54, 'minutes' => 90],
     'now' => '2026-11-11 09:00:00',
 ]);
-check('custom ladder saves', $saved['status'] === 200 && $saved['body']['customLadder']['targetKapitlach'] === 300);
-check('the row stores the target and the grid', ran($db, 'INSERT INTO wwtc_custom_ladders', ':target', 300) && ran($db, 'INSERT INTO wwtc_custom_ladders', ':finish', '8'));
+check('perform refuses a target above 150', $tooHigh['status'] === 422);
+check('a refused target writes nothing', count($db->queries) === 0);
+
+$db = new CustomLadderFakePDO();
+$saved = wwtcPerformCustomLadder($db, $hq, $kid, [
+    'targetKapitlach' => 150, 'finishGrade' => '8', 'reason' => 'needs longer',
+], [], [
+    'ready' => true,
+    'anchor' => ['grade' => '4', 'month' => 'Cheshvan', 'kapitlach' => 54, 'minutes' => 90],
+    'now' => '2026-11-11 09:00:00',
+]);
+check('custom ladder saves', $saved['status'] === 200 && $saved['body']['customLadder']['targetKapitlach'] === 150);
+check('the row stores the target and the grid', ran($db, 'INSERT INTO wwtc_custom_ladders', ':target', 150) && ran($db, 'INSERT INTO wwtc_custom_ladders', ':finish', '8'));
 check('the row stores who and when', ran($db, 'INSERT INTO wwtc_custom_ladders', ':who', 1) && ran($db, 'INSERT INTO wwtc_custom_ladders', ':at', '2026-11-11 09:00:00'));
 check('audit log stores set, who, and when', ran($db, 'INSERT INTO wwtc_audit_log', ':action', 'custom_ladder_set') && ran($db, 'INSERT INTO wwtc_audit_log', ':actor', 1));
 
@@ -159,6 +183,15 @@ $removed = wwtcPerformRemoveCustomLadder($db, $hq, $kid, [], [
 check('remove succeeds', $removed['status'] === 200 && $removed['body']['customLadder'] === null);
 check('remove sets removed_at', ran($db, 'SET removed_at', ':at', '2026-11-11 10:00:00'));
 check('remove is audited', ran($db, 'INSERT INTO wwtc_audit_log', ':action', 'custom_ladder_remove'));
+
+$engine = wwtcReportQuotaFromEngine(40, 80, null);
+check('no custom cell keeps the engine quota', $engine['kapitlach'] === 40 && $engine['minutes'] === 80 && $engine['customLadder'] === false);
+$priced = wwtcReportQuotaFromEngine(40, 80, ['v' => 190, 'm' => 187]);
+check('a custom cell replaces kapitel and minutes', $priced['kapitlach'] === 190 && $priced['minutes'] === 187 && $priced['customLadder'] === true);
+$half = wwtcReportQuotaFromEngine(118, 120, ['v' => 118.5, 'm' => 120]);
+check('a half-kapitel custom cell rounds the report quota', $half['kapitlach'] === 119);
+$empty = wwtcReportQuotaFromEngine(40, 80, []);
+check('an empty custom cell is ignored', $empty['customLadder'] === false && $empty['kapitlach'] === 40);
 
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);

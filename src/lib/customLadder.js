@@ -19,38 +19,31 @@
 //   2. Otherwise the custom ladder supplies kapitel and minutes.
 //   3. Otherwise the normal ladder.
 
-import { GRADES, MONTHS, QUOTA, quotaFor, toHebrewNumeral } from '@/data/ladders.js'
+import { MONTHS, QUOTA, quotaFor, toHebrewNumeral } from '@/data/ladders.js'
 import { effectiveKapQuota } from '@/lib/quotaOverride.js'
 import { quotaMonth } from '@/lib/hebrewYear.js'
 
-/** One whole Tehillim. Monthly quotas may be set above this. */
+/** One whole Tehillim. Custom-ladder monthly quotas never exceed this. */
 export const TEHILLIM_KAPITLACH = 150
 
 /**
- * How a monthly quota above one Tehillim is shown.
- *
- * Sholem is confirming whether a target above 150 means "that many kapitlach
- * in the month, past whole Tehillims" or some other total. Until that is
- * settled, this display is the one the app uses. It is not a cap: the stored
- * quota stays the plain number (190, 300, …).
+ * How a leftover monthly quota above one Tehillim is shown. New custom
+ * ladders cannot generate a cell above 150; this formatter still labels
+ * an older stored number if one is on the soldier.
  *
  * 'tehillim-plus-count':
  *   150 and below → Aleph-Beis range, same as the ladders (א-מ, א-קנ).
  *     The breakdown still draws a crown on exactly 150.
  *   190 → "1 Tehillim + 40 kapitlach", with the plain number 190 beside it.
- *   300 → "2 Tehillim", with the plain number 300 beside it.
- *   151 → "1 Tehillim + 1 kapitel", with the plain number 151 beside it.
  * Hebrew letters are not used above 150. Gematria past קנ is not a kapitel label.
  */
 export const KAPITEL_ABOVE_TEHILLIM_DISPLAY = 'tehillim-plus-count'
 
-/** Highest kapitlach target the generator accepts. Not the Tehillim length. */
-export const MAX_TARGET_KAPITLACH = 9999
+/** Highest kapitlach target the generator accepts. One Tehillim. */
+export const MAX_TARGET_KAPITLACH = TEHILLIM_KAPITLACH
 
 /** Finish grades offered in the admin picker: Pre-1A through 4 years after 12th. */
 export const MAX_FINISH_OFFSET = 4
-
-const GRADE_INDEX = Object.fromEntries(GRADES.map((g, i) => [g, i]))
 
 export function gradeIndex(grade) {
   if (grade == null || grade === '') return -1
@@ -82,7 +75,7 @@ export function finishGradeLabel(grade) {
 export function finishGradeOptions() {
   const out = [{ value: 'pre1a', label: 'Pre-1A' }]
   for (let n = 1; n <= 12 + MAX_FINISH_OFFSET; n++) {
-    out.push({ value: n === 0 ? 'pre1a' : String(n), label: finishGradeLabel(n) })
+    out.push({ value: String(n), label: finishGradeLabel(n) })
   }
   return out
 }
@@ -305,7 +298,7 @@ export function generateCustomLadder({ targetKapitlach, finishGrade, anchor = nu
   if (!aGrade || !cells[aGrade]?.[aMonth]) return grid
   // Keep a half-kapitel anchor (118.5). Rounding it up would lift a ladder
   // that already matches and break an exact copy of that ladder.
-  const aV = Number(anchor.kapitlach) || 0
+  const aV = Math.min(Number(anchor.kapitlach) || 0, TEHILLIM_KAPITLACH)
   const aM = Math.round(Number(anchor.minutes) || 0)
   const slots = orderedSlots(finish, aGrade)
   const idx = slots.findIndex((s) => s.grade === aGrade && s.month === aMonth)
@@ -313,7 +306,7 @@ export function generateCustomLadder({ targetKapitlach, finishGrade, anchor = nu
   const pure = cells[aGrade][aMonth]
   const next = cloneCells(cells)
   if (aV > pure.v) {
-    const goal = Math.max(target, aV)
+    const goal = Math.min(Math.max(target, aV), TEHILLIM_KAPITLACH)
     const c0 = pure.v
     const endGrade = gradeKey(Math.max(finishN, gradeIndex(aGrade)))
     const c1 = next[endGrade].Elul.v
@@ -339,7 +332,22 @@ export function generateCustomLadder({ targetKapitlach, finishGrade, anchor = nu
   } else if (enforceFloorForward(next, slots, idx, aV, aM)) {
     grid = { ...grid, cells: next, anchored: true }
   }
-  return grid
+  return clampGridToTehillim(grid)
+}
+
+function clampGridToTehillim(grid) {
+  const cells = {}
+  for (const [grade, months] of Object.entries(grid.cells || {})) {
+    cells[grade] = {}
+    for (const [month, cell] of Object.entries(months || {})) {
+      if (cell && Number(cell.v) > TEHILLIM_KAPITLACH) {
+        cells[grade][month] = cellOf(TEHILLIM_KAPITLACH, minutesForKapitlach(TEHILLIM_KAPITLACH))
+      } else {
+        cells[grade][month] = cell
+      }
+    }
+  }
+  return { ...grid, cells }
 }
 
 export function cellFor(grid, grade, month) {

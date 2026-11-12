@@ -2,10 +2,6 @@
 // facade. Modeled on Mivtza Lulav's src/services/mashpia.js: signed bearer
 // tokens over the existing Mashpia roster, served from /shabbos-mevorchim-
 // tehillim/api (see api/README.md).
-//
-// Only the endpoints the facade has been wired to live so far are implemented
-// here. The rest of services/api.js still runs on the demo roster; each
-// function flips to its mashpia.* twin as it is wired, the Lulav pattern.
 
 // import.meta.env is injected by Vite in the app; guard it so the module also
 // loads under plain Node (the test harness), where it is undefined.
@@ -173,7 +169,7 @@ function periodQuery(period) {
   return text ? `?${text}` : ''
 }
 
-export const getSchool = (id) => req(`/schools/${id}`)
+export const getSchool = (id, period) => req(`/schools/${id}${periodQuery(period)}`)
 export const getGlobalStats = (period) => req(`/stats${periodQuery(period)}`)
 export const getSchools = (period) => req(`/schools${periodQuery(period)}`).then((r) => r.schools || [])
 export const getPerfectPlatoons = (period) => req(`/perfect-platoons${periodQuery(period)}`).then((r) => r.platoons || [])

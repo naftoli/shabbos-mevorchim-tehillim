@@ -2,7 +2,7 @@
 // The campaign's first Shabbos Mevorchim is Cheshvan 5778 (14 Oct 2017).
 // A leap year lists Adar I and Adar II as two months. A plain year has one Adar.
 
-import { campaignMonths, isHebrewLeapYear } from './hebrewYear.js'
+import { campaignMonths } from './hebrewYear.js'
 
 export const FIRST_CAMPAIGN_YEAR = 5778
 export const FIRST_CAMPAIGN_MONTH = 'Cheshvan'
@@ -58,10 +58,4 @@ export function scaleMonthRows(rows, kapitlachTarget) {
     kapitlach: scaled[i],
     minutes: sum > 0 ? Math.max(0, Math.round((Number(row.minutes) || 0) * factor)) : 0,
   }))
-}
-
-export function yearKeepsBothAdars(year) {
-  return isHebrewLeapYear(year)
-    && breakdownMonthNames(year).includes('Adar I')
-    && breakdownMonthNames(year).includes('Adar II')
 }

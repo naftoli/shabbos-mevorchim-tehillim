@@ -24,7 +24,7 @@ import {
 
 // Wording is frozen. This hash moved when the last-two-months review was added.
 // The spoken sentences below did not change.
-const SCRIPT_HASH = 'ff26f5e7421c6f9d9bcf182371ad00f5c5142149986f3e9e755dfc9165e7f27a'
+const SCRIPT_HASH = '0dc512230689d3f18cf415417688e46d5c27f821c7390688143808d39ca0468e'
 
 const child = {
   firstName: 'Dovi',
@@ -55,7 +55,7 @@ test('Wednesday commander scripts file is unchanged', () => {
   assert.match(CHOOSING_SCRIPT, /^That's wonderful, soldier!/)
   assert.match(TRACK_SCRIPT, /^This is your Tehillim training track, soldier\./)
   assert.match(fillMission({ name: 'Dovi', ladder: 8, gradeLabel: '8th grade', kapitlach: 18, minutes: 55 }), /18 kapitlach, about 55 minutes/)
-  assert.match(fillMission({ name: 'Dovi', customTarget: 300, customFinish: '8th grade', kapitlach: 40, minutes: 80 }), /custom ladder[\s\S]*300 kapitlach by 8th grade/)
+  assert.match(fillMission({ name: 'Dovi', customTarget: 150, customFinish: '8th grade', kapitlach: 40, minutes: 80 }), /custom ladder[\s\S]*150 kapitlach by 8th grade/)
   assert.match(fillStand({ baseRank: 23, baseTotal: 75, platoonRank: 4, platoonTotal: 47, soldierRank: 8, soldierTotal: 581 }), /number 23 out of 75/)
   assert.match(fillStreak({ current: 2, longest: 4 }), /2 missions in a row/)
   assert.match(fillClimb('8th grade'), /by 8th grade/)

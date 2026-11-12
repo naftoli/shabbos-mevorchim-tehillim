@@ -51,7 +51,7 @@ $tishreiLeap = array_column(wwtcSchoolYearSlots('Tishrei', 5787), 'month');
 check('Tishrei plain year matches campaign months', $tishreiPlain === wwtcCampaignMonthNames(5785));
 check('Tishrei leap year matches campaign months', $tishreiLeap === wwtcCampaignMonthNames(5787));
 check('Tishrei grade ends in Elul', wwtcGradeEndMonth('Tishrei') === 'Elul');
-check('Tishrei end cell is Elul', wwtcGradeEndSheetMonth('Tishrei') === 'Elul');
+check('Tishrei end cell is Elul', wwtcQuotaSheetMonth(wwtcGradeEndMonth('Tishrei'), 'Tishrei') === 'Elul');
 
 $same = true;
 foreach ($plain as $month) {

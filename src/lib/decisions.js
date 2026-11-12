@@ -70,18 +70,13 @@ export const GENTLER_LADDER_MISSES = 3
 /**
  * Demo-only labels, from Tehillim medals alone. The live personal page shows
  * the soldier's Tzivos Hashem rank from rank_marks (every campaign's medals).
- * Promotion is NOT announced by the commander until RANK_PROMOTION_ANNOUNCE
- * is true, and rank is not inferred out loud from medals alone.
+ * Rank is not inferred out loud from medals alone.
  */
 export const RANK_SCHEDULE = [
   { medals: 3, rank: 'Sergeant' },
   { medals: 7, rank: 'Sergeant Major' },
 ]
 export const RANK_BELOW_SCHEDULE = 'Soldier'
-export const RANK_PROMOTION_ANNOUNCE = false
-
-/** How many past campaign years the chooser offers. Live data fills each one. */
-export const PAST_YEARS_BACK = 4
 
 /**
  * Who may see one class's student roll (name, ladder, "said X of Y").
@@ -134,24 +129,6 @@ export function canSeeClassRoll(viewer, scope = {}) {
   }
   return false
 }
-
-/**
- * Voices. Marin stays the default and the girl commander.
- * A boy gets cedar unless OPENAI_REALTIME_VOICE pins one voice for everyone.
- */
-export const COMMANDER_VOICE = { girl: 'marin', boy: 'cedar', default: 'marin' }
-
-/**
- * What the commander may know about a child. No date of birth, serial,
- * address, password, or parent contact. Escalation text is the exceptional
- * email only, and only after the chayol confirms.
- */
-export const AI_CHILD_FIELDS = [
-  'name', 'gender', 'childGrade', 'childGradeLabel', 'ladder', 'finishTrainingByGrade',
-  'focusLadder', 'situation', 'greeting', 'cue', 'monthEn', 'ladderChoices',
-  'thisMonth', 'missionsTotal', 'medal', 'streak', 'rank', 'nextShabbosMevorchim',
-  'scripts', 'scriptNow',
-]
 
 export function rankForMedals(earnedCount) {
   let rank = RANK_BELOW_SCHEDULE

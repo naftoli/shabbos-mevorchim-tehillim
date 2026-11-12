@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { QUOTA, GRADE_LABEL, finishGrade, toHebrewNumeral } from '@/data/ladders.js'
-import { finishGradeLabel, formatKapitlachQuota } from '@/lib/customLadder.js'
+import { formatKapitlachQuota } from '@/lib/customLadder.js'
 import { DEFAULT_FIRST_MONTH, gradeEndSheetMonth } from '@/lib/schoolYear.js'
 import { asset } from '@/lib/asset.js'
 import { CrownIcon } from '@/components/ui.jsx'
@@ -138,7 +138,7 @@ export default function ClimbMeter({ reached = 0, target = 0, ladder, finishGrad
           const heb = (
             <span className={`font-heb text-[12px] font-bold ${finish ? '' : 'text-navy'}`}>{finish ? <CrownIcon className="h-4 w-auto" /> : m.heb}</span>
           )
-          const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade] || finishGradeLabel(m.grade)}</span>
+          const grade = <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted">{GRADE_LABEL[m.grade] || m.grade}</span>
           if (m.side === 'above') {
             return (
               <span key={m.grade}>

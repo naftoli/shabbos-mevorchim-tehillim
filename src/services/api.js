@@ -1,7 +1,6 @@
 // Data facade. Every page/component reads campaign numbers through this module,
-// so the demo→live switch happens in one place. Today it computes everything
-// from the anonymized demo roster; when the PHP/Mashpia API lands, each function
-// branches `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
+// so the demo→live switch happens in one place. Each function branches
+// `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor } from '@/data/ladders.js'
 import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
@@ -353,15 +352,6 @@ export async function getSchools(period) {
   const month = period?.month || CURRENT_MONTH
   const year = period?.year || CAMPAIGN_YEAR
   return schoolsFor(demoDataMonth(month), year).slice().sort((a, b) => b.saidMonth - a.saidMonth)
-}
-export function topSchoolsByKapitlach(n = 5) {
-  return schools().slice().sort((a, b) => b.saidMonth - a.saidMonth).slice(0, n)
-}
-export function topSchoolsByQuota(n = 5) {
-  return schools()
-    .slice()
-    .sort((a, b) => b.pctMet - a.pctMet || b.pct - a.pct || b.saidMonth - a.saidMonth || a.name.localeCompare(b.name))
-    .slice(0, n)
 }
 export async function getPerfectPlatoons(period) {
   const rows = !IS_DEMO
@@ -791,16 +781,18 @@ export async function getKidSocial(id) {
 // track, and dedication, which stays null until the write endpoint is designed).
 // Demo: computed from the roster below. Async in both modes so callers are
 // identical — see useLiveData.
-export async function getSchool(id) {
-  if (!IS_DEMO) return mashpia.getSchool(id)
-  return demoSchool(id)
+export async function getSchool(id, period) {
+  if (!IS_DEMO) return mashpia.getSchool(id, period)
+  return demoSchool(id, period)
 }
 
-function demoSchool(id) {
+function demoSchool(id, period) {
   const school = ROSTER.find((s) => s.id === id)
   if (!school) return null
   const first = schoolYearStart(id)
-  const agg = schoolAgg(school)
+  const month = period?.month || CURRENT_MONTH
+  const year = period?.year || CAMPAIGN_YEAR
+  const agg = schoolAgg(school, month, year)
   const classes = school.classes.map((cls) => {
     let said = 0
     let quota = 0
@@ -809,13 +801,13 @@ function demoSchool(id) {
     let minsSaid = 0
     let minsQuota = 0
     for (const kid of cls.kids) {
-      const kidSaid = kidMonthSaid(kid, CURRENT_MONTH)
+      const kidSaid = kidMonthSaid(kid, month)
       said += kidSaid
-      quota += kidMonthQuota(kid, CURRENT_MONTH, CAMPAIGN_YEAR, first)
-      minsSaid += kidMonthMinutes(kid, CURRENT_MONTH)
-      minsQuota += engineMin(kid, CURRENT_MONTH, first)
-      if (metQuota(kid, CURRENT_MONTH, first)) met += 1
-      if (reportedOf(kid, CURRENT_MONTH, CAMPAIGN_YEAR) && kidSaid > 0) participated += 1
+      quota += kidMonthQuota(kid, month, year, first)
+      minsSaid += kidMonthMinutes(kid, month)
+      minsQuota += engineMin(kid, month, first)
+      if (metQuota(kid, month, first)) met += 1
+      if (reportedOf(kid, month, year) && kidSaid > 0) participated += 1
     }
     const size = cls.kids.length
     return {
@@ -1095,9 +1087,7 @@ export async function setSchoolLadders(schoolId, hidden) {
 }
 
 export function removeSchoolDedication(schoolId) {
-  setSchoolDedicationStore(schoolId, null)
-  invalidate()
-  return null
+  return setSchoolDedication(schoolId, '')
 }
 
 function demoStaffCanOverride(schoolId) {

@@ -44,5 +44,9 @@ export function currentHebrewYear(d = new Date()) {
  * their own; both read the Adar quota.
  */
 export function quotaMonth(month) {
-  return month === 'Adar I' || month === 'Adar II' ? 'Adar' : month
+  if (month === 'Adar I' || month === 'Adar II') return 'Adar'
+  if (month === 'Rosh Hashana' || month === 'Yom Kippur' || month === 'Rosh Hashona' || month === 'Rosh Hashanah') {
+    return 'Tishrei'
+  }
+  return month
 }

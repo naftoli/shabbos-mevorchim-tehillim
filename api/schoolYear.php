@@ -108,12 +108,6 @@ function wwtcGradeEndMonth(string $firstMonth): string
     return (string) $months[count($months) - 1];
 }
 
-/** Position 12 always reads the Elul quota cell. */
-function wwtcGradeEndSheetMonth(string $firstMonth): string
-{
-    return wwtcQuotaSheetMonth(wwtcGradeEndMonth($firstMonth), $firstMonth);
-}
-
 function wwtcSchoolYearStartYear(string $firstMonth, int $hebrewYear, string $hebrewMonth): int
 {
     $plain = wwtcPlainMonthNames();

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { Card, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
@@ -18,8 +18,8 @@ import {
   getSchools,
   schoolSoldierLeaderboard,
   schoolClassLeaderboard,
-  CURRENT_MONTH,
 } from '@/services/api.js'
+import { useCampaignClock } from '@/lib/useCampaignClock.js'
 import { displayClassName } from '@/lib/formatClassName.js'
 import { teacherName } from '@/lib/teacherName.js'
 import ClassName from '@/components/ClassName.jsx'
@@ -39,10 +39,17 @@ const classMono = (c) => {
 
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
-  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
+  const [params] = useSearchParams()
+  const yearParam = params.get('year')
+  const monthParam = params.get('month')
+  const clock = useCampaignClock(yearParam || undefined)
+  const year = yearParam || clock.year
+  const month = monthParam || clock.currentMonth
+  const period = { year, month }
+  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId, period), [schoolId, year, month])
   const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId), [schoolId])
   const { data: classesData } = useLiveData(() => schoolClassLeaderboard(schoolId), [schoolId])
-  const { data: armySchools } = useLiveData(() => getSchools(), [])
+  const { data: armySchools } = useLiveData(() => getSchools(period), [year, month])
   const classes = classesData ?? []
   const rank = useMemo(
     () => (armySchools ? baseRanks(armySchools).get(String(schoolId)) ?? null : null),
@@ -86,7 +93,7 @@ export default function SchoolCampaign() {
         <div className="mx-auto flex max-w-[1400px] items-start gap-3 px-4 py-8 sm:gap-4 sm:px-6 sm:py-10 lg:px-10">
           <SchoolLogo school={school} size={72} className="!h-14 !w-14 ring-2 ring-white/30 sm:!h-[72px] sm:!w-[72px]" />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></p>
             <h1 className="min-w-0 break-words font-display text-[1.65rem] font-black leading-tight text-white sm:text-4xl">{school.name}</h1>
             <p className="text-white/80">{school.city ? `${school.city} · ` : ''}{fmt(school.kids)} soldiers</p>
           </div>
@@ -98,7 +105,7 @@ export default function SchoolCampaign() {
         {/* Goal meter — kapitlach, minutes and soldiers finished */}
         <Card className="p-6 sm:p-8">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <p className="sh">This month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
+            <p className="sh">This month · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></p>
             {school.pct >= 100 ? <QuotaReached /> : null}
           </div>
           <QuotaBars
@@ -121,7 +128,7 @@ export default function SchoolCampaign() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="flex min-w-0 items-center gap-3">
               <PerfectPlatoonLogo className="h-12 w-auto sm:h-14" />
-              <h2 className="min-w-0 font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
+              <h2 className="min-w-0 font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></h2>
             </div>
             <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(perfect.length)} this month</span>
           </div>

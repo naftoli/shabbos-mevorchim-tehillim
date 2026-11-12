@@ -76,7 +76,7 @@ export default function KidDashboard() {
     [kid],
   )
   const { data: social, reload: reloadSocial } = useLiveData(
-    () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
+    () => (kid ? getKidSocial(kid.id) : Promise.resolve(null)),
     [kid],
   )
 
@@ -181,7 +181,8 @@ export default function KidDashboard() {
   }
 
   const streaks = streakFromMissions(streakMissions(progress))
-  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, Number(CAMPAIGN_YEAR), yearStart)
+  const campaignYear = Number(progress.year) || Number(CAMPAIGN_YEAR)
+  const earnBy = earliestMedalWhen(progress.medal?.missionsToNext, cur?.month || CURRENT_MONTH, campaignYear, yearStart)
   let earnedOn = null
   {
     const medal = progress.medal?.current
@@ -311,8 +312,17 @@ export default function KidDashboard() {
             <div className="flex items-center gap-2.5">
               <LadderGlyph width="22" height="34" className="flex-none" />
               <div className="text-right">
-                <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
-                <p className="mt-1 text-xs text-white/70">finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+                {progress.customLadder ? (
+                  <>
+                    <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Custom ladder</span>
+                    <p className="mt-1 text-xs text-white/70">finish {fmt(progress.customLadder.targetKapitlach)} kapitlach by {progress.customLadder.finishLabel}</p>
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block rounded-full bg-white/15 px-3 py-1 font-cond text-sm uppercase tracking-wide text-gold">Ladder {kid.ladder}</span>
+                    <p className="mt-1 text-xs text-white/70">finish training by {GRADE_LABEL[String(finishGrade(kid.ladder))]} grade</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -548,7 +558,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={CAMPAIGN_YEAR} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={campaignYear} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
 
         <MedalBoard
           progress={progress}
@@ -580,12 +590,12 @@ export default function KidDashboard() {
           </div>
 
           <div className="mt-4 overflow-x-auto rounded-xl bg-paper/60 p-3">
-            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={CAMPAIGN_YEAR} firstMonth={yearStart} anchorMonth={cur.month} />
+            <LadderBreakdownTable ladder={kid.ladder} grid={progress.customLadder} highlightGrade={kid.grade} highlightMonth={cur.month} year={campaignYear} firstMonth={yearStart} anchorMonth={cur.month} />
           </div>
           <p className="mt-2 text-center text-xs text-muted">
             Each cell is the kapitel you say up to (from <span className="font-heb">א</span>) and the minutes · <CrownIcon className="h-3.5 w-auto align-text-bottom" /> = the whole Tehillim ·{' '}
             <span className="rounded bg-green/15 px-1.5 py-0.5 ring-1 ring-green">highlighted</span> is where you are now.
-            {isHebrewLeapYear(CAMPAIGN_YEAR) ? ' Adar I and Adar II each use the Adar quota.' : ''}
+            {isHebrewLeapYear(campaignYear) ? ' Adar I and Adar II each use the Adar quota.' : ''}
           </p>
         </Card>
 

@@ -17,18 +17,15 @@
  *   2. Otherwise an active custom ladder supplies kapitel and minutes.
  *   3. Otherwise the normal ladder.
  *
- * How a monthly quota above one Tehillim (150) is shown — Sholem is confirming
- * this. The stored number is not capped. Display mode is tehillim-plus-count:
- *   190 → "1 Tehillim + 40 kapitlach" (plain number 190 beside it)
- *   300 → "2 Tehillim" (plain number 300 beside it)
- * Letters are not used above 150.
+ * Monthly quotas never exceed one Tehillim (150). Display mode for a leftover
+ * stored number above that is tehillim-plus-count; letters are not used above 150.
  *
  * Storage: api/sql/wwtc_custom_ladders.sql. This file does not run it.
  */
 
 const WWTC_TEHILLIM_KAPITLACH = 150;
 const WWTC_KAPITEL_ABOVE_TEHILLIM_DISPLAY = 'tehillim-plus-count';
-const WWTC_MAX_TARGET_KAPITLACH = 9999;
+const WWTC_MAX_TARGET_KAPITLACH = WWTC_TEHILLIM_KAPITLACH;
 const WWTC_MAX_FINISH_OFFSET = 4;
 
 /** @return list<string> */
@@ -124,33 +121,16 @@ function wwtcParsedLadderQuota(): array
     if ($parsed !== null) {
         return $parsed;
     }
-    $path = dirname(__DIR__) . '/src/data/ladders.js';
-    $text = is_file($path) ? (string) file_get_contents($path) : '';
+    $path = dirname(__DIR__) . '/src/data/ladders-quota.json';
+    $raw = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
     $parsed = [];
-    $grade = null;
-    $months = array_fill_keys(wwtcLadderMonths(), true);
-    foreach (preg_split("/\r\n|\n|\r/", $text) as $line) {
-        if (preg_match("/^\\s*'(pre1a|\\d+)': \\{\\s*$/", $line, $gm)) {
-            $grade = $gm[1];
-            continue;
-        }
-        if ($grade === null || !preg_match('/^\\s*([A-Za-z]+): \\{/', $line, $mm)) {
-            continue;
-        }
-        $month = $mm[1];
-        if (!isset($months[$month])) {
-            continue;
-        }
-        if (!preg_match_all('/(\\d+):\\{k:"[^"]*",v:(\\d+(?:\\.\\d+)?)(?:,m:(\\d+))?(?:,h:(\\d+))?\\}/', $line, $cells, PREG_SET_ORDER)) {
-            continue;
-        }
-        foreach ($cells as $cell) {
-            $ladder = (int) $cell[1] + 4;
-            $parsed[$grade][$month][$ladder] = [
-                'v' => (float) $cell[2],
-                'm' => isset($cell[3]) && $cell[3] !== '' ? (int) $cell[3] : 0,
-                'h' => isset($cell[4]) && $cell[4] !== '' ? (int) $cell[4] : null,
-            ];
+    if (is_array($raw)) {
+        foreach ($raw as $grade => $months) {
+            foreach ((array) $months as $month => $ladders) {
+                foreach ((array) $ladders as $ladder => $cell) {
+                    $parsed[$grade][$month][(int) $ladder] = $cell;
+                }
+            }
         }
     }
     return $parsed;
@@ -343,14 +323,14 @@ function wwtcGenerateCustomLadder(int $targetKapitlach, string $finishGrade, ?ar
         'cells' => $cells,
     ];
     if (!$anchor || !isset($anchor['kapitlach']) || $anchor['kapitlach'] === '') {
-        return $grid;
+        return wwtcClampGridToTehillim($grid);
     }
     $aGrade = wwtcGradeKeyFrom((string) ($anchor['grade'] ?? ''));
     $aMonth = wwtcCustomMonthName((string) ($anchor['month'] ?? ''));
     if ($aGrade === '' || !isset($cells[$aGrade][$aMonth])) {
-        return $grid;
+        return wwtcClampGridToTehillim($grid);
     }
-    $aV = (float) $anchor['kapitlach'];
+    $aV = min((float) $anchor['kapitlach'], (float) WWTC_TEHILLIM_KAPITLACH);
     $aM = (int) round((float) ($anchor['minutes'] ?? 0));
     $slots = [];
     foreach (wwtcGradesThrough($finish, $aGrade) as $grade) {
@@ -366,12 +346,12 @@ function wwtcGenerateCustomLadder(int $targetKapitlach, string $finishGrade, ?ar
         }
     }
     if ($idx < 0) {
-        return $grid;
+        return wwtcClampGridToTehillim($grid);
     }
     $pure = $cells[$aGrade][$aMonth];
     $next = $cells;
     if ($aV > (float) $pure['v']) {
-        $goal = max((float) $target, $aV);
+        $goal = min(max((float) $target, $aV), (float) WWTC_TEHILLIM_KAPITLACH);
         $c0 = (float) $pure['v'];
         $endGrade = wwtcGradeKeyFromIndex(max($finishN, wwtcGradeIndexFrom($aGrade)));
         $c1 = (float) $next[$endGrade]['Elul']['v'];
@@ -406,6 +386,20 @@ function wwtcGenerateCustomLadder(int $targetKapitlach, string $finishGrade, ?ar
     } elseif (wwtcEnforceFloorForward($next, $slots, $idx, $aV, $aM)) {
         $grid['cells'] = $next;
         $grid['anchored'] = true;
+    }
+    return wwtcClampGridToTehillim($grid);
+}
+
+function wwtcClampGridToTehillim(array $grid): array
+{
+    $cap = (float) WWTC_TEHILLIM_KAPITLACH;
+    foreach ($grid['cells'] ?? [] as $grade => $months) {
+        foreach ($months as $month => $cell) {
+            if (!is_array($cell) || (float) ($cell['v'] ?? 0) <= $cap) {
+                continue;
+            }
+            $grid['cells'][$grade][$month] = wwtcLadderCell($cap, wwtcMinutesForKapitlach($cap));
+        }
     }
     return $grid;
 }
@@ -638,6 +632,25 @@ function wwtcCustomLadderCell(?array $row, string $grade, string $month): ?array
 function wwtcCustomQuotaInt(float $v): int
 {
     return (int) round($v);
+}
+
+/**
+ * Self-report over-entry uses the same quota the soldier is measured against.
+ * A custom-ladder cell replaces the engine kapitel and minutes.
+ *
+ * @param array{v:float|int,m?:int|float}|null $customCell
+ * @return array{kapitlach:int,minutes:int,customLadder:bool}
+ */
+function wwtcReportQuotaFromEngine(int $engineKap, int $engineMin, $customCell): array
+{
+    if (!is_array($customCell) || !isset($customCell['v'])) {
+        return ['kapitlach' => $engineKap, 'minutes' => $engineMin, 'customLadder' => false];
+    }
+    return [
+        'kapitlach' => wwtcCustomQuotaInt((float) $customCell['v']),
+        'minutes' => (int) round((float) ($customCell['m'] ?? 0)),
+        'customLadder' => true,
+    ];
 }
 
 /**

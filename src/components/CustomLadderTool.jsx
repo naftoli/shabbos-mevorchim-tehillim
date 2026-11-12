@@ -7,8 +7,10 @@ import {
   finishGradeOptions,
   formatKapitlachQuota,
   generateCustomLadder,
+  MAX_TARGET_KAPITLACH,
 } from '@/lib/customLadder.js'
-import { listCustomLadderSoldiers, setCustomLadder, removeCustomLadder, CAMPAIGN_YEAR } from '@/services/api.js'
+import { listCustomLadderSoldiers, setCustomLadder, removeCustomLadder } from '@/services/api.js'
+import { useCampaignClock } from '@/lib/useCampaignClock.js'
 import { formatClassName } from '@/lib/formatClassName.js'
 
 // Admin: pick one soldier, then "Finish [N] kapitlach by [grade]".
@@ -23,6 +25,7 @@ export default function CustomLadderTool({ schoolId }) {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
+  const { year } = useCampaignClock()
   const { data, error, reload } = useLiveData(
     () => (open && schoolId ? listCustomLadderSoldiers(schoolId) : Promise.resolve(null)),
     [open, schoolId],
@@ -51,7 +54,7 @@ export default function CustomLadderTool({ schoolId }) {
     setKidId(soldier.id)
     setNote(null)
     const custom = soldier.customLadder
-    setTarget(String(custom?.targetKapitlach || 150))
+    setTarget(String(Math.min(custom?.targetKapitlach || 150, MAX_TARGET_KAPITLACH)))
     setFinishGrade(custom?.finishGrade || (soldier.ladder ? String(soldier.ladder) : '8'))
     setReason('')
   }
@@ -120,7 +123,7 @@ export default function CustomLadderTool({ schoolId }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="sh">Custom ladder</p>
-          <p className="mt-1 text-sm text-muted">Give one soldier their own finish: how many kapitlach, and by which grade.</p>
+          <p className="mt-1 text-sm text-muted">Give one soldier their own finish: how many kapitlach (1–{MAX_TARGET_KAPITLACH}), and by which grade.</p>
         </div>
         <Button id="custom-ladder-open" type="button" variant="navy" className="max-sm:min-h-11" onClick={() => setOpen((v) => !v)}>
           {open ? 'Close' : 'Custom ladder'}
@@ -174,6 +177,7 @@ export default function CustomLadderTool({ schoolId }) {
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
                   aria-label="Kapitlach to finish"
+                  max={MAX_TARGET_KAPITLACH}
                 />
                 <span>kapitlach by</span>
                 <select
@@ -204,7 +208,7 @@ export default function CustomLadderTool({ schoolId }) {
               ) : null}
               {preview ? (
                 <div className="overflow-x-auto rounded-xl bg-paper/60 p-3">
-                  <LadderBreakdownTable grid={preview} highlightGrade={kid.grade} highlightMonth={kid.month} year={CAMPAIGN_YEAR} />
+                  <LadderBreakdownTable grid={preview} highlightGrade={kid.grade} highlightMonth={kid.month} year={year} />
                 </div>
               ) : null}
               <div className="flex flex-wrap gap-2">
