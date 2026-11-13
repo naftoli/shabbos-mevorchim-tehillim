@@ -30,3 +30,60 @@ export function ladderIsOpen(ladder, hidden) {
   if (!LADDER_SET.has(n)) return false
   return !hiddenLadderList(hidden).includes(n)
 }
+
+/**
+ * Explicit on/off rows for one class or one child. A missing ladder means
+ * "inherit" (class inherits the school, child inherits the class). Unknown
+ * ladder numbers are ignored. Accepts either `{ 5: false }` or
+ * `[{ ladder: 5, enabled: false }]`.
+ */
+export function ladderOverrideMap(value) {
+  const out = {}
+  if (!value) return out
+  if (Array.isArray(value)) {
+    for (const row of value) {
+      const n = Number(row?.ladder)
+      if (!LADDER_SET.has(n)) continue
+      const enabled = overrideEnabled(row?.enabled)
+      if (enabled === null) continue
+      out[n] = enabled
+    }
+    return out
+  }
+  if (typeof value === 'object') {
+    for (const [key, enabledRaw] of Object.entries(value)) {
+      const n = Number(key)
+      if (!LADDER_SET.has(n)) continue
+      const enabled = overrideEnabled(enabledRaw)
+      if (enabled === null) continue
+      out[n] = enabled
+    }
+  }
+  return out
+}
+
+function overrideEnabled(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true
+  if (value === false || value === 0 || value === '0' || value === 'false') return false
+  return null
+}
+
+/**
+ * The closest setting wins: child, then class, then school. No setting at any
+ * level leaves the ladder on. `classOverrides` / `childOverrides` are explicit
+ * rows only; a missing ladder inherits.
+ */
+export function ladderOnForScope(ladder, schoolHidden, classOverrides = null, childOverrides = null) {
+  const n = Number(ladder)
+  if (!LADDER_SET.has(n)) return false
+  const child = ladderOverrideMap(childOverrides)
+  if (Object.prototype.hasOwnProperty.call(child, n)) return child[n]
+  const cls = ladderOverrideMap(classOverrides)
+  if (Object.prototype.hasOwnProperty.call(cls, n)) return cls[n]
+  return ladderIsOpen(n, schoolHidden)
+}
+
+/** Ladders that are off for this scope, in picker order (12 down to 5). */
+export function hiddenForScope(schoolHidden, classOverrides = null, childOverrides = null) {
+  return LADDERS.filter((ladder) => !ladderOnForScope(ladder, schoolHidden, classOverrides, childOverrides))
+}

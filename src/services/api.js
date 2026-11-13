@@ -44,7 +44,10 @@ import {
   schoolYearStart,
   setSchoolYearStartStore,
   schoolHiddenLadders,
+  hiddenLaddersForChild,
+  demoLadderSettings,
   setSchoolHiddenLaddersStore,
+  setLadderScopeStore,
   saveKidProgress,
   clearKidProgress,
 } from '@/data/demo.js'
@@ -434,7 +437,7 @@ function safeKid(kid, school, cls) {
     schoolName: school.name,
     className: cls.name,
     yearStart: schoolYearStart(school.id),
-    hiddenLadders: schoolHiddenLadders(school.id),
+    hiddenLadders: hiddenLaddersForChild(school.id, cls.id, kid.id),
   }
 }
 
@@ -666,7 +669,7 @@ export async function setKidLadder(id, ladder) {
   if (!found) return null
   const { kid } = found
   const next = Number(ladder)
-  const hidden = schoolHiddenLadders(found.school.id)
+  const hidden = hiddenLaddersForChild(found.school.id, found.cls.id, kid.id)
   if (!ladderIsOpen(next, hidden)) return null
   // The dashboard re-applies the session ladder on every read. Skip the
   // notify when nothing changed, or that read refreshes itself forever.
@@ -691,7 +694,21 @@ export async function adminSetLadder({ schoolId, classId = null, kidId = null, l
   if (!IS_DEMO) return mashpia.adminSetLadder({ schoolId, classId, kidId, ladder })
   const next = Number(ladder)
   const school = ROSTER.find((s) => s.id === schoolId)
-  if (!school || !ladderIsOpen(next, schoolHiddenLadders(schoolId))) return { ok: false, matched: 0, updated: 0 }
+  if (!school) return { ok: false, matched: 0, updated: 0 }
+  const foundKid = kidId ? locate(kidId) : null
+  const scopeClass = foundKid?.cls?.id || classId
+  const hidden = hiddenLaddersForChild(schoolId, scopeClass, kidId)
+  if (!ladderIsOpen(next, hidden)) {
+    const error = new Error(
+      kidId
+        ? 'That ladder is turned off for this child.'
+        : classId
+          ? 'That ladder is turned off for this class.'
+          : 'That ladder is turned off for this school.',
+    )
+    error.status = 422
+    throw error
+  }
   const targets = []
   for (const cls of school.classes) {
     if (classId && cls.id !== classId) continue
@@ -1084,12 +1101,77 @@ export async function setSchoolYearStart(schoolId, firstMonth) {
   return { ok: true, schoolId, firstMonth: schoolYearStart(schoolId), gradeEnds: null }
 }
 
-export async function setSchoolLadders(schoolId, hidden) {
-  if (!IS_DEMO) return mashpia.setSchoolLadders({ schoolId, hidden })
-  setSchoolHiddenLaddersStore(schoolId, hidden)
+function scopeRows(rows, idKey) {
+  const out = []
+  for (const row of rows || []) {
+    const id = row?.[idKey] ?? row?.id
+    const ladder = Number(row?.ladder)
+    const enabled = row?.enabled
+    if (id == null || id === '' || ladder < 5 || ladder > 12) continue
+    if (enabled !== true && enabled !== false) continue
+    out.push({ ...row, [idKey]: id, ladder, enabled })
+  }
+  return out
+}
+
+export async function getSchoolLadders(schoolId) {
+  if (!IS_DEMO) return mashpia.getSchoolLadders(schoolId)
+  const school = ROSTER.find((s) => s.id === schoolId)
+  if (!school) return null
+  return demoLadderSettings(schoolId)
+}
+
+export async function setSchoolLadders(schoolId, hidden, scopes) {
+  if (!IS_DEMO) {
+    return mashpia.setSchoolLadders({
+      schoolId,
+      hidden,
+      classes: scopes ? scopes.classes : undefined,
+      children: scopes ? scopes.children : undefined,
+      sendScopes: scopes != null,
+    })
+  }
+  const school = ROSTER.find((s) => s.id === schoolId)
+  if (!school) {
+    const error = new Error('School not found.')
+    error.status = 404
+    throw error
+  }
+  if (scopes == null) {
+    setSchoolHiddenLaddersStore(schoolId, hidden)
+  } else {
+    const classIds = new Set(school.classes.map((cls) => String(cls.id)))
+    const kids = new Map()
+    for (const cls of school.classes) {
+      for (const kid of cls.kids) kids.set(String(kid.id), cls.id)
+    }
+    const classes = {}
+    for (const row of scopeRows(scopes.classes, 'classId')) {
+      const classId = String(row.classId)
+      if (!classIds.has(classId)) {
+        const error = new Error('That class is not in this school.')
+        error.status = 422
+        throw error
+      }
+      if (!classes[classId]) classes[classId] = {}
+      classes[classId][row.ladder] = row.enabled
+    }
+    const children = {}
+    for (const row of scopeRows(scopes.children, 'userId')) {
+      const userId = String(row.userId)
+      const classId = kids.get(userId)
+      if (!classId) {
+        const error = new Error('That soldier is not in this school.')
+        error.status = 422
+        throw error
+      }
+      if (!children[userId]) children[userId] = { classId, ladders: {} }
+      children[userId].ladders[row.ladder] = row.enabled
+    }
+    setLadderScopeStore(schoolId, { hidden, classes, children })
+  }
   invalidate()
-  const hiddenLadders = schoolHiddenLadders(schoolId)
-  return { ok: true, schoolId, hiddenLadders }
+  return demoLadderSettings(schoolId)
 }
 
 export function removeSchoolDedication(schoolId) {

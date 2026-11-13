@@ -30,10 +30,6 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
     if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
         wwtcError('School not found.', 404);
     }
-    $schoolHidden = function_exists('wwtcHiddenLaddersForSchool') ? wwtcHiddenLaddersForSchool($schoolId) : [];
-    if ($schoolHidden && function_exists('wwtcLadderIsHidden') && wwtcLadderIsHidden($ladder, $schoolHidden)) {
-        wwtcError('That ladder is turned off for this school.', 422);
-    }
 
     $classId = (isset($input['classId']) && $input['classId'] !== '' && $input['classId'] !== null)
         ? (int) $input['classId'] : 0;
@@ -68,6 +64,20 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
         if (!wwtcCanManageSchool($actor, $schoolId, $schoolIds)) {
             wwtcError('You do not have permission to perform this action.', 403);
         }
+    }
+
+    // The closest switch wins: one child, else the class, else the school.
+    // A whole-class assignment uses the class switch and does not look at
+    // each child's own row. The child's picker still hides a ladder that is
+    // off for that child.
+    if (function_exists('wwtcLadderOpenForScope') && !wwtcLadderOpenForScope($ladder, $schoolId, $classId, $kidId)) {
+        if ($kidId) {
+            wwtcError('That ladder is turned off for this child.', 422);
+        }
+        if ($classId) {
+            wwtcError('That ladder is turned off for this class.', 422);
+        }
+        wwtcError('That ladder is turned off for this school.', 422);
     }
 
     // Scope: one soldier, one class, or the whole school. Every registered
@@ -134,8 +144,23 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-year')
     ]);
 }
 
+// Which ladders this school offers, including class and child overrides.
+// HQ or that school's admin. Class names only. Child rows are ids — names
+// stay on the staff platoon roll and are not in this payload.
+if ($method === 'GET' && $path === '/admin/school-ladders') {
+    $schoolId = (int) ($_GET['schoolId'] ?? 0);
+    if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
+        wwtcError('School not found.', 404);
+    }
+    wwtcRequireSchoolAdmin($schoolId);
+    wwtcJson(wwtcSchoolLadderAdminPayload($schoolId));
+}
+
 // Which ladders this school offers. HQ or that school's admin. Missing table
 // is a 503, same as the school-year setting. No student names.
+// `hidden` is the whole-school off list (unchanged). `classes` and `children`,
+// when present, replace that school's explicit overrides. Omit them to leave
+// class and child rows alone.
 if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-ladders') {
     $input = wwtcInput();
     $schoolId = (int) ($input['schoolId'] ?? 0);
@@ -146,15 +171,105 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-ladder
     if (!wwtcSchoolLaddersReady()) {
         wwtcError('Ladder switches are not installed yet. Run api/sql/wwtc_school_ladders.sql on mashpia.', 503);
     }
+    $hasScopes = array_key_exists('classes', $input) || array_key_exists('children', $input);
+    if ($hasScopes && !wwtcLadderScopesReady()) {
+        wwtcError('Ladder switches for a class or a child are not installed yet. Run api/sql/wwtc_ladder_scopes.sql on mashpia.', 503);
+    }
     $hidden = wwtcNormalizeHiddenLadders($input['hidden'] ?? $input['ladders'] ?? []);
-    wwtcSaveHiddenLadders($schoolId, $hidden);
+    $classRows = null;
+    $childRows = null;
+    $classByUser = [];
+    if (array_key_exists('classes', $input)) {
+        $classRows = wwtcNormalizeScopeRows($input['classes'], 'classId');
+        wwtcAssertClassesInSchool($schoolId, array_column($classRows, 'id'));
+    }
+    if (array_key_exists('children', $input)) {
+        $childRows = wwtcNormalizeScopeRows($input['children'], 'userId');
+        $classByUser = wwtcAssertChildrenInSchool($schoolId, array_column($childRows, 'id'));
+    }
+    $MASHPIA_DB->beginTransaction();
+    try {
+        wwtcSaveHiddenLadders($schoolId, $hidden);
+        if ($hasScopes) {
+            wwtcSaveLadderScopes($schoolId, $classRows, $childRows, $classByUser);
+        }
+        $MASHPIA_DB->commit();
+    } catch (Throwable $e) {
+        if ($MASHPIA_DB->inTransaction()) {
+            $MASHPIA_DB->rollBack();
+        }
+        throw $e;
+    }
     wwtcAfterWrite();
-    wwtcJson([
-        'ok' => true,
-        'schoolId' => $schoolId,
-        'hiddenLadders' => $hidden,
-        'ladders' => wwtcLadderSwitchList($hidden),
-    ]);
+    wwtcJson(wwtcSchoolLadderAdminPayload($schoolId));
+}
+
+/**
+ * @param list<int> $classIds
+ */
+function wwtcAssertClassesInSchool(int $schoolId, array $classIds): void
+{
+    $unique = [];
+    foreach ($classIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $unique[$id] = $id;
+        }
+    }
+    if (!$unique) {
+        return;
+    }
+    global $MASHPIA_DB;
+    $ids = array_values($unique);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT class_id FROM classes WHERE school_id = ? AND class_id IN (' . $marks . ')'
+    );
+    $stmt->execute(array_merge([$schoolId], $ids));
+    $found = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+        $found[(int) $id] = true;
+    }
+    if (count($found) !== count($ids)) {
+        wwtcError('That class is not in this school.', 422);
+    }
+}
+
+/**
+ * @param list<int> $userIds
+ * @return array<int,int> user_id => class_id
+ */
+function wwtcAssertChildrenInSchool(int $schoolId, array $userIds): array
+{
+    $unique = [];
+    foreach ($userIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $unique[$id] = $id;
+        }
+    }
+    if (!$unique) {
+        return [];
+    }
+    global $MASHPIA_DB;
+    $ids = array_values($unique);
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT user_id, class_id FROM users WHERE school_id = ? AND user_id IN (' . $marks . ')'
+    );
+    $stmt->execute(array_merge([$schoolId], $ids));
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $classId = (int) $row['class_id'];
+        if ($classId <= 0) {
+            wwtcError('That soldier is not in this school.', 422);
+        }
+        $out[(int) $row['user_id']] = $classId;
+    }
+    if (count($out) !== count($ids)) {
+        wwtcError('That soldier is not in this school.', 422);
+    }
+    return $out;
 }
 
 if ($method === 'GET' && $path === '/dedication') {
