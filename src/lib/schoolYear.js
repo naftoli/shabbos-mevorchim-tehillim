@@ -28,8 +28,9 @@ export function normalizeFirstMonth(month) {
 
 /**
  * First month for one school. No settings row — null, a missing field, or a
- * blank month — is Tishrei, the same year every school has until an admin
- * saves another month.
+ * blank month — is Tishrei, the first month of the campaign year. A saved
+ * month stays. HQ sets it. A school admin sets it only after HQ turns
+ * allowSchoolPick on for that school.
  */
 export function firstMonthFromRow(row) {
   if (row == null || row === '') return DEFAULT_FIRST_MONTH
@@ -39,6 +40,37 @@ export function firstMonthFromRow(row) {
     return normalizeFirstMonth(stored)
   }
   return normalizeFirstMonth(row)
+}
+
+/**
+ * HQ's per-school switch. Missing, 0, false, or anything but an explicit
+ * on value is off, including before the column exists.
+ */
+export function allowSchoolPickFromRow(row) {
+  if (row == null || typeof row !== 'object') return false
+  const raw = row.allowSchoolPick !== undefined ? row.allowSchoolPick : row.allow_school_pick
+  return raw === true || raw === 1 || raw === '1' || raw === 'true'
+}
+
+/**
+ * HQ always sees the start-month picker. A school admin sees it only when
+ * HQ has turned the switch on for that school.
+ */
+export function schoolYearPickerVisible({ isSuper = false, allowSchoolPick = false } = {}) {
+  return !!isSuper || allowSchoolPickFromRow({ allowSchoolPick })
+}
+
+/**
+ * Who may save the start month. HQ (auth super, or the demo kind super)
+ * always may. A school admin may only when the switch is on.
+ */
+export function maySetSchoolYear(actor, allowSchoolPick = false) {
+  if (!actor || typeof actor !== 'object') return false
+  const type = actor.type || ''
+  if (type !== '' && type !== 'admin') return false
+  if (actor.auth === 'super' || actor.kind === 'super') return true
+  if (type !== 'admin' && actor.kind !== 'school') return false
+  return allowSchoolPickFromRow({ allowSchoolPick })
 }
 
 /** Adar I and Adar II occupy Adar's one slot. Anything else is unchanged. */

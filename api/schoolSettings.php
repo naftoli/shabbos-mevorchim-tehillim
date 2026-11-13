@@ -7,6 +7,10 @@ require_once __DIR__ . '/schoolYear.php';
 /**
  * wwtc_school_settings. Missing table or missing row → Tishrei, today's year.
  * Never writes Mashpia's schools table.
+ *
+ * allow_school_pick is optional. Until api/sql/wwtc_school_year_pick.sql has
+ * been run by hand, the column is absent and every school stays off: HQ can
+ * still save first_month, and a school admin cannot.
  */
 
 function wwtcSchoolSettingsReady(): bool
@@ -14,14 +18,25 @@ function wwtcSchoolSettingsReady(): bool
     return function_exists('wwtcColumnExists') && wwtcColumnExists('wwtc_school_settings', 'first_month');
 }
 
-/** @return array<int,string> school_id => first month, Tishrei rows included */
-function wwtcAllSchoolFirstMonths(): array
+function wwtcSchoolPickReady(): bool
+{
+    return function_exists('wwtcColumnExists') && wwtcColumnExists('wwtc_school_settings', 'allow_school_pick');
+}
+
+/**
+ * One read of the settings table. The pick column is selected only after
+ * the migration has been applied, so a database that still has the original
+ * table keeps returning saved start months.
+ *
+ * @return array{months:array<int,string>,pick:array<int,bool>}
+ */
+function wwtcSchoolSettingsCache(): array
 {
     static $cache = null;
     if ($cache !== null) {
         return $cache;
     }
-    $cache = [];
+    $cache = ['months' => [], 'pick' => []];
     if (!wwtcSchoolSettingsReady()) {
         return $cache;
     }
@@ -29,16 +44,41 @@ function wwtcAllSchoolFirstMonths(): array
     if (!isset($MASHPIA_DB) || !$MASHPIA_DB instanceof PDO) {
         return $cache;
     }
+    $pickReady = wwtcSchoolPickReady();
+    $sql = 'SELECT school_id, first_month FROM wwtc_school_settings';
+    if ($pickReady) {
+        $sql = 'SELECT school_id, first_month, allow_school_pick FROM wwtc_school_settings';
+    }
     try {
-        $rows = $MASHPIA_DB->query('SELECT school_id, first_month FROM wwtc_school_settings')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $MASHPIA_DB->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
-            $cache[(int) $row['school_id']] = wwtcFirstMonthFromRow($row);
+            $id = (int) $row['school_id'];
+            $cache['months'][$id] = wwtcFirstMonthFromRow($row);
+            if ($pickReady) {
+                $cache['pick'][$id] = wwtcAllowSchoolPickFromRow($row);
+            }
         }
     } catch (Throwable $e) {
         error_log('WWTC school-year settings read failed: ' . $e->getMessage());
-        $cache = [];
+        $cache = ['months' => [], 'pick' => []];
     }
     return $cache;
+}
+
+/** @return array<int,string> school_id => first month, Tishrei rows included */
+function wwtcAllSchoolFirstMonths(): array
+{
+    return wwtcSchoolSettingsCache()['months'];
+}
+
+/** HQ's per-school switch. Missing column or missing row is off. */
+function wwtcSchoolAllowsOwnStart(int $schoolId): bool
+{
+    if ($schoolId <= 0 || !wwtcSchoolPickReady()) {
+        return false;
+    }
+    $pick = wwtcSchoolSettingsCache()['pick'];
+    return isset($pick[$schoolId]) && $pick[$schoolId] === true;
 }
 
 function wwtcSchoolFirstMonth(int $schoolId): string
@@ -74,7 +114,21 @@ function wwtcSaveSchoolFirstMonth(int $schoolId, string $firstMonth): void
     );
     $stmt->execute([':id' => $schoolId, ':month' => $month]);
     // The in-request cache would keep the old month. The save response returns
-    // the new value; the next request reads the row.
+    // the new value; the next request reads the row. first_month is the only
+    // column this writes, so allow_school_pick stays as it was (or the column
+    // default, 0, when the row is new and the migration has been applied).
+}
+
+/** HQ only. Leaves first_month alone on an existing row. A new row stores Tishrei. */
+function wwtcSaveSchoolAllowsOwnStart(int $schoolId, bool $allow): void
+{
+    global $MASHPIA_DB;
+    $stmt = $MASHPIA_DB->prepare(
+        'INSERT INTO wwtc_school_settings (school_id, allow_school_pick)
+         VALUES (:id, :allow)
+         ON DUPLICATE KEY UPDATE allow_school_pick = VALUES(allow_school_pick), updated_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([':id' => $schoolId, ':allow' => $allow ? 1 : 0]);
 }
 
 /** Julian day of a campaign month in a Hebrew year. Plain Adar uses Adar I in a leap year. */

@@ -86,6 +86,39 @@ foreach ($leap as $slot) {
 }
 check('leap Adars share the Cheshvan cell and position 2', $shared);
 
+check('a saved month stays when the pick flag is off', wwtcFirstMonthFromRow(['first_month' => 'Shvat', 'allow_school_pick' => 0]) === 'Shvat');
+check('a saved month stays when the pick column is absent', wwtcFirstMonthFromRow(['first_month' => 'Nissan']) === 'Nissan');
+check('a missing pick flag is off', wwtcAllowSchoolPickFromRow(null) === false
+    && wwtcAllowSchoolPickFromRow([]) === false
+    && wwtcAllowSchoolPickFromRow(['first_month' => 'Shvat']) === false
+    && wwtcAllowSchoolPickFromRow(['allow_school_pick' => 0]) === false
+    && wwtcAllowSchoolPickFromRow(['allowSchoolPick' => false]) === false
+    && wwtcAllowSchoolPickFromRow(['allow_school_pick' => '0']) === false);
+check('an explicit pick flag is on', wwtcAllowSchoolPickFromRow(['allow_school_pick' => 1]) === true
+    && wwtcAllowSchoolPickFromRow(['allow_school_pick' => '1']) === true
+    && wwtcAllowSchoolPickFromRow(['allowSchoolPick' => true]) === true
+    && wwtcAllowSchoolPickFromRow(['allowSchoolPick' => 'true']) === true);
+check('HQ can set the month when the school cannot pick', wwtcActorMaySetSchoolYear(['type' => 'admin', 'auth' => 'super'], false) === true);
+check('a school admin cannot set the month until HQ allows it', wwtcActorMaySetSchoolYear(['type' => 'admin', 'auth' => 'school'], false) === false
+    && wwtcActorMaySetSchoolYear(['type' => 'admin', 'auth' => ''], false) === false);
+check('a school admin can set the month when HQ allows it', wwtcActorMaySetSchoolYear(['type' => 'admin', 'auth' => 'school'], true) === true
+    && wwtcActorMaySetSchoolYear(['kind' => 'school'], true) === true);
+check('a soldier cannot set the month', wwtcActorMaySetSchoolYear(['type' => 'kid', 'auth' => 'super'], true) === false);
+check('demo HQ can set the month', wwtcActorMaySetSchoolYear(['kind' => 'super'], false) === true);
+
+$pickSql = (string) file_get_contents(__DIR__ . '/../../api/sql/wwtc_school_year_pick.sql');
+check('the pick migration is a separate file the app does not run', strpos($pickSql, 'Do not run this from the app') !== false);
+check('the pick column defaults off', strpos($pickSql, 'allow_school_pick TINYINT(1) NOT NULL DEFAULT 0') !== false);
+$settingsSrc = (string) file_get_contents(__DIR__ . '/../../api/schoolSettings.php');
+check(
+    'saved months still read before the pick column exists',
+    strpos($settingsSrc, 'SELECT school_id, first_month FROM wwtc_school_settings') !== false
+);
+$adminSrc = (string) file_get_contents(__DIR__ . '/../../api/routes/admin.php');
+check('the school-year route asks who may set the month', strpos($adminSrc, 'wwtcActorMaySetSchoolYear') !== false);
+check('only HQ can turn the picker on', strpos($adminSrc, 'Only HQ can let a school pick its start month.') !== false);
+check('the route names the pick migration', strpos($adminSrc, 'api/sql/wwtc_school_year_pick.sql') !== false);
+
 if ($failed > 0) {
     fwrite(STDERR, "$failed check(s) failed\n");
     exit(1);

@@ -34,8 +34,9 @@ function wwtcNormalizeFirstMonth(string $month): string
 
 /**
  * First month for one school. No settings row — null, false, a missing
- * field, or a blank month — is Tishrei. Every school stays on Tishrei until
- * an admin saves another month.
+ * field, or a blank month — is Tishrei, the first month of the campaign
+ * year. A saved month stays. HQ sets it. A school admin sets it only after
+ * HQ turns allow_school_pick on for that school.
  *
  * @param array<string,mixed>|string|null|false $row
  */
@@ -65,6 +66,55 @@ function wwtcFirstMonthFromRow($row): string
 function wwtcIsDefaultSchoolYear(string $month): bool
 {
     return wwtcNormalizeFirstMonth($month) === WWTC_DEFAULT_FIRST_MONTH;
+}
+
+/**
+ * Whether HQ has let this school pick its own start month.
+ * A missing column, a missing key, 0, false, or anything other than an
+ * explicit on value is off.
+ *
+ * @param array<string,mixed>|null|false $row
+ */
+function wwtcAllowSchoolPickFromRow($row): bool
+{
+    if (!is_array($row)) {
+        return false;
+    }
+    if (array_key_exists('allow_school_pick', $row)) {
+        $raw = $row['allow_school_pick'];
+    } elseif (array_key_exists('allowSchoolPick', $row)) {
+        $raw = $row['allowSchoolPick'];
+    } else {
+        return false;
+    }
+    return $raw === true || $raw === 1 || $raw === '1' || $raw === 'true';
+}
+
+/**
+ * Who may write the start month. HQ (auth super, or the demo kind super)
+ * always may. A school admin may only when HQ has turned the switch on.
+ * Anyone who is not an admin may not.
+ *
+ * @param array<string,mixed>|null $actor
+ */
+function wwtcActorMaySetSchoolYear($actor, bool $allowSchoolPick): bool
+{
+    if (!is_array($actor)) {
+        return false;
+    }
+    $type = (string) ($actor['type'] ?? '');
+    if ($type !== '' && $type !== 'admin') {
+        return false;
+    }
+    $auth = (string) ($actor['auth'] ?? '');
+    $kind = (string) ($actor['kind'] ?? '');
+    if ($auth === 'super' || $kind === 'super') {
+        return true;
+    }
+    if ($type !== 'admin' && $kind !== 'school') {
+        return false;
+    }
+    return $allowSchoolPick;
 }
 
 /** Adar I and Adar II occupy Adar's one slot. */

@@ -118,29 +118,58 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/admin/ladder') {
 }
 
 // School year start. The picked month is that school's first Shabbos Mevorchim
-// (Mevorchim of the month) and quota position 1. HQ or that school's admin only.
-// No student names. Missing table → 503, same as dedications.
+// (Mevorchim of the month) and quota position 1. No student names.
+// HQ (auth super) may set the month for any school, and may turn on
+// allowSchoolPick so that school's admin can pick. The switch is off until
+// HQ turns it on. A school admin who sends firstMonth while it is off is
+// rejected. Missing first_month table → 503. Missing allow_school_pick
+// column → the switch stays off and only a request that tries to change it
+// returns 503 (existing months still save for HQ).
 if (($method === 'PUT' || $method === 'POST') && $path === '/admin/school-year') {
     $input = wwtcInput();
     $schoolId = (int) ($input['schoolId'] ?? 0);
-    $firstMonth = trim((string) ($input['firstMonth'] ?? ''));
-    if (!in_array($firstMonth, wwtcPlainMonthNames(), true)) {
+    $hasMonth = array_key_exists('firstMonth', $input);
+    $hasPick = array_key_exists('allowSchoolPick', $input);
+    $firstMonth = $hasMonth ? trim((string) $input['firstMonth']) : '';
+    if ($hasMonth && !in_array($firstMonth, wwtcPlainMonthNames(), true)) {
+        wwtcError('Choose the month the school year starts in.', 422);
+    }
+    if (!$hasMonth && !$hasPick) {
         wwtcError('Choose the month the school year starts in.', 422);
     }
     if (!$schoolId || !isset(wwtcEligibleSchools()[$schoolId])) {
         wwtcError('School not found.', 404);
     }
-    wwtcRequireSchoolAdmin($schoolId);
-    if (!wwtcSchoolSettingsReady()) {
+    $actor = wwtcRequireSchoolAdmin($schoolId);
+    if ($hasPick && (($actor['auth'] ?? '') !== 'super')) {
+        wwtcError('Only HQ can let a school pick its start month.', 403);
+    }
+    if ($hasMonth && !wwtcActorMaySetSchoolYear($actor, wwtcSchoolAllowsOwnStart($schoolId))) {
+        wwtcError('Only HQ can change the start month for this school.', 403);
+    }
+    if ($hasMonth && !wwtcSchoolSettingsReady()) {
         wwtcError('School-year storage is not installed yet. Run api/sql/wwtc_school_settings.sql on mashpia.', 503);
     }
-    wwtcSaveSchoolFirstMonth($schoolId, $firstMonth);
+    if ($hasPick && !wwtcSchoolPickReady()) {
+        wwtcError('The school start-month switch is not installed yet. Run api/sql/wwtc_school_year_pick.sql on mashpia.', 503);
+    }
+    if ($hasMonth) {
+        wwtcSaveSchoolFirstMonth($schoolId, $firstMonth);
+    }
+    $allow = $hasPick
+        ? wwtcAllowSchoolPickFromRow(['allowSchoolPick' => $input['allowSchoolPick']])
+        : wwtcSchoolAllowsOwnStart($schoolId);
+    if ($hasPick) {
+        wwtcSaveSchoolAllowsOwnStart($schoolId, $allow);
+    }
+    $savedMonth = $hasMonth ? $firstMonth : wwtcSchoolFirstMonth($schoolId);
     wwtcAfterWrite();
     wwtcJson([
         'ok' => true,
         'schoolId' => $schoolId,
-        'firstMonth' => $firstMonth,
-        'gradeEnds' => wwtcGradeEndMonth($firstMonth),
+        'firstMonth' => $savedMonth,
+        'gradeEnds' => wwtcGradeEndMonth($savedMonth),
+        'allowSchoolPick' => $allow,
     ]);
 }
 

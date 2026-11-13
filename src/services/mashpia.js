@@ -257,6 +257,9 @@ export const markSchoolGraphicsSent = (schoolId) =>
 export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
   write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
 
+export const setSchoolYearPick = ({ schoolId, allowSchoolPick }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, allowSchoolPick }, as: 'admin' })
+
 export const getSchoolLadders = (schoolId) =>
   req(`/admin/school-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
 

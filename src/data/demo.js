@@ -6,7 +6,7 @@
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
 import { hiddenForScope } from '@/lib/schoolLadders.js'
 import { campaignMonths, currentHebrewYear } from '@/lib/hebrewYear.js'
-import { firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
+import { allowSchoolPickFromRow, firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
 import { applySoldierReport, planReport } from '@/lib/overEntry.js'
 
@@ -466,6 +466,28 @@ export function setSchoolYearStartStore(schoolId, firstMonth) {
     const all = loadYearStarts()
     all[schoolId] = normalizeFirstMonth(firstMonth)
     localStorage.setItem(YEAR_START_KEY, JSON.stringify(all))
+  } catch { /* private mode */ }
+}
+// HQ's per-school switch. Missing entry = off. The school admin does not
+// see the start-month picker until HQ turns this on.
+const YEAR_PICK_KEY = 'wwtc.demo.yearPick'
+function loadYearPicks() {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    return JSON.parse(localStorage.getItem(YEAR_PICK_KEY) || '{}')
+  } catch { return {} }
+}
+export function schoolAllowsOwnStart(schoolId) {
+  const store = loadYearPicks()
+  if (!Object.prototype.hasOwnProperty.call(store, schoolId)) return false
+  return allowSchoolPickFromRow({ allowSchoolPick: store[schoolId] })
+}
+export function setSchoolYearPickStore(schoolId, allow) {
+  try {
+    if (typeof localStorage === 'undefined') return
+    const all = loadYearPicks()
+    all[schoolId] = allow === true || allow === 1 || allow === '1' || allow === 'true'
+    localStorage.setItem(YEAR_PICK_KEY, JSON.stringify(all))
   } catch { /* private mode */ }
 }
 
