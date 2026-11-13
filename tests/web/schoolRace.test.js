@@ -77,6 +77,16 @@ test('a shared rank inside the top 10 is one badge number, and 11+ stays a plain
   }
 })
 
+test('schools ranked uses the same top-base badge and plain place as the race', () => {
+  const reports = readFileSync(join(root, 'src/pages/Reports.jsx'), 'utf8')
+  assert.match(reports, /const ordered = rankRace\(rows, sort\)/)
+  assert.match(reports, /<RaceToggle value=\{sort\} onChange=\{setSort\} \/>/)
+  assert.match(reports, /<SchoolPlace rank=\{r\.rank\} \/>/)
+  assert.match(reports, /<TopBaseBadge rank=\{rank\} className="h-10 w-auto" \/>/)
+  assert.match(reports, /\{rank\}/)
+  assert.equal(reports.includes('<Rank n={i} />\n                <SchoolLogo'), false)
+})
+
 test('the home race shows the top-base badge for places 1-10 on every tab', () => {
   assert.match(home, /const ranked = rankRace\(schools, sort\)/)
   assert.match(home, /<RaceToggle value=\{sort\} onChange=\{setSort\} \/>/)

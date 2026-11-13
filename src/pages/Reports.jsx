@@ -7,7 +7,8 @@ import { CheckMark, IconImg, Meter, Pending, RaceToggle, StarMark } from '@/comp
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
 import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
-import { rankSchools } from '@/lib/schoolRace.js'
+import { rankRace } from '@/lib/schoolRace.js'
+import { TopBaseBadge } from '@/components/brandMarks.jsx'
 import { BREADCRUMB_STYLE, MONTH_CHOOSER } from '@/lib/decisions.js'
 import {
   CAMPAIGN_YEAR,
@@ -69,9 +70,24 @@ function hebrewMark(row) {
   return GRADE_LABEL[row.grade] || formatClassName(row.grade)
 }
 
+// Class rows inside one base. These are platoon places, not a school's
+// nationwide rank, so they keep the small place mark.
 function Rank({ n }) {
   if (n > 2) return <span className="font-display text-lg font-bold italic text-blue-accent">{n + 1}</span>
   return <img src={asset(`design/${MEDALS[n]}.png`)} alt={`#${n + 1}`} className="h-8 w-auto" />
+}
+
+// Same place mark as The Race: Top Base art for 1–10, a plain number after.
+// The slot stays about as wide as the old medal so the card does not open a gap.
+function SchoolPlace({ rank }) {
+  if (rank <= 10) {
+    return (
+      <span className="grid w-9 justify-self-start place-items-center">
+        <TopBaseBadge rank={rank} className="h-10 w-auto" />
+      </span>
+    )
+  }
+  return <span className="justify-self-start font-display text-[20px] font-bold italic leading-none text-blue-accent">{rank}</span>
 }
 
 export default function Reports() {
@@ -120,7 +136,7 @@ export default function Reports() {
     pctParticipated: r.pctParticipated || 0,
     minutesPct: r.minutesPct || 0,
   })), [army.data])
-  const ordered = rankSchools(rows, sort)
+  const ordered = rankRace(rows, sort)
   const pctGoal = useMemo(() => {
     const goal = rows.reduce((a, r) => a + (r.goal || 0), 0)
     const done = rows.reduce((a, r) => a + (r.accomplished || 0), 0)
@@ -237,7 +253,7 @@ function ArmyView({ rows, raw, error, loading, reload, sort, setSort, pctGoal, o
             const pct = r.goal ? Math.round((r.accomplished / r.goal) * 100) : 0
             return (
               <div key={r.id} className="grid items-center gap-3 px-4 py-3 sm:grid-cols-[auto_auto_minmax(0,1.1fr)_minmax(0,1.5fr)_auto] sm:px-5">
-                <Rank n={i} />
+                <SchoolPlace rank={r.rank} />
                 <SchoolLogo school={{ name: r.name, color: COLORS[i % COLORS.length], logo: r.logo }} size={44} />
                 <span className="min-w-0 whitespace-normal font-display text-[17px] font-bold leading-tight text-navy">{r.name}<span className="mt-0.5 block text-xs font-semibold text-muted">{fmt(r.registered)} soldiers</span></span>
                 <span className="min-w-0">
