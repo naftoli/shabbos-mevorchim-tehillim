@@ -6,9 +6,10 @@ import { useLiveData } from '@/lib/useLiveData.js'
 import { GRADE_LABEL, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { nextShabbosMevorchim } from '@/lib/shabbosMevorchim.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
-import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn } from '@/lib/general613.js'
+import { BOT_NAME, autoOpenFor, ladderMenu, openingGreeting, peekText, quickRepliesFor, readSituation, scriptedTurn, stepLadder } from '@/lib/general613.js'
 import { canListen, canSpeak, releaseCallMic, speak, startRecognition, stopSpeaking, stripForSpeech } from '@/lib/speech.js'
 import { answerSheet, ladderChangeReply, ladderConfirmedReply, ladderStepReply, looksLikeEcho, voiceCommand, wantsLadderChange } from '@/lib/kidAnswers.js'
+import { formatClassName } from '@/lib/formatClassName.js'
 import { OFF_TOPIC_REPLY, topicDecision, turnPlan } from '@/lib/topicGate.js'
 import { defaultChatReply } from '@/lib/defaultChat.js'
 import { NO_MATCH_REPLY } from '@/lib/siteSearch.js'
@@ -25,6 +26,7 @@ import {
   readTrainingAnswer,
   rememberScript,
   rememberTraining,
+  reviewMonthsFromProgress,
   selectCommanderScripts,
   standFacts,
   suppressLegacyGreeting,
@@ -63,7 +65,7 @@ function aiContext(ctx) {
       : null,
     missionsTotal: ctx.progress?.missionsTotal ?? 0,
     medal: medal ? { current: medal.current?.name ?? null, next: medal.next?.name ?? null, missionsToNext: medal.missionsToNext ?? null } : null,
-    rank: s ? { className: s.className, classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
+    rank: s ? { className: formatClassName(s.className), classRank: s.classRank, totalClasses: s.totalClasses, schoolName: s.schoolName, schoolRank: s.schoolRank, totalSchools: s.totalSchools, needToPass: s.needToPass } : null,
     streak: ctx.streakInfo ?? null,
     scripts: scriptPayload(ctx.commanderScripts),
     scriptNow: Array.isArray(ctx.scriptNow) ? ctx.scriptNow : [],
@@ -84,7 +86,7 @@ function scriptPayload(scripts) {
 function buildReply(text, ctx) {
   const t = ` ${text.toLowerCase()} `
   const has = (...ks) => ks.some((k) => t.includes(k))
-  const { firstName, ladder, gradeLabel, progress, social, sMevorchim, monthHeb } = ctx
+  const { firstName, ladder, grade, gradeLabel, hiddenLadders, progress, social, sMevorchim, monthHeb } = ctx
   const cur = progress?.current
   const medal = progress?.medal
   const plural = (n) => (n === 1 ? '' : 's')
@@ -138,8 +140,8 @@ function buildReply(text, ctx) {
   }
   // --- harder / easier ladder ---
   if (has('harder', 'hardest', 'steep', 'fastest', 'easier', 'easiest', 'slower', 'gentler', 'move up', 'challenge', 'bigger', 'faster ladder')) {
-    const target = ladder && ladder > 5 ? ladder - 1 : ladder
-    if (ladder && ladder > 5) return `Want a bigger challenge? Ladder ${target} finishes training by ${GRADE_LABEL[String(target)]} grade — a bit more each month than Ladder ${ladder}. If you're beating your quota already, you'd do great! Tap “Switch my ladder” when you're ready. 🌟`
+    const target = ladder ? stepLadder(grade, ladder, 'harder', hiddenLadders) : null
+    if (ladder && target != null && target !== Number(ladder)) return `Want a bigger challenge? Ladder ${target} finishes training by ${GRADE_LABEL[String(target)]} grade — a bit more each month than Ladder ${ladder}. If you're beating your quota already, you'd do great! Tap “Switch my ladder” when you're ready. 🌟`
     if (ladder) return `You're already on the steepest ladder — the fastest climb there is! Incredible, ${firstName}. 🌟`
     return `A lower ladder number is a steeper, faster climb; a higher one is gentler. Pick what feels right — tap “Pick my ladder.” 🪜`
   }
@@ -181,7 +183,7 @@ function buildReply(text, ctx) {
   if (has('rank', 'place', 'standing', 'class', 'school', 'leaderboard', 'winning', 'first place', 'who is ahead', 'who won', 'am i first')) {
     if (!social) return `Every time you say your Tehillim, you lift your whole class and school up! 🏆`
     const tail = social.classRank === 1 ? `Your class is in first place — amazing!` : social.needToPass > 0 ? `${social.needToPass} more soldier${plural(social.needToPass)} finishing moves your class up!` : `Every child counts — keep saying your Tehillim!`
-    return `Your class ${social.className} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
+    return `Your class ${formatClassName(social.className)} is #${social.classRank} of ${social.totalClasses} in ${social.schoolName}, and your school ranks #${social.schoolRank} of ${social.totalSchools} worldwide. ${tail} 🏆`
   }
   // --- perfect platoon ---
   if (has('perfect platoon', 'platoon')) {
@@ -334,7 +336,7 @@ export default function ChatBuddy() {
   const trainingRef = useRef(null)
   const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid])
   const { data: social, loading: socialLoading } = useLiveData(
-    () => (kid && kid.ladder ? getKidSocial(kid.id) : Promise.resolve(null)),
+    () => (kid ? getKidSocial(kid.id) : Promise.resolve(null)),
     [kid],
   )
   const [scriptRev, setScriptRev] = useState(0)
@@ -351,8 +353,10 @@ export default function ChatBuddy() {
       childGradeLabel: GRADE_LABEL[String(kid.grade)] ?? '',
       gradeLabel: kid.ladder ? GRADE_LABEL[String(finishGrade(kid.ladder))] : null,
       monthEn,
+      yearStart: progress.yearStart || kid.yearStart || 'Tishrei',
+      hiddenLadders: progress.hiddenLadders || kid.hiddenLadders || [],
       focusLadder,
-      ladderChoices: ladderMenu(kid.grade, monthEn),
+      ladderChoices: ladderMenu(kid.grade, monthEn, progress.yearStart || kid.yearStart || 'Tishrei', progress.hiddenLadders || kid.hiddenLadders),
       progress,
       social,
       sMevorchim: nextShabbosMevorchim(),
@@ -368,14 +372,16 @@ export default function ChatBuddy() {
   const chayolName = (kid?.name || '').trim().split(/\s+/)[0] || null
   const storedScripts = readKidScripts(typeof localStorage === 'undefined' ? null : localStorage, kidId, monthKey)
   const streaks = progress ? streakFromMissions(streakMissions(progress)) : null
-  const quota = ctx?.ladder != null && ctx?.grade != null && monthKey
-    ? missionQuota(ctx.grade, monthKey, ctx.ladder)
+  const quota = ctx?.grade != null && monthKey && (ctx?.ladder != null || progress?.customLadder)
+    ? missionQuota(ctx.grade, monthKey, ctx.ladder, progress?.customLadder, ctx?.yearStart)
     : { kapitlach: null, minutes: null }
   const facts = standFacts(social)
   const scriptInput = {
     name: chayolName,
     ladder: ctx?.ladder,
-    gradeLabel: ctx?.ladder != null ? trainByGrade(ctx.ladder) : null,
+    gradeLabel: progress?.customLadder?.finishLabel || (ctx?.ladder != null ? trainByGrade(ctx.ladder) : null),
+    customTarget: progress?.customLadder?.targetKapitlach ?? null,
+    customFinish: progress?.customLadder?.finishLabel ?? null,
     month: monthKey,
     cardsOnScreen: pathname === '/ladders',
     training: storedScripts.training,
@@ -392,6 +398,7 @@ export default function ChatBuddy() {
     streakLongest: streaks ? streaks.best : null,
     trackOpen,
     climbOpen,
+    reviewMonths: reviewMonthsFromProgress(progress),
   }
   const dueNow = ctx ? selectCommanderScripts(scriptInput) : []
   const suppressLegacy = ctx ? suppressLegacyGreeting(scriptInput) : false
@@ -407,8 +414,11 @@ export default function ChatBuddy() {
     streaks ? `${streaks.current}|${streaks.best}` : '',
     quota.kapitlach ?? '',
     quota.minutes ?? '',
+    progress?.customLadder?.targetKapitlach ?? '',
+    progress?.customLadder?.finishGrade ?? '',
     trackOpen ? 'track' : '',
     climbOpen ? 'climb' : '',
+    (scriptInput.reviewMonths || []).map((row) => `${row.month}:${row.kapitlach}:${row.minutes}:${row.met ? 1 : 0}`).join(','),
   ].join('~')
   const quickReplies = !ctx
     ? []
@@ -975,7 +985,7 @@ export default function ChatBuddy() {
       releaseCallMic()
       return
     }
-    if (kid.ladder && socialLoading) return
+    if (kid && socialLoading) return
     const input = scriptInputRef.current
     const due = input ? selectCommanderScripts(input) : []
     const suppress = input ? suppressLegacyGreeting(input) : false

@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Card, CrownIcon } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
-import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
+import { getKidProgress } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
 import MedalCoin from '@/components/MedalCoin.jsx'
@@ -53,7 +53,7 @@ export default function Medals() {
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) {
     return (
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         One moment while your medals come up.
       </PageHero>
     )
@@ -64,7 +64,7 @@ export default function Medals() {
 
   return (
     <>
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         Earn one Shabbos Mevorchim Tehillim mission each month — by saying Tehillim on Shabbos Mevorchim.
       </PageHero>
 
@@ -93,7 +93,7 @@ export default function Medals() {
             </div>
             <p className="mt-3 text-center text-sm font-semibold text-navy">
               {medal.next ? (
-                <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>.</span></>
+                <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[progress.current?.month] ?? progress.current?.month}</span>.</span></>
               ) : (
                 <>Every medal earned — amazing! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>
               )}

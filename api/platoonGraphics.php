@@ -8,8 +8,9 @@ require_once __DIR__ . '/platoonGrade.php';
  * Perfect Platoon graphics: which classes are new, the ledger, the placeholder
  * renderer, and the public/office payloads.
  *
- * The daily job reads perfect platoons through wwtcPerfectPlatoonRows(), the
- * same mission-mark query as GET /perfect-platoons. It does not open a browser.
+ * The daily job reads perfect platoons through wwtcPerfectPlatoonRows() in
+ * perfectPlatoon.php, the same roster as GET /perfect-platoons. It does not
+ * open a browser.
  *
  * Student names are never selected. School WhatsApp numbers are read only by
  * the office handlers, from wwtc_school_contacts, and never copied onto a
@@ -944,61 +945,9 @@ function wwtcNormSchoolName(string $name): string
     return trim($name);
 }
 
-// ---- perfect platoons (same query as GET /perfect-platoons) ----
-
-/**
- * Perfect platoons for one Shabbos Mevorchim julian day.
- * A class is perfect when every enrolled soldier earned the mission
- * (met count >= class size), the same rule as GET /perfect-platoons.
- * No student names are selected.
- *
- * @return array<int,array<string,mixed>>
- */
-function wwtcPerfectPlatoonRows(int $date): array
-{
-    global $MASHPIA_DB;
-    $counts = wwtcCompletionCounts($date);
-    $perfect = [];
-    foreach ($counts['sizeByClass'] as $sid => $byClass) {
-        foreach ($byClass as $cid => $size) {
-            if ($size > 0 && ($counts['metByClass'][$sid][$cid] ?? 0) >= $size) {
-                $perfect[(int) $cid] = ['sid' => (int) $sid, 'size' => (int) $size];
-            }
-        }
-    }
-    if (!$perfect || !isset($MASHPIA_DB)) {
-        return [];
-    }
-    $schools = wwtcEligibleSchools();
-    $ids = implode(',', array_map('intval', array_keys($perfect)));
-    $meta = $MASHPIA_DB->query(
-        "SELECT class_id, class_grade, class_sub, class_teacher FROM classes WHERE class_id IN ($ids)"
-    )->fetchAll(PDO::FETCH_ASSOC);
-    $out = [];
-    foreach ($meta as $c) {
-        $cid = (int) $c['class_id'];
-        if (!isset($perfect[$cid])) {
-            continue;
-        }
-        $sid = $perfect[$cid]['sid'];
-        if (!isset($schools[$sid])) {
-            continue;
-        }
-        $grade = (string) $c['class_grade'];
-        $sub = (string) ($c['class_sub'] ?? '');
-        $out[] = [
-            'schoolId' => $sid,
-            'school' => $schools[$sid],
-            'classId' => $cid,
-            'className' => $grade . ($sub !== '' ? '-' . $sub : ''),
-            'teacher' => (string) ($c['class_teacher'] ?? ''),
-            'grade' => $grade,
-            'size' => $perfect[$cid]['size'],
-            'schoolClasses' => isset($counts['sizeByClass'][$sid]) ? count($counts['sizeByClass'][$sid]) : 0,
-        ];
-    }
-    return $out;
-}
+// Perfect platoons come from wwtcPerfectPlatoonRows() in perfectPlatoon.php
+// (loaded by bootstrap.php). The copy that used mission marks was the old
+// /perfect-platoons query; the shared roster is the one the pages use.
 
 // ---- database ----
 
@@ -1499,7 +1448,7 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
         fwrite(STDERR, "Platoon graphics storage is not installed. Run api/sql/wwtc_platoon_graphics.sql once on the mashpia database.\n");
         return 1;
     }
-    $platoons = wwtcPerfectPlatoonRows($jd);
+    $platoons = wwtcPerfectPlatoonRows($jd, $year);
     $existing = wwtcLoadPlatoonGraphicRows($year, $month, null);
     $fresh = wwtcNewPlatoonJobs($platoons, $existing, $year, $month);
     $already = count($platoons) - count($fresh);

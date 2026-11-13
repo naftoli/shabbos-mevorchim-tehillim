@@ -2,10 +2,12 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { PageHero } from './_page.jsx'
 import LadderCarousel from '@/components/LadderCarousel.jsx'
+import { useCampaignClock } from '@/lib/useCampaignClock.js'
 
 export default function Ladders() {
   const { kid, changeLadder } = useAuth()
   const navigate = useNavigate()
+  const { year, currentMonth } = useCampaignClock()
 
   if (!kid) return <Navigate to="/login" replace />
 
@@ -22,7 +24,7 @@ export default function Ladders() {
       </PageHero>
 
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 8} onPick={pick} />
+        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 8} onPick={pick} year={year} firstMonth={kid.yearStart || 'Tishrei'} anchorMonth={currentMonth} hiddenLadders={kid.hiddenLadders} />
         <p className="mt-6 text-center text-sm text-muted">You can change your ladder later from your dashboard.</p>
       </div>
     </>

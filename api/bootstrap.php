@@ -14,11 +14,19 @@ declare(strict_types=1);
  *
  * Reads mirror the WWTC report pages. Writes are scoped by the bearer token to
  * the signed-in soldier's own record: POST /me/report (kapitlach/minutes marks,
- * the mark_tehillim2.php logic) and PUT /me/ladder (user_tracks.track_id). Only
- * dedications stay a 405 — the SPA keeps those client-side for now.
+ * the mark_tehillim2.php logic) and PUT /me/ladder (user_tracks.track_id).
  */
 
 require_once __DIR__ . '/compat.php';
+require_once __DIR__ . '/hebrewYear.php';
+require_once __DIR__ . '/schoolYear.php';
+require_once __DIR__ . '/schoolSettings.php';
+require_once __DIR__ . '/schoolLadders.php';
+require_once __DIR__ . '/runningTotals.php';
+require_once __DIR__ . '/quotaOverride.php';
+require_once __DIR__ . '/className.php';
+require_once __DIR__ . '/teacherName.php';
+require_once __DIR__ . '/customLadder.php';
 
 define('WWTC_PUBLIC_ROOT', dirname(__DIR__, 2));
 // Tehillim subject in user_tracks / date_tasks_missions.
@@ -45,6 +53,9 @@ const WWTC_REPORT_GRACE_DAYS = 7;
 // `classes c` and `users u` in scope. Campaign done/goal figures instead follow
 // setASR()'s roster, to stay identical to the WWTC report pages.
 const WWTC_ROSTER_WHERE = 's.school_era IS NULL AND c.class_era = 0 AND u.school_id NOT IN (82, 612)';
+
+// Perfect-platoon rule shared with the classes view. Pure helpers; no DB at load.
+require_once __DIR__ . '/perfectPlatoon.php';
 
 // Buffer the legacy includes: api/header/db.php and db.php print a plain-text
 // message and exit() when MySQL is unreachable, which would otherwise reach the
@@ -229,6 +240,29 @@ function wwtcColdCompute(string $file, callable $producer)
  * (or, where the response can't be flushed early, rebuild inline). Cold: build
  * once, under a lock. $producer must return a JSON-serializable array.
  */
+/** Drop every wwtcCached file so the next read rebuilds from live marks. */
+function wwtcFlushFileCache(): void
+{
+    $dir = wwtcCacheDir();
+    if (!is_dir($dir)) {
+        return;
+    }
+    foreach (glob($dir . '/*') ?: [] as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+    }
+    if (function_exists('wwtcForgetOverrideCache')) {
+        wwtcForgetOverrideCache();
+    }
+}
+
+/** Call after a write that changes public campaign numbers. */
+function wwtcAfterWrite(): void
+{
+    wwtcFlushFileCache();
+}
+
 function wwtcCached(string $key, callable $producer)
 {
     $file = wwtcCacheFile($key);
@@ -263,7 +297,7 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
-    return wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
+    $raw = wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
         $sm = wwtcReport($date, $year);
         $sm->setArmyResults();
         $sm->setASR($date);
@@ -277,6 +311,15 @@ function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
             'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
         ];
     });
+    // campaignBoard.php defines this once the school report is available. Overrides
+    // are applied on the way out so the file cache stays the engine's own totals.
+    if (function_exists('wwtcAdjustArmyAggregates')) {
+        $raw = wwtcAdjustArmyAggregates($raw, $date, $year);
+    }
+    if (function_exists('wwtcAdjustSchoolYearAggregates')) {
+        $raw = wwtcAdjustSchoolYearAggregates($raw, $date, $year);
+    }
+    return $raw;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -525,14 +568,11 @@ function wwtcRateLimit(string $bucket, int $limit, int $windowSeconds): void
     }
 }
 
-function wwtcActor(bool $required = true): ?array
+function wwtcActor(): array
 {
     $token = wwtcBearerToken();
     if (!$token) {
-        if ($required) {
-            wwtcError('Authentication required.', 401);
-        }
-        return null;
+        wwtcError('Authentication required.', 401);
     }
     $payload = wwtcVerifySignedPayload($token);
     if (!$payload || !in_array($payload['type'], ['kid', 'admin'], true)) {
@@ -564,35 +604,14 @@ function wwtcYear(): int
 
 /**
  * The campaign's Shabbos-Mevorchim dates for the year as [englishMonth => jd],
- * in calendar order, with Adar collapsed the way the class does (Adar/Adar II
- * only split in a leap year). English month spellings match the SPA's
- * ladders.js MONTHS, so the app can key straight off them.
+ * in calendar order. A plain year has one "Adar" (the duplicate Adar II slot
+ * from calculateSM is skipped). A leap year keeps "Adar I" and "Adar II" as
+ * separate keys so their marks never share a month. English spellings match
+ * the SPA (ladders.js / hebrewYear.js).
  */
 function wwtcMonthDates(): array
 {
-    static $dates;
-    if ($dates !== null) {
-        return $dates;
-    }
-    // SPA month spellings (ladders.js). The class uses "Cheshvon/Kisleiv/
-    // Shevat/Tamuz"; normalize to the app's forms so JSON keys line up.
-    $names = [
-        0 => 'Tishrei', 1 => 'Cheshvan', 2 => 'Kislev', 3 => 'Teves',
-        4 => 'Shvat', 5 => 'Adar', 6 => 'Adar II', 7 => 'Nissan',
-        8 => 'Iyar', 9 => 'Sivan', 10 => 'Tammuz', 11 => 'Av', 12 => 'Elul',
-    ];
-    $sm = calculateSM(wwtcYear());
-    $dates = [];
-    foreach ($sm as $index => $jd) {
-        if ($sm[6] != $sm[7] && $index == 5) {      // leap year: index 5 is Adar I
-            $dates['Adar I'] = $jd;
-            continue;
-        } elseif ($sm[6] == $sm[7] && $index == 6) { // plain year: skip the duplicate
-            continue;
-        }
-        $dates[$names[$index]] = $jd;
-    }
-    return $dates;
+    return wwtcMonthDatesForYear(wwtcYear());
 }
 
 /** The most-recent Shabbos-Mevorchim jd (the month soldiers report now). */
@@ -632,10 +651,33 @@ function wwtcReportWindowOpen(): bool
 }
 
 /** English month name for a Shabbos-Mevorchim jd, '' if unknown. */
-function wwtcMonthForDate(int $jd): string
+function wwtcMonthForDate(int $jd, ?int $year = null): string
 {
-    $month = array_search($jd, wwtcMonthDates(), true);
-    return $month === false ? '' : (string) $month;
+    if ($year !== null) {
+        return wwtcMonthNameForJd($jd, $year);
+    }
+    $name = wwtcMonthNameForJd($jd, wwtcYear());
+    if ($name !== '') {
+        return $name;
+    }
+    for ($y = wwtcYear() - 8; $y <= wwtcYear() + 1; $y++) {
+        if ($y === wwtcYear()) {
+            continue;
+        }
+        $name = wwtcMonthNameForJd($jd, $y);
+        if ($name !== '') {
+            return $name;
+        }
+    }
+    return '';
+}
+
+if (!function_exists('wwtcMonthNameForJd')) {
+    function wwtcMonthNameForJd(int $jd, int $year): string
+    {
+        $found = array_search($jd, wwtcMonthDatesForYear($year), true);
+        return $found === false ? '' : (string) $found;
+    }
 }
 
 /**
@@ -673,6 +715,46 @@ function wwtcTrackAsOf(int $userId, int $jd, int $fallbackTrack): int
     $stmt->execute([':uid' => $userId, ':boundary' => $boundary]);
     $track = $stmt->fetchColumn();
     return $track === false ? $fallbackTrack : (int) $track;
+}
+
+/** Mission id for this soldier on Shabbos-Mevorchim $date, priced as-of. */
+function wwtcMissionIdAsOf(PDO $db, array $kid, int $date): int
+{
+    $track = wwtcTrackAsOf((int) $kid['user_id'], $date, (int) ($kid['track_id'] ?? 0));
+    $stmt = $db->prepare(
+        'SELECT date_tasks_mission_id FROM date_tasks_missions
+          WHERE subject_id = ' . WWTC_SUBJECT_ID . '
+            AND start_date = :d AND end_date = :d AND school_type_id = :st
+            AND track_id = :track AND level = :lvl AND lang_id = :lang
+          LIMIT 1'
+    );
+    $stmt->execute([
+        ':d' => $date,
+        ':st' => (int) $kid['school_type_id'],
+        ':track' => $track,
+        ':lvl' => (int) $kid['level'],
+        ':lang' => (int) $kid['lang_id'],
+    ]);
+    return (int) ($stmt->fetchColumn() ?: 0);
+}
+
+/** Kapitel and minutes task rows for one mission. */
+function wwtcMissionTasks(PDO $db, int $missionId): array
+{
+    if ($missionId <= 0) {
+        return [];
+    }
+    $stmt = $db->prepare(
+        'SELECT date_task_id, grid_id, quantity, description, points
+           FROM date_tasks WHERE date_tasks_mission_id = :mid
+            AND grid_id IN (' . WWTC_GRID_KAPITELACH . ', ' . WWTC_GRID_MINUTES . ')'
+    );
+    $stmt->execute([':mid' => $missionId]);
+    $tasksByGrid = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $t) {
+        $tasksByGrid[(int) $t['grid_id']] = $t;
+    }
+    return $tasksByGrid;
 }
 
 /** The elapsed months this year, oldest first: [ ['month'=>, 'jd'=>], ... ]. */
@@ -728,16 +810,15 @@ function wwtcReport(?int $jd = null, ?int $year = null): ShabbosMevorchim
     return $byDate[$key];
 }
 
-/** English month => jd for one campaign year. Current year reuses wwtcMonthDates(). */
+/** English month => jd for one campaign year. */
 function wwtcMonthDatesForYear(int $year): array
 {
     static $cache = [];
     if (isset($cache[$year])) {
         return $cache[$year];
     }
-    if ($year === wwtcYear()) {
-        return $cache[$year] = wwtcMonthDates();
-    }
+    // SPA month spellings (ladders.js). The class uses "Cheshvon/Kisleiv/
+    // Shevat/Tamuz"; normalize to the app's forms so JSON keys line up.
     $names = [
         0 => 'Tishrei', 1 => 'Cheshvan', 2 => 'Kislev', 3 => 'Teves',
         4 => 'Shvat', 5 => 'Adar', 6 => 'Adar II', 7 => 'Nissan',
@@ -746,10 +827,10 @@ function wwtcMonthDatesForYear(int $year): array
     $sm = calculateSM($year);
     $dates = [];
     foreach ($sm as $index => $jd) {
-        if ($sm[6] != $sm[7] && $index == 5) {
+        if ($sm[6] != $sm[7] && $index == 5) {      // leap year: index 5 is Adar I
             $dates['Adar I'] = $jd;
             continue;
-        } elseif ($sm[6] == $sm[7] && $index == 6) {
+        } elseif ($sm[6] == $sm[7] && $index == 6) { // plain year: skip the duplicate
             continue;
         }
         $dates[$names[$index]] = $jd;
@@ -775,7 +856,7 @@ function wwtcQueryPeriod(): array
         $month = $aliases[$month];
     }
     if (wwtcIsHolidayMonth($month)) {
-        $name = ($month === 'Rosh Hashona' || $month === 'Rosh Hashanah') ? 'Rosh Hashana' : $month;
+        $name = $month === 'Yom Kippur' ? 'Yom Kippur' : 'Rosh Hashana';
         // A holiday boards off its own day(s) for "said", but the quota is the
         // Shabbos-Mevorchim Tishrei quota of the same year (see wwtcHolidayBoard).
         $jds = wwtcHolidayDates($year)[$name] ?? [];
@@ -868,7 +949,7 @@ function wwtcHolidayDates(int $year): array
  * which also drives perfect platoons — self-consistent across the holiday board.
  * Returns engine-shaped arrays so wwtcSchoolRow() etc. can be reused unchanged.
  */
-function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): array
+function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null, ?string $monthName = null): array
 {
     global $MASHPIA_DB;
     $year = $year ?: wwtcYear();
@@ -877,7 +958,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
     // Holiday quota is the SM-Tishrei quota, priced on the ladder each soldier was on
     // for Tishrei (as of Tishrei's own Shabbos Mevorchim), not their current ladder.
     $asofBoundary = wwtcAsOfBoundary($quotaJd);
-    return wwtcCached($key, static function () use ($doneJds, $quotaJd, $asofBoundary, $MASHPIA_DB) {
+    $board = wwtcCached($key, static function () use ($doneJds, $quotaJd, $asofBoundary, $MASHPIA_DB) {
         $kap = WWTC_GRID_KAPITELACH;
         $min = WWTC_GRID_MINUTES;
 
@@ -948,7 +1029,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
             $reported = $d !== null;
             $dk = ($reported && $d['k'] !== null) ? $d['k'] : 0;
             $dm = ($reported && $d['m'] !== null) ? $d['m'] : 0;
-            $isMet = $qk > 0 && $dk >= $qk;
+            $isMet = wwtcSoldierMetQuota($qk, $dk);
             $didPart = $dk > 0;
 
             $schools[$sid] = $names[$sid];
@@ -970,7 +1051,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
                     'schoolId' => $sid,
                     'grade' => $grade,
                     'sub' => (string) ($row['class_sub'] ?? ''),
-                    'teacher' => (string) ($row['class_teacher'] ?? ''),
+                    'teacher' => wwtcTeacherName($row['class_teacher'] ?? ''),
                 ];
             }
             $studentsBySchool[$sid][] = [
@@ -996,7 +1077,7 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
         foreach ($sizeByClass as $sid => $byClass) {
             $classesCount += count($byClass);
             foreach ($byClass as $cid => $size) {
-                if ($size > 0 && ($metByClass[$sid][$cid] ?? 0) >= $size) {
+                if (wwtcClassIsPerfect((int) ($metByClass[$sid][$cid] ?? 0), (int) $size)) {
                     $perfectPlatoons++;
                 }
             }
@@ -1022,6 +1103,17 @@ function wwtcHolidayBoard(array $doneJds, int $quotaJd, ?int $year = null): arra
             ],
         ];
     });
+    if (function_exists('wwtcRepriceHolidayBoard')) {
+        $board = wwtcRepriceHolidayBoard($board, $year, $quotaJd);
+    }
+    if ($monthName !== null && $monthName !== '') {
+        // Custom ladder first, then the one-month override (the override wins).
+        if (function_exists('wwtcApplyCustomLaddersToBoard')) {
+            $board = wwtcApplyCustomLaddersToBoard($board, (string) $monthName);
+        }
+        return wwtcOverlayHolidayBoard($board, $year, (string) $monthName);
+    }
+    return $board;
 }
 
 /** One soldier's MAX(done_qty) across a holiday's day(s) for a grid. [said, reported]. */
@@ -1125,9 +1217,15 @@ function wwtcSafeKid(array $u): array
         'ladder' => isset($u['track_id']) && $u['track_id'] !== null ? wwtcLadderFromTrack($u['track_id']) : null,
         'schoolId' => isset($u['school_id']) ? (int) $u['school_id'] : null,
         'schoolName' => $u['school_name'] ?? null,
-        'className' => trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? '')),
+        'className' => wwtcFormatClassName(trim(($u['class_grade'] ?? '') . ($u['class_sub'] ?? ''))),
         'gender' => wwtcGender($u['gender'] ?? null),
         'photoUrl' => wwtcPhotoUrl($u['wwtc_photo'] ?? null),
+        'yearStart' => function_exists('wwtcSchoolFirstMonth')
+            ? wwtcSchoolFirstMonth((int) ($u['school_id'] ?? 0))
+            : 'Tishrei',
+        'hiddenLadders' => function_exists('wwtcHiddenLaddersForSchool')
+            ? wwtcHiddenLaddersForSchool((int) ($u['school_id'] ?? 0))
+            : [],
     ];
 }
 
@@ -1226,19 +1324,22 @@ function wwtcEligibleSchools(): array
  * the mission-mark signal (date_tasks_mission_marks — the "earned this month"
  * row the teacher tool and POST /me/report both maintain) plus eligible enrolled
  * headcounts. Cheap grouped queries, so this scales to the whole army without the
- * per-student loop the summary report does. Returns:
+ * per-student loop the summary report does.
+ *
+ * This is the home-race "soldiers who finished" signal. It is not a Perfect
+ * Platoon. A class can finish every kapitlach quota and still lack mission
+ * marks, so perfect platoons use wwtcPerfectPlatoonRows() instead.
+ * Returns:
  *   [ 'metBySchool' => [sid=>n], 'sizeBySchool' => [sid=>n],
  *     'metByClass' => [sid=>[cid=>n]], 'sizeByClass' => [sid=>[cid=>n]] ]
  */
-function wwtcCompletionCounts(int $date): array
+function wwtcCompletionCounts(int $date, ?int $year = null): array
 {
     global $MASHPIA_DB;
+    $year = $year ?: wwtcYear();
     static $cache = [];
-    if (isset($cache[$date])) {
-        return $cache[$date];
-    }
-
-    return $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
+    if (!isset($cache[$date])) {
+        $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
     $met = $MASHPIA_DB->prepare(
         'SELECT u.school_id, u.class_id, COUNT(*) n
            FROM date_tasks_mission_marks mm
@@ -1274,5 +1375,7 @@ function wwtcCompletionCounts(int $date): array
         $out['sizeBySchool'][$sid] = ($out['sizeBySchool'][$sid] ?? 0) + $n;
     }
     return $out;
-    });
+        });
+    }
+    return wwtcOverlayCompletionCountsForDate($cache[$date], $date, $year);
 }

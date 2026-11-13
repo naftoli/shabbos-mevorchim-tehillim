@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { GRADE_LABEL, finishGrade } from '@/data/ladders.js'
+import { DEFAULT_FIRST_MONTH } from '@/lib/schoolYear.js'
 import LadderBreakdownTable from './LadderBreakdownTable.jsx'
 import { CrownIcon } from '@/components/ui.jsx'
 
 // Full month-by-month plan for a ladder, every grade from Pre-1A to the finish
 // grade. Each cell is the cumulative kapitel (Aleph-Beis) + minutes.
-export default function LadderBreakdown({ ladder, onClose }) {
+export default function LadderBreakdown({ ladder, onClose, year, firstMonth = DEFAULT_FIRST_MONTH, anchorMonth = null }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
     document.addEventListener('keydown', onKey)
@@ -26,8 +27,8 @@ export default function LadderBreakdown({ ladder, onClose }) {
         </div>
 
         <div className="max-h-[70vh] overflow-auto p-4">
-          <LadderBreakdownTable ladder={ladder} />
-          <p className="mt-3 text-center text-xs text-muted">Each cell shows the kapitel you say up to (from kapitel א) and the minutes. <CrownIcon className="inline-block h-3.5 w-auto align-text-bottom" /> = the whole Tehillim (קנ).</p>
+          <LadderBreakdownTable ladder={ladder} year={year} firstMonth={firstMonth} anchorMonth={anchorMonth} />
+          <p className="mt-3 text-center text-xs text-muted">Each cell shows the kapitel you say up to (from kapitel א) and the minutes. <CrownIcon className="inline-block h-3.5 w-auto align-text-bottom" /> = the whole Tehillim (קנ). Adar I and Adar II share one quota.</p>
         </div>
       </div>
     </div>

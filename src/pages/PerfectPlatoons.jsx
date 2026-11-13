@@ -3,10 +3,16 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { PageHero } from './_page.jsx'
 import { Input } from '@/components/ui.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { getPerfectPlatoons, getSchool, CURRENT_MONTH } from '@/services/api.js'
+import { getPerfectPlatoons, getSchool } from '@/services/api.js'
+import { schoolCampaignPath, useCampaignClock } from '@/lib/useCampaignClock.js'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
+import { platoonKey } from '@/lib/perfectPlatoons.js'
+import { displayClassName, formatClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
+import ClassName from '@/components/ClassName.jsx'
+import { PerfectPlatoonLogo } from '@/components/brandMarks.jsx'
 
 // Every perfect platoon this month — the full, searchable list behind the
 // "+N more" buttons. A perfect platoon is a class where every single soldier
@@ -15,11 +21,17 @@ import { asset } from '@/lib/asset.js'
 export default function PerfectPlatoons() {
   const [params] = useSearchParams()
   const schoolId = params.get('school')
+  const yearParam = params.get('year')
+  const monthParam = params.get('month')
+  const clock = useCampaignClock(yearParam || undefined)
+  const year = yearParam || clock.year
+  const month = monthParam || clock.currentMonth
+  const period = { year, month }
   const perSchool = !!schoolId
-  const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId) : Promise.resolve(null)), [schoolId])
+  const { data: school } = useLiveData(() => (schoolId ? getSchool(schoolId, period) : Promise.resolve(null)), [schoolId, year, month])
   const schoolName = school?.name ?? null
 
-  const { data: platoonsData, loading } = useLiveData(() => getPerfectPlatoons(), [])
+  const { data: platoonsData, loading } = useLiveData(() => getPerfectPlatoons(period), [year, month])
   const all = useMemo(() => {
     const list = platoonsData ?? []
     return schoolId ? list.filter((p) => String(p.schoolId) === String(schoolId)) : list
@@ -28,14 +40,18 @@ export default function PerfectPlatoons() {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const filtered = useMemo(
-    () => (q ? all.filter((p) => `${p.className} ${perSchool ? '' : p.school} ${p.teacher || ''}`.toLowerCase().includes(q)) : all),
+    () => (q ? all.filter((p) => `${p.className} ${formatClassName(p.className)} ${perSchool ? '' : p.school} ${teacherName(p.teacher)}`.toLowerCase().includes(q)) : all),
     [all, q, perSchool],
   )
   const stillLoading = loading && platoonsData == null
 
   return (
     <>
-      <PageHero eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'} title="Perfect Platoons">
+      <PageHero
+        mark={<PerfectPlatoonLogo className="h-20 w-auto sm:h-28" />}
+        eyebrow={perSchool ? schoolName || 'School' : 'Every single soldier finished'}
+        title="Perfect Platoons"
+      >
         A platoon is a class — and it’s <span className="font-semibold text-white">perfect</span> when
         every single soldier in it finished their full quota of kapitlach this month
         {perSchool && schoolName ? <> at {schoolName}</> : null}.
@@ -46,9 +62,9 @@ export default function PerfectPlatoons() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <span className="inline-flex items-center gap-2 rounded-full bg-green/15 px-4 py-1.5 font-cond text-base font-bold uppercase tracking-wide text-green">
             {stillLoading ? (
-              <><span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+              <><span className="font-heb">{MONTH_HEB[month] ?? month}</span></>
             ) : (
-              <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></>
+              <>🎉 {fmt(all.length)} this month · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></>
             )}
           </span>
           {!stillLoading && all.length ? (
@@ -74,19 +90,22 @@ export default function PerfectPlatoons() {
 
             {filtered.length ? (
               <div className="flex flex-wrap gap-2">
-                {filtered.map((p) => (
-                  <Link
-                    key={`${p.schoolId}-${p.className}`}
-                    to={`/s/${p.schoolId}`}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
-                    title={`${p.className}${p.teacher ? ' · ' + p.teacher : ''} · ${p.size} soldiers`}
-                  >
-                    <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
-                    <span className="font-display font-bold text-navy">{p.className}</span>
-                    {p.teacher ? <span className="text-green">· {p.teacher}</span> : null}
-                    {perSchool ? null : <span className="text-navy/55">· {p.school}</span>}
-                  </Link>
-                ))}
+                {filtered.map((p) => {
+                  const teacher = teacherName(p.teacher)
+                  return (
+                    <Link
+                      key={platoonKey(p)}
+                      to={schoolCampaignPath(p.schoolId, period)}
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40 transition hover:-translate-y-px hover:bg-gold/20 sm:min-h-0"
+                      title={`${displayClassName(p.className)}${teacher ? ' · ' + teacher : ''} · ${p.size} soldiers`}
+                    >
+                      <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
+                      <span className="font-display font-bold text-navy"><ClassName name={p.className} /></span>
+                      {teacher ? <span className="text-green">· {teacher}</span> : null}
+                      {perSchool ? null : <span className="text-navy/55">· {p.school}</span>}
+                    </Link>
+                  )
+                })}
               </div>
             ) : (
               <p className="font-display text-[16px] italic text-muted">No perfect platoons match “{query}”.</p>

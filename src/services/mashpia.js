@@ -2,10 +2,6 @@
 // facade. Modeled on Mivtza Lulav's src/services/mashpia.js: signed bearer
 // tokens over the existing Mashpia roster, served from /shabbos-mevorchim-
 // tehillim/api (see api/README.md).
-//
-// Only the endpoints the facade has been wired to live so far are implemented
-// here. The rest of services/api.js still runs on the demo roster; each
-// function flips to its mashpia.* twin as it is wired, the Lulav pattern.
 
 // import.meta.env is injected by Vite in the app; guard it so the module also
 // loads under plain Node (the test harness), where it is undefined.
@@ -96,7 +92,11 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
   if (response.status === 401 && as) endSession(as)
   const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
-    throw new Error(payload?.error || `Request failed (${response.status}).`)
+    const error = new Error(payload?.error || `Request failed (${response.status}).`)
+    error.status = response.status
+    error.code = payload?.code
+    error.threshold = payload?.threshold
+    throw error
   }
   // A 2xx with an unparseable (e.g. empty) body means the server died after its
   // headers went out; surface it as a clear error rather than returning null and
@@ -169,7 +169,7 @@ function periodQuery(period) {
   return text ? `?${text}` : ''
 }
 
-export const getSchool = (id) => req(`/schools/${id}`)
+export const getSchool = (id, period) => req(`/schools/${id}${periodQuery(period)}`)
 export const getGlobalStats = (period) => req(`/stats${periodQuery(period)}`)
 export const getSchools = (period) => req(`/schools${periodQuery(period)}`).then((r) => r.schools || [])
 export const getPerfectPlatoons = (period) => req(`/perfect-platoons${periodQuery(period)}`).then((r) => r.platoons || [])
@@ -191,6 +191,7 @@ export const getSoldierLeaderboard = (id, n = null) => {
   return req(`/schools/${id}/leaderboard${q}`).then((r) => r.soldiers || [])
 }
 export const getRunningTotals = () => req('/running-totals')
+export const getRunningTotalsBreakdown = () => req('/running-totals/breakdown')
 const monthQuery = (idx) => (idx === undefined || idx === null ? '' : `?monthIdx=${idx}`)
 function reportQuery(monthIdx, period) {
   if (period?.year || period?.month) return periodQuery(period)
@@ -224,9 +225,13 @@ export const recordMonth = (kapitlach, minutes, extra = {}) =>
       kapitlach,
       minutes,
       ...(extra?.exceptionalConfirmed ? { exceptionalConfirmed: true } : {}),
+      ...(extra?.flagConfirmed ? { flagConfirmed: true } : {}),
     },
     as: 'kid',
   })
+export const getFlagQueue = () => req('/admin/flags', { as: 'admin' })
+export const reviewFlag = (id, action) =>
+  write(`/admin/flags/${id}/${action}`, { method: 'POST', as: 'admin' })
 export const setDedication = async ({ scope, schoolId, text, year, month }) => {
   const data = await write('/dedication', { method: 'PUT', body: { scope, schoolId, text, year, month }, as: 'admin' })
   return data?.dedication ?? null
@@ -248,3 +253,24 @@ export const markPlatoonGraphicsSent = ({ ids, sent }) =>
   write('/office/platoon-graphics/sent', { method: 'POST', body: { ids, sent }, as: 'admin' })
 export const markSchoolGraphicsSent = (schoolId) =>
   write('/office/platoon-graphics/sent', { method: 'POST', body: { schoolId, sent: true }, as: 'admin' })
+
+export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
+
+export const setSchoolLadders = ({ schoolId, hidden }) =>
+  write('/admin/school-ladders', { method: 'PUT', body: { schoolId, hidden }, as: 'admin' })
+
+export const overrideQuota = ({ kidId, year, month, reason }) =>
+  write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
+
+export const listCustomLadderSoldiers = (schoolId) =>
+  req(`/admin/custom-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setCustomLadder = ({ kidId, targetKapitlach, finishGrade, reason }) =>
+  write('/admin/custom-ladder', { method: 'POST', body: { kidId, targetKapitlach, finishGrade, reason }, as: 'admin' })
+
+export const removeCustomLadder = ({ kidId }) =>
+  write('/admin/custom-ladder/remove', { method: 'POST', body: { kidId }, as: 'admin' })
+
+export const undoQuotaOverride = ({ kidId, year, month }) =>
+  write('/admin/quota-override/undo', { method: 'POST', body: { kidId, year, month }, as: 'admin' })

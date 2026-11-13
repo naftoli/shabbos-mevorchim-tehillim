@@ -6,7 +6,9 @@
 // A lower ladder number is more challenging. An easier step goes to a
 // higher number (ladder 12 is the gentlest).
 
-import { availableLadders, GRADE_LABEL, quotaFor } from '../data/ladders.js'
+import { GRADE_LABEL } from '../data/ladders.js'
+import { openLadders } from './schoolLadders.js'
+import { quotaForSchool } from './schoolYear.js'
 import { cueAheadOne, cueMissed, cueMissedFresh, cueNewMonth, cueWelcome } from './commanderCues.js'
 
 export const BOT_NAME = 'Your Virtual Commander'
@@ -26,7 +28,7 @@ function priorMonths(progress) {
 
 export function readSituation(ctx) {
   const { ladder, progress } = ctx ?? {}
-  if (!ladder) return 'pick'
+  if (!ladder && !progress?.customLadder) return 'pick'
   const prior = priorMonths(progress)
   const last = prior[prior.length - 1]
   const quota = Number(last?.quota)
@@ -51,8 +53,8 @@ export function quotaWords(q) {
   return `${kapitlach} and ${amount(q.m, 'minute', 'minutes')}`
 }
 
-export function quotaPhrase(grade, month, ladder) {
-  return quotaWords(quotaFor(grade, month, ladder))
+export function quotaPhrase(grade, month, ladder, firstMonth = 'Tishrei') {
+  return quotaWords(quotaForSchool(grade, month, ladder, firstMonth))
 }
 
 function gradeWords(grade) {
@@ -67,18 +69,19 @@ function finishWords(ladder) {
 }
 
 // Listed high → low, so the first available ladder is the gentlest.
-export function easiestLadder(grade) {
-  return availableLadders(grade)[0] ?? null
+// `hidden` is the school's off switches. Missing means every ladder is on.
+export function easiestLadder(grade, hidden) {
+  return openLadders(grade, hidden)[0] ?? null
 }
 
-export function hardestLadder(grade) {
-  const list = availableLadders(grade)
+export function hardestLadder(grade, hidden) {
+  const list = openLadders(grade, hidden)
   return list[list.length - 1] ?? null
 }
 
 // direction "harder" moves toward a lower ladder number. "easier" moves up.
-export function stepLadder(grade, from, direction) {
-  const list = availableLadders(grade)
+export function stepLadder(grade, from, direction, hidden) {
+  const list = openLadders(grade, hidden)
   if (!list.length) return null
   const i = list.indexOf(Number(from))
   if (i < 0) return direction === 'easier' ? list[0] : list[list.length - 1]
@@ -86,9 +89,9 @@ export function stepLadder(grade, from, direction) {
   return list[Math.max(0, i - 1)]
 }
 
-export function ladderMenu(grade, month) {
-  return availableLadders(grade).map((L) => {
-    const q = quotaFor(grade, month, L)
+export function ladderMenu(grade, month, firstMonth = 'Tishrei', hidden) {
+  return openLadders(grade, hidden).map((L) => {
+    const q = quotaForSchool(grade, month, L, firstMonth)
     return { ladder: L, kapitlach: q?.v ?? null, minutes: q?.m ?? null }
   })
 }
@@ -110,7 +113,7 @@ function choicesParagraph(easy, hard) {
 // Step 2 of the walk: one ladder, this month, the real quota.
 export function ladderOffer(ctx, ladder) {
   const month = ctx?.monthEn || 'this month'
-  const words = quotaPhrase(ctx?.grade, ctx?.monthEn, ladder)
+  const words = quotaPhrase(ctx?.grade, ctx?.monthEn, ladder, ctx?.yearStart)
   const quota = words
     ? `So, if you take ladder ${ladder}, that would mean that your quota is ${words}.`
     : `So, if you take ladder ${ladder}, your page will show the kapitlach for that ladder.`
@@ -118,8 +121,8 @@ export function ladderOffer(ctx, ladder) {
 }
 
 export function pickPitch(ctx) {
-  const easy = easiestLadder(ctx?.grade)
-  const hard = hardestLadder(ctx?.grade)
+  const easy = easiestLadder(ctx?.grade, ctx?.hiddenLadders)
+  const hard = hardestLadder(ctx?.grade, ctx?.hiddenLadders)
   const open = `${hello(ctx)} Welcome to Shabbos Mevorchim Tehillim Campaign. Let's start by choosing the ladder that works best for you.`
   if (easy == null) return `${open} Tap Pick my ladder on your page and we'll choose one together.`
   return `${open} ${choicesParagraph(easy, hard)} ${ladderOffer(ctx, easy)}`
@@ -153,7 +156,7 @@ export function peekText(ctx) {
 }
 
 function resolveFocus(ctx) {
-  const options = availableLadders(ctx?.grade)
+  const options = openLadders(ctx?.grade, ctx?.hiddenLadders)
   const focused = Number(ctx?.focusLadder)
   if (options.includes(focused)) return focused
   return options[0] ?? null
@@ -166,8 +169,8 @@ export function quickRepliesFor(ctx) {
       const focus = resolveFocus(ctx)
       if (focus == null) return ['Help me pick my ladder', 'How does it work?']
       const replies = ["That's good for me"]
-      const harder = stepLadder(ctx.grade, focus, 'harder')
-      const easier = stepLadder(ctx.grade, focus, 'easier')
+      const harder = stepLadder(ctx.grade, focus, 'harder', ctx.hiddenLadders)
+      const easier = stepLadder(ctx.grade, focus, 'easier', ctx.hiddenLadders)
       if (harder != null && harder !== focus) replies.push('A more challenging ladder')
       if (easier != null && easier !== focus) replies.push('An easier ladder')
       return replies
@@ -175,9 +178,7 @@ export function quickRepliesFor(ctx) {
     case 'behind':
       return ['What do I say this month?', 'How does it work?']
     case 'ahead': {
-      const next = ctx.grade != null && ctx.grade !== ''
-        ? stepLadder(ctx.grade, ctx.ladder, 'harder')
-        : (Number(ctx.ladder) > 5 ? Number(ctx.ladder) - 1 : Number(ctx.ladder))
+      const next = stepLadder(ctx.grade, ctx.ladder, 'harder', ctx.hiddenLadders)
       return next != null && next !== Number(ctx.ladder)
         ? [`Tell me about Ladder ${next}`, 'How am I doing?']
         : ['How am I doing?', 'How does it work?']
@@ -205,7 +206,7 @@ function unavailableLadder(ctx, n, options) {
 }
 
 function steppedOffer(ctx, from, direction) {
-  const next = stepLadder(ctx?.grade, from, direction)
+  const next = stepLadder(ctx?.grade, from, direction, ctx?.hiddenLadders)
   const landed = next ?? from
   let lead = ''
   if (landed === from && direction === 'harder') {
@@ -222,13 +223,13 @@ export function scriptedTurn(text, ctx) {
   if (!ctx || ctx.situation !== 'pick') return null
   const raw = ` ${String(text ?? '').toLowerCase()} `
   if (/which ladder|help me pick|help me choose|climb to get there/.test(raw)) {
-    const easy = easiestLadder(ctx.grade)
+    const easy = easiestLadder(ctx.grade, ctx.hiddenLadders)
     return { reply: pickPitch(ctx), focusLadder: easy }
   }
   const intent = readLadderIntent(text)
   if (!intent.any) return null
 
-  const options = availableLadders(ctx.grade)
+  const options = openLadders(ctx.grade, ctx.hiddenLadders)
   const focus = resolveFocus(ctx)
   if (focus == null) return null
 
