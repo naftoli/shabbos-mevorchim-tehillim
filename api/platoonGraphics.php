@@ -628,7 +628,12 @@ function wwtcRenderPlatoonGraphicCommand(string $cmd, array $job): string
     @unlink($tmp);
     file_put_contents($specPath, json_encode($spec, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-    $process = proc_open(array_merge($parts, [$specPath]), $descriptors, $pipes);
+    // Pass the command as a shell-escaped string rather than an argv array:
+    // proc_open()'s array form is PHP 7.4+, and the site runs on legacy 7.2.
+    // Each token is escaped on its own, so this hands the renderer exactly the
+    // same arguments the array form would have.
+    $command = implode(' ', array_map('escapeshellarg', array_merge($parts, [$specPath])));
+    $process = proc_open($command, $descriptors, $pipes);
     if (!is_resource($process)) {
         @unlink($specPath);
         throw new RuntimeException('Could not start the Perfect Platoon renderer.');
