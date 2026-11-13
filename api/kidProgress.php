@@ -175,6 +175,37 @@ function wwtcKidMissionsLifetime(int $userId): int
     return (int) $stmt->fetchColumn() + wwtcUnmarkedOverrideCount($userId);
 }
 
+/**
+ * Hebrew award date per earned WWTC medal, keyed by lower-case medal name
+ * ('white', 'red', ... 'gray', 'black', 'bronze'). Mirrors the legacy Mission
+ * Board (medals3.html): medal_marks.date_awarded is a Julian day, which
+ * jdtojewish renders as the Hebrew date shown under each earned medal.
+ */
+function wwtcKidMedalDates(int $userId): array
+{
+    global $MASHPIA_DB;
+    $stmt = $MASHPIA_DB->prepare(
+        'SELECT md.medal_name, mm.date_awarded
+           FROM medal_marks mm
+           JOIN medals md ON md.medal_ord = mm.medal_ord
+          WHERE mm.user_id = :uid AND mm.subject_id = ' . WWTC_SUBJECT_ID
+    );
+    $stmt->execute([':uid' => $userId]);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $jd = (int) $row['date_awarded'];
+        if ($jd <= 0 || !function_exists('jdtojewish')) {
+            continue;
+        }
+        $heb = @iconv('WINDOWS-1255', 'UTF-8', jdtojewish($jd, true, CAL_JEWISH_ADD_GERESHAYIM));
+        if ($heb === false || $heb === '') {
+            continue;
+        }
+        $out[strtolower((string) $row['medal_name'])] = $heb;
+    }
+    return $out;
+}
+
 /** SPA grade key ('pre1a', '1'..'12') → number for math; -1 if unknown. */
 function wwtcGradeNum(string $grade): int
 {
@@ -290,6 +321,7 @@ function wwtcKidProgress(array $kid): array
         'missionsTotal' => $missionsTotal,
         'priorMissions' => $priorMissions,
         'missionHistory' => wwtcKidMissionHistoryByGrade($kid),
+        'medalDates' => wwtcKidMedalDates((int) $kid['user_id']),
         'medal' => null,
         // Tzivos Hashem rank (all campaigns), not a label from Tehillim medals.
         'rank' => wwtcCurrentRank($MASHPIA_DB, (int) $kid['user_id']),
