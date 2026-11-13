@@ -445,11 +445,15 @@ if (($method === 'PUT' || $method === 'POST') && $path === '/me/ladder') {
     if ($ladder < 5 || $ladder > 12) {
         wwtcError("Choose a ladder between 5 and 12.", 422);
     }
-    $schoolHidden = function_exists('wwtcHiddenLaddersForSchool')
-        ? wwtcHiddenLaddersForSchool((int) ($kid['school_id'] ?? 0))
+    $hiddenForChild = function_exists('wwtcHiddenLaddersForSoldier')
+        ? wwtcHiddenLaddersForSoldier(
+            (int) ($kid['school_id'] ?? 0),
+            (int) ($kid['class_id'] ?? 0),
+            (int) ($kid['user_id'] ?? 0)
+        )
         : [];
-    if ($schoolHidden && function_exists('wwtcLadderIsHidden') && wwtcLadderIsHidden($ladder, $schoolHidden)) {
-        wwtcError('That ladder is turned off for your school.', 422);
+    if ($hiddenForChild && function_exists('wwtcLadderIsHidden') && wwtcLadderIsHidden($ladder, $hiddenForChild)) {
+        wwtcError('That ladder is turned off for you.', 422);
     }
     $track = wwtcTrackFromLadder($ladder);
 

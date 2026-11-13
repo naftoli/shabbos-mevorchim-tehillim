@@ -3,13 +3,17 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import { PageHero } from './_page.jsx'
 import LadderCarousel from '@/components/LadderCarousel.jsx'
 import { useCampaignClock } from '@/lib/useCampaignClock.js'
+import { useLiveData } from '@/lib/useLiveData.js'
+import { getKidProgress } from '@/services/api.js'
 
 export default function Ladders() {
   const { kid, changeLadder } = useAuth()
   const navigate = useNavigate()
   const { year, currentMonth } = useCampaignClock()
+  const { data: progress } = useLiveData(() => (kid ? getKidProgress(kid.id) : Promise.resolve(null)), [kid?.id])
 
   if (!kid) return <Navigate to="/login" replace />
+  const hiddenLadders = progress?.hiddenLadders || kid.hiddenLadders
 
   async function pick(L) {
     await changeLadder(L)
@@ -24,7 +28,7 @@ export default function Ladders() {
       </PageHero>
 
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 8} onPick={pick} year={year} firstMonth={kid.yearStart || 'Tishrei'} anchorMonth={currentMonth} hiddenLadders={kid.hiddenLadders} />
+        <LadderCarousel grade={kid.grade} defaultLadder={kid.ladder ?? 8} onPick={pick} year={year} firstMonth={kid.yearStart || 'Tishrei'} anchorMonth={currentMonth} hiddenLadders={hiddenLadders} />
         <p className="mt-6 text-center text-sm text-muted">You can change your ladder later from your dashboard.</p>
       </div>
     </>

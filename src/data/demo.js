@@ -4,6 +4,7 @@
 // roster until the real API is wired; the api.js facade reads it in demo mode.
 
 import { GRADE_LABEL, availableLadders, quotaFor } from './ladders.js'
+import { hiddenForScope } from '@/lib/schoolLadders.js'
 import { campaignMonths, currentHebrewYear } from '@/lib/hebrewYear.js'
 import { firstMonthFromRow, normalizeFirstMonth } from '@/lib/schoolYear.js'
 import { currentReportingMonth } from '@/lib/shabbosMevorchim.js'
@@ -468,35 +469,156 @@ export function setSchoolYearStartStore(schoolId, firstMonth) {
   } catch { /* private mode */ }
 }
 
-// Ladders a school has turned off. Missing entry = every ladder on.
+// Ladders a school has turned off, plus class and child overrides.
+// A missing entry uses the built-in demo (Sample Cheder shows all three
+// levels; the first Cheder Menachem class hides ladder 5 from that class).
+// An older saved value is just the school-level list.
 const HIDDEN_LADDERS_KEY = 'wwtc.demo.hiddenLadders'
+
+// Sample Cheder: ladder 5 is off for the school, class "1" turns it back on
+// and turns 6 off, Fictional 1 turns 6 back on, Fictional 2 turns 5 off.
+// Cheder Menachem's first class turns ladder 5 off, so the new soldier's
+// picker hides it while the rest of the school still offers it.
+const DEMO_LADDER_SCOPES = {
+  'sample-cheder': {
+    hidden: [5],
+    classes: {
+      'sample-cheder-1': { 5: true, 6: false },
+    },
+    children: {
+      'sample-k-1': { classId: 'sample-cheder-1', ladders: { 6: true } },
+      'sample-k-2': { classId: 'sample-cheder-1', ladders: { 5: false } },
+    },
+  },
+  'cheder-menachem-sample': {
+    hidden: [],
+    classes: {
+      'cheder-menachem-sample-c1': { 5: false },
+    },
+    children: {},
+  },
+}
+
+function cleanHiddenList(hidden) {
+  const next = []
+  const seen = new Set()
+  for (const value of hidden || []) {
+    const n = Number(value)
+    if (n < 5 || n > 12 || seen.has(n)) continue
+    seen.add(n)
+    next.push(n)
+  }
+  return next
+}
+
+function cleanOverrideMap(raw) {
+  const out = {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out
+  for (const [key, enabled] of Object.entries(raw)) {
+    const n = Number(key)
+    if (n < 5 || n > 12) continue
+    if (enabled === true || enabled === false) out[n] = enabled
+  }
+  return out
+}
+
+function normalizeLadderScope(raw) {
+  if (Array.isArray(raw)) {
+    return { hidden: cleanHiddenList(raw), classes: {}, children: {} }
+  }
+  const classes = {}
+  for (const [classId, map] of Object.entries(raw?.classes || {})) {
+    const cleaned = cleanOverrideMap(map)
+    if (Object.keys(cleaned).length) classes[classId] = cleaned
+  }
+  const children = {}
+  for (const [userId, row] of Object.entries(raw?.children || {})) {
+    const ladders = cleanOverrideMap(row?.ladders || row)
+    if (!Object.keys(ladders).length) continue
+    children[userId] = { classId: row?.classId ?? null, ladders }
+  }
+  return { hidden: cleanHiddenList(raw?.hidden), classes, children }
+}
+
 function loadHiddenLadders() {
   try {
     if (typeof localStorage === 'undefined') return {}
     return JSON.parse(localStorage.getItem(HIDDEN_LADDERS_KEY) || '{}')
   } catch { return {} }
 }
-export function schoolHiddenLadders(schoolId) {
+
+function ladderScope(schoolId) {
   const store = loadHiddenLadders()
-  const raw = store[schoolId]
-  if (!Array.isArray(raw)) return []
-  return raw.map(Number).filter((n) => n >= 5 && n <= 12)
+  if (Object.prototype.hasOwnProperty.call(store, schoolId)) return normalizeLadderScope(store[schoolId])
+  return normalizeLadderScope(DEMO_LADDER_SCOPES[schoolId] || { hidden: [] })
 }
-export function setSchoolHiddenLaddersStore(schoolId, hidden) {
+
+export function schoolHiddenLadders(schoolId) {
+  return ladderScope(schoolId).hidden
+}
+
+/** Ladders that are off for this child. Child beats class beats school. */
+export function hiddenLaddersForChild(schoolId, classId, childId) {
+  const scope = ladderScope(schoolId)
+  const classMap = classId ? scope.classes[String(classId)] : null
+  const child = childId ? scope.children[String(childId)] : null
+  return hiddenForScope(scope.hidden, classMap, child?.ladders)
+}
+
+function overrideList(map) {
+  return Object.entries(map || {})
+    .map(([ladder, enabled]) => ({ ladder: Number(ladder), enabled: enabled === true }))
+    .filter((row) => row.ladder >= 5 && row.ladder <= 12)
+}
+
+/** Admin ladder screen for the demo. Child rows have ids, never names. */
+export function demoLadderSettings(schoolId) {
+  const school = ROSTER.find((s) => s.id === schoolId)
+  const scope = ladderScope(schoolId)
+  const classes = (school?.classes || []).map((cls) => ({
+    id: cls.id,
+    name: cls.name,
+    grade: cls.grade,
+    overrides: overrideList(scope.classes[cls.id]),
+  }))
+  const children = Object.entries(scope.children).map(([id, row]) => ({
+    id,
+    classId: row.classId,
+    overrides: overrideList(row.ladders),
+  }))
+  return {
+    ok: true,
+    schoolId,
+    hiddenLadders: scope.hidden,
+    ladders: [12, 11, 10, 9, 8, 7, 6, 5].map((ladder) => ({
+      ladder,
+      enabled: !scope.hidden.includes(ladder),
+    })),
+    classes,
+    children,
+  }
+}
+
+function writeLadderStore(all) {
   try {
     if (typeof localStorage === 'undefined') return
-    const all = loadHiddenLadders()
-    const next = []
-    const seen = new Set()
-    for (const value of hidden || []) {
-      const n = Number(value)
-      if (n < 5 || n > 12 || seen.has(n)) continue
-      seen.add(n)
-      next.push(n)
-    }
-    all[schoolId] = next
     localStorage.setItem(HIDDEN_LADDERS_KEY, JSON.stringify(all))
   } catch { /* private mode */ }
+}
+
+export function setSchoolHiddenLaddersStore(schoolId, hidden) {
+  const all = loadHiddenLadders()
+  const current = Object.prototype.hasOwnProperty.call(all, schoolId)
+    ? normalizeLadderScope(all[schoolId])
+    : ladderScope(schoolId)
+  all[schoolId] = { ...current, hidden: cleanHiddenList(hidden) }
+  writeLadderStore(all)
+}
+
+export function setLadderScopeStore(schoolId, scope) {
+  const all = loadHiddenLadders()
+  all[schoolId] = normalizeLadderScope(scope)
+  writeLadderStore(all)
 }
 
 export function schoolDedication(schoolId) {

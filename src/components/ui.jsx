@@ -78,9 +78,9 @@ export function Avatar({ name = '', src, size = 40, className = '' }) {
 }
 
 // Sky card on the page: big radius, no border, only a whisper of shadow.
-export function Card({ className = '', children }) {
+export function Card({ className = '', children, ...props }) {
   return (
-    <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`}>
+    <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`} {...props}>
       {children}
     </div>
   )

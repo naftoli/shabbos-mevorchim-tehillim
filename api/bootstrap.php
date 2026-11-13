@@ -1223,8 +1223,12 @@ function wwtcSafeKid(array $u): array
         'yearStart' => function_exists('wwtcSchoolFirstMonth')
             ? wwtcSchoolFirstMonth((int) ($u['school_id'] ?? 0))
             : 'Tishrei',
-        'hiddenLadders' => function_exists('wwtcHiddenLaddersForSchool')
-            ? wwtcHiddenLaddersForSchool((int) ($u['school_id'] ?? 0))
+        'hiddenLadders' => function_exists('wwtcHiddenLaddersForSoldier')
+            ? wwtcHiddenLaddersForSoldier(
+                (int) ($u['school_id'] ?? 0),
+                (int) ($u['class_id'] ?? 0),
+                (int) ($u['user_id'] ?? 0)
+            )
             : [],
     ];
 }

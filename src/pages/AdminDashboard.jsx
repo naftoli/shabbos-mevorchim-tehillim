@@ -6,7 +6,8 @@ import { Card, Pill, Button, SchoolLogo } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
-import { openLadders } from '@/lib/schoolLadders.js'
+import { hiddenForScope, ladderOverrideMap, openLadders } from '@/lib/schoolLadders.js'
+import { sortClasses } from '@/lib/classOrder.js'
 import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
 import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
 import {
@@ -19,6 +20,7 @@ import {
   setSchoolDedication,
   setSchoolYearStart,
   setSchoolLadders,
+  getSchoolLadders,
   removeSchoolDedication,
   getHqVerify,
   getArmyDedication,
@@ -122,14 +124,131 @@ function SchoolYearSetting({ school, onSaved }) {
   )
 }
 
-// Turn individual ladders off for this school. Every ladder starts on.
-// A custom ladder is not in this list and stays available.
-function SchoolLadderSetting({ school, onSaved }) {
-  const saved = (school.hiddenLadders || []).map(Number)
-  const [hidden, setHidden] = useState(() => new Set(saved))
+function mapsFromSettings(settings) {
+  const classes = {}
+  for (const cls of settings?.classes || []) {
+    const map = ladderOverrideMap(cls.overrides)
+    if (Object.keys(map).length) classes[String(cls.id)] = map
+  }
+  const children = {}
+  for (const child of settings?.children || []) {
+    const map = ladderOverrideMap(child.overrides)
+    if (!Object.keys(map).length) continue
+    children[String(child.id)] = { classId: child.classId ?? null, ladders: map }
+  }
+  return {
+    hidden: (settings?.hiddenLadders || []).map(Number),
+    classes,
+    children,
+  }
+}
+
+function scopeSignature(state) {
+  const classes = {}
+  for (const [id, map] of Object.entries(state.classes)) {
+    const ladders = Object.keys(map).map(Number).sort((a, b) => a - b)
+    if (!ladders.length) continue
+    classes[id] = Object.fromEntries(ladders.map((ladder) => [ladder, map[ladder] === true]))
+  }
+  const children = {}
+  for (const [id, row] of Object.entries(state.children)) {
+    const ladders = Object.keys(row.ladders || {}).map(Number).sort((a, b) => a - b)
+    if (!ladders.length) continue
+    children[id] = Object.fromEntries(ladders.map((ladder) => [ladder, row.ladders[ladder] === true]))
+  }
+  return JSON.stringify({
+    hidden: [...state.hidden].map(Number).filter((n) => n >= 5 && n <= 12).sort((a, b) => a - b),
+    classes,
+    children,
+  })
+}
+
+function rowsFromState(state) {
+  const classes = []
+  for (const [classId, map] of Object.entries(state.classes)) {
+    for (const [ladder, enabled] of Object.entries(map)) {
+      if (enabled !== true && enabled !== false) continue
+      classes.push({ classId, ladder: Number(ladder), enabled })
+    }
+  }
+  const children = []
+  for (const [userId, row] of Object.entries(state.children)) {
+    for (const [ladder, enabled] of Object.entries(row.ladders || {})) {
+      if (enabled !== true && enabled !== false) continue
+      children.push({ userId, classId: row.classId, ladder: Number(ladder), enabled })
+    }
+  }
+  return { hidden: state.hidden, classes, children }
+}
+
+// Names come from the staff platoon roll. The ladder payload itself has ids only.
+function ClassLadderKids({ classId, ladder, classOn, childMaps, onToggle, onClear }) {
+  const { data, loading, error, reload } = useLiveData(() => getPlatoonReport(classId), [classId])
+  const showRoll = data?.roll === true && Array.isArray(data.rows)
+  if (error) {
+    return (
+      <p className="px-3 py-2 text-sm text-navy">
+        Couldn’t load soldiers. <button type="button" className="underline" onClick={reload}>Try again</button>
+      </p>
+    )
+  }
+  if (!data && loading) return <p className="px-3 py-2 text-sm text-muted">Getting soldiers…</p>
+  if (!showRoll) return <p className="px-3 py-2 text-sm text-muted">Soldier names are shown only to staff.</p>
+  if (!data.rows.length) return <p className="px-3 py-2 text-sm text-muted">No soldiers in this class.</p>
+  return (
+    <ul className="border-t border-line">
+      {data.rows.map((kid) => {
+        const key = String(kid.id)
+        const explicit = childMaps[key]?.ladders?.[ladder]
+        const on = explicit === true || explicit === false ? explicit : classOn
+        return (
+          <li key={key} className="flex flex-wrap items-center gap-3 border-t border-line px-3 py-2 text-sm first:border-t-0">
+            <label className="flex min-h-11 min-w-0 flex-1 items-center gap-3">
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={() => onToggle(key, classId)}
+                aria-label={`Ladder ${ladder} for ${kid.name}`}
+              />
+              <span className="min-w-0 font-semibold text-navy"><bdi dir="auto">{kid.name}</bdi></span>
+            </label>
+            <span className={`text-xs font-bold uppercase ${on ? 'text-green' : 'text-muted'}`}>{on ? 'On' : 'Off'}</span>
+            {explicit === true || explicit === false ? (
+              <button type="button" className="min-h-11 text-xs font-semibold text-blue underline sm:min-h-0" onClick={() => onClear(key, ladder)}>
+                Use class setting
+              </button>
+            ) : (
+              <span className="text-xs text-muted">Same as class</span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function LadderScopeEditor({ schoolId, settings, onSaved }) {
+  const initial = mapsFromSettings(settings)
+  const [ladder, setLadder] = useState(LADDERS[0])
+  const [hidden, setHidden] = useState(() => new Set(initial.hidden))
+  const [classMaps, setClassMaps] = useState(initial.classes)
+  const [childMaps, setChildMaps] = useState(initial.children)
+  const [openClass, setOpenClass] = useState(null)
+  const [baseline, setBaseline] = useState(() => scopeSignature(initial))
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
-  function toggle(ladder) {
+  const classes = sortClasses(settings.classes || [])
+  const schoolOn = !hidden.has(ladder)
+  const signature = scopeSignature({ hidden: [...hidden], classes: classMaps, children: childMaps })
+  const same = signature === baseline
+
+  function classOnFor(classId) {
+    const explicit = classMaps[String(classId)]?.[ladder]
+    if (explicit === true || explicit === false) return explicit
+    return schoolOn
+  }
+
+  function toggleSchool() {
     setHidden((prev) => {
       const next = new Set(prev)
       if (next.has(ladder)) next.delete(ladder)
@@ -137,13 +256,78 @@ function SchoolLadderSetting({ school, onSaved }) {
       return next
     })
   }
-  const same = saved.length === hidden.size && saved.every((ladder) => hidden.has(ladder))
+
+  function toggleClass(classId) {
+    const key = String(classId)
+    const explicit = classMaps[key]?.[ladder]
+    const effective = explicit === true || explicit === false ? explicit : schoolOn
+    const nextOn = !effective
+    setClassMaps((prev) => {
+      const next = { ...prev, [key]: { ...(prev[key] || {}) } }
+      if (nextOn === schoolOn) delete next[key][ladder]
+      else next[key][ladder] = nextOn
+      if (!Object.keys(next[key]).length) delete next[key]
+      return next
+    })
+  }
+
+  function clearClass(classId) {
+    const key = String(classId)
+    setClassMaps((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev, [key]: { ...prev[key] } }
+      delete next[key][ladder]
+      if (!Object.keys(next[key]).length) delete next[key]
+      return next
+    })
+  }
+
+  function toggleChild(userId, classId) {
+    const key = String(userId)
+    const parentOn = classOnFor(classId)
+    const explicit = childMaps[key]?.ladders?.[ladder]
+    const effective = explicit === true || explicit === false ? explicit : parentOn
+    const nextOn = !effective
+    setChildMaps((prev) => {
+      const row = { classId, ladders: { ...(prev[key]?.ladders || {}) } }
+      if (nextOn === parentOn) delete row.ladders[ladder]
+      else row.ladders[ladder] = nextOn
+      const next = { ...prev }
+      if (!Object.keys(row.ladders).length) delete next[key]
+      else next[key] = row
+      return next
+    })
+  }
+
+  function clearChild(userId) {
+    const key = String(userId)
+    setChildMaps((prev) => {
+      if (!prev[key]) return prev
+      const row = { classId: prev[key].classId, ladders: { ...prev[key].ladders } }
+      delete row.ladders[ladder]
+      const next = { ...prev }
+      if (!Object.keys(row.ladders).length) delete next[key]
+      else next[key] = row
+      return next
+    })
+  }
+
   async function save() {
     setBusy(true)
     setNote('')
+    const state = { hidden: [...hidden], classes: classMaps, children: childMaps }
     try {
-      await setSchoolLadders(school.id, [...hidden])
-      setNote('Saved. Soldiers and the virtual commander skip the ladders that are off.')
+      const saved = await setSchoolLadders(schoolId, [...hidden], rowsFromState(state))
+      const next = mapsFromSettings(saved || {})
+      if (saved?.classes) {
+        setHidden(new Set(next.hidden))
+        setClassMaps(next.classes)
+        setChildMaps(next.children)
+        setBaseline(scopeSignature(next))
+      } else {
+        setBaseline(scopeSignature(state))
+      }
+      setNote('Saved. A soldier’s picker and the virtual commander skip a ladder that is off for that child.')
       onSaved()
     } catch (e) {
       setNote(e?.message || 'Could not save the ladders.')
@@ -151,36 +335,122 @@ function SchoolLadderSetting({ school, onSaved }) {
       setBusy(false)
     }
   }
+
   return (
-    <Card className="p-5 sm:p-6">
-      <p className="sh">Ladders for this school</p>
-      <p className="mt-1 text-sm text-muted">
-        Turn a ladder off to hide it from the soldier’s picker and from the virtual commander’s suggestions. Every ladder starts on. A custom ladder stays available.
-      </p>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-        {LADDERS.map((ladder) => {
-          const on = !hidden.has(ladder)
+    <>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" role="listbox" aria-label="Choose a ladder">
+        {LADDERS.map((n) => {
+          const on = !hidden.has(n)
+          const selected = n === ladder
           return (
-            <li key={ladder}>
-              <label className="flex min-h-11 items-center gap-3 rounded-xl border border-line bg-[#eef4ff] px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => toggle(ladder)}
-                  aria-label={`Ladder ${ladder}`}
-                />
-                <span className="font-semibold text-navy">
-                  Ladder {ladder}
-                  <span className="mt-0.5 block font-normal text-muted">finish training by {GRADE_LABEL[String(finishGrade(ladder))]} grade</span>
-                </span>
-                <span className={`ml-auto text-xs font-bold uppercase ${on ? 'text-green' : 'text-muted'}`}>{on ? 'On' : 'Off'}</span>
-              </label>
-            </li>
+            <button
+              key={n}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              onClick={() => setLadder(n)}
+              className={`min-h-11 rounded-xl border px-3 py-2 text-left text-sm ${
+                selected ? 'border-transparent bg-navy text-white' : 'border-line bg-[#eef4ff] text-navy'
+              }`}
+            >
+              <span className="block font-semibold">Ladder {n}</span>
+              <span className={`text-xs font-bold uppercase ${selected ? 'text-white/80' : on ? 'text-green' : 'text-muted'}`}>
+                School {on ? 'on' : 'off'}
+              </span>
+            </button>
           )
         })}
-      </ul>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-line">
+        <label className="flex min-h-11 items-center gap-3 px-3 py-2 text-sm">
+          <input type="checkbox" checked={schoolOn} onChange={toggleSchool} aria-label={`Ladder ${ladder} for the whole school`} />
+          <span className="font-semibold text-navy">
+            Whole school
+            <span className="mt-0.5 block font-normal text-muted">finish training by {GRADE_LABEL[String(finishGrade(ladder))]} grade</span>
+          </span>
+          <span className={`ml-auto text-xs font-bold uppercase ${schoolOn ? 'text-green' : 'text-muted'}`}>{schoolOn ? 'On' : 'Off'}</span>
+        </label>
+
+        {classes.length ? (
+          <ul className="border-t border-line">
+            {classes.map((cls) => {
+              const key = String(cls.id)
+              const explicit = classMaps[key]?.[ladder]
+              const on = explicit === true || explicit === false ? explicit : schoolOn
+              const open = openClass === key
+              return (
+                <li key={key} className="border-t border-line first:border-t-0">
+                  <div className="flex flex-wrap items-center gap-3 bg-track/40 px-3 py-2 text-sm">
+                    <button
+                      type="button"
+                      className="min-h-11 min-w-0 flex-1 text-left font-semibold text-navy sm:min-h-0"
+                      aria-expanded={open}
+                      onClick={() => setOpenClass(open ? null : key)}
+                    >
+                      <bdi dir="auto">{formatClassName(cls.name)}</bdi>
+                      <span className="mt-0.5 block text-xs font-semibold text-muted">{open ? 'Hide children' : 'Show children'}</span>
+                    </button>
+                    <label className="flex min-h-11 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => toggleClass(cls.id)}
+                        aria-label={`Ladder ${ladder} for ${formatClassName(cls.name)}`}
+                      />
+                      <span className={`text-xs font-bold uppercase ${on ? 'text-green' : 'text-muted'}`}>{on ? 'On' : 'Off'}</span>
+                    </label>
+                    {explicit === true || explicit === false ? (
+                      <button type="button" className="min-h-11 text-xs font-semibold text-blue underline sm:min-h-0" onClick={() => clearClass(cls.id)}>
+                        Use school setting
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted">Same as school</span>
+                    )}
+                  </div>
+                  {open ? (
+                    <ClassLadderKids
+                      classId={cls.id}
+                      ladder={ladder}
+                      classOn={on}
+                      childMaps={childMaps}
+                      onToggle={toggleChild}
+                      onClear={clearChild}
+                    />
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          <p className="border-t border-line px-3 py-2 text-sm text-muted">No classes in this school yet.</p>
+        )}
+      </div>
+
       <Button variant="navy" className="mt-3" onClick={save} disabled={busy || same}>{busy ? 'Saving…' : 'Save ladders'}</Button>
       {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
+    </>
+  )
+}
+
+// Turn a ladder on or off for the whole school, one class, or one child.
+// The closest setting wins. Every ladder starts on. A custom ladder is not
+// in this list and stays available. Soldier names load from the staff roll.
+function SchoolLadderSetting({ school, onSaved }) {
+  const { data, error, reload } = useLiveData(() => getSchoolLadders(school.id), [school.id])
+  return (
+    <Card className="p-5 sm:p-6" data-ladder-settings>
+      <p className="sh">Ladders for this school</p>
+      <p className="mt-1 text-sm text-muted">
+        Pick a ladder. Turn it on or off for the whole school, for one class, or for one child. The closest setting wins. If nobody set it, the ladder stays on. A custom ladder stays available.
+      </p>
+      {error ? (
+        <p className="mt-3 text-sm text-navy">Couldn’t load ladder settings. <button type="button" className="underline" onClick={reload}>Try again</button></p>
+      ) : !data ? (
+        <p className="mt-3 text-sm text-muted">Getting ladders…</p>
+      ) : (
+        <LadderScopeEditor key={school.id} schoolId={school.id} settings={data} onSaved={() => { onSaved(); reload() }} />
+      )}
     </Card>
   )
 }
@@ -231,7 +501,13 @@ function DedicationEditor({ school, onSaved, month }) {
 function LadderSetter({ schoolId, classes, hiddenLadders }) {
   const [classId, setClassId] = useState('') // '' = whole school
   const [kidId, setKidId] = useState('') // '' = all children in the class
-  const offered = openLadders(null, hiddenLadders)
+  const { data: access } = useLiveData(() => getSchoolLadders(schoolId), [schoolId])
+  const classRow = classId ? (access?.classes || []).find((c) => String(c.id) === String(classId)) : null
+  const childRow = kidId ? (access?.children || []).find((c) => String(c.id) === String(kidId)) : null
+  const scopeHidden = access
+    ? hiddenForScope(access.hiddenLadders, classId ? classRow?.overrides : null, kidId ? childRow?.overrides : null)
+    : hiddenLadders
+  const offered = openLadders(null, scopeHidden)
   const [ladder, setLadder] = useState(offered[0] ?? LADDERS[0])
   if (offered.length && !offered.includes(Number(ladder))) setLadder(offered[0])
   const [busy, setBusy] = useState(false)

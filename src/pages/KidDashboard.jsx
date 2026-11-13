@@ -172,7 +172,7 @@ export default function KidDashboard() {
           open={welcomeOpen}
           name={kid.name}
           grade={kid.grade}
-          hiddenLadders={kid.hiddenLadders}
+          hiddenLadders={progress.hiddenLadders || kid.hiddenLadders}
           onPick={() => { setWelcomeOpen(false); navigate('/ladders') }}
           onClose={() => setWelcomeOpen(false)}
         />

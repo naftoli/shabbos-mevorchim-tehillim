@@ -248,8 +248,15 @@ export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder 
 export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
   write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
 
-export const setSchoolLadders = ({ schoolId, hidden }) =>
-  write('/admin/school-ladders', { method: 'PUT', body: { schoolId, hidden }, as: 'admin' })
+export const getSchoolLadders = (schoolId) =>
+  req(`/admin/school-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setSchoolLadders = ({ schoolId, hidden, classes, children, sendScopes = false }) =>
+  write('/admin/school-ladders', {
+    method: 'PUT',
+    body: sendScopes ? { schoolId, hidden, classes: classes || [], children: children || [] } : { schoolId, hidden },
+    as: 'admin',
+  })
 
 export const overrideQuota = ({ kidId, year, month, reason }) =>
   write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })

@@ -179,6 +179,41 @@ test('setSchoolLadders puts the hidden ladders on /admin/school-ladders', async 
   assert.deepEqual(call.body, { schoolId: 42, hidden: [5, 6] })
 })
 
+test('school ladder reads and class or child saves stay on the admin route', async () => {
+  reset()
+  api.endSession('admin')
+  mock({
+    'POST /admin/login': { body: { token: 'atok-ladders', expiresIn: 43200, admin: { kind: 'school', schoolId: 42 } } },
+    'GET /admin/school-ladders?schoolId=42': {
+      body: {
+        ok: true,
+        schoolId: 42,
+        hiddenLadders: [5],
+        classes: [{ id: 7, name: 'Aleph', overrides: [] }],
+        children: [{ id: 9, classId: 7, overrides: [{ ladder: 6, enabled: false }] }],
+      },
+    },
+    'PUT /admin/school-ladders': { body: { ok: true, hiddenLadders: [5], classes: [], children: [] } },
+  })
+  await api.verifyAdmin('school', 'pw')
+  const settings = await api.getSchoolLadders(42)
+  assert.equal(settings.hiddenLadders[0], 5)
+  assert.equal(settings.children[0].name, undefined)
+  assert.match(lastCall().headers.Authorization, /^Bearer atok-ladders$/)
+  await api.setSchoolLadders(42, [5], {
+    classes: [{ classId: 7, ladder: 6, enabled: false }],
+    children: [{ userId: 9, ladder: 8, enabled: true }],
+  })
+  assert.equal(lastCall().method, 'PUT')
+  assert.deepEqual(lastCall().body, {
+    schoolId: 42,
+    hidden: [5],
+    classes: [{ classId: 7, ladder: 6, enabled: false }],
+    children: [{ userId: 9, ladder: 8, enabled: true }],
+  })
+  api.endSession('admin')
+})
+
 test('getSchools unwraps {schools} into an array', async () => {
   reset()
   mock({ 'GET /schools': { body: { month: 'Cheshvan', schools: [{ id: 1, name: 'A', pctMet: 50, pct: 60, minutesPct: 40, saidMonth: 9 }] } } })
