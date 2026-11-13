@@ -245,6 +245,15 @@ export const setKidLadder = (ladder) =>
 export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
   write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
 
+export const getPublicPlatoonGraphics = (period) => req(`/platoon-graphics${periodQuery(period)}`)
+export const getOfficePlatoonGraphics = (period) => req(`/office/platoon-graphics${periodQuery(period)}`, { as: 'admin' })
+export const saveSchoolWhatsapp = (schoolId, whatsapp) =>
+  write('/office/platoon-graphics/contact', { method: 'PUT', body: { schoolId, whatsapp: whatsapp || '' }, as: 'admin' })
+export const markPlatoonGraphicsSent = ({ ids, sent }) =>
+  write('/office/platoon-graphics/sent', { method: 'POST', body: { ids, sent }, as: 'admin' })
+export const markSchoolGraphicsSent = (schoolId) =>
+  write('/office/platoon-graphics/sent', { method: 'POST', body: { schoolId, sent: true }, as: 'admin' })
+
 export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
   write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
 

@@ -55,6 +55,7 @@ export default function Layout({ children }) {
           <nav className="flex shrink-0 items-center gap-1 sm:gap-1 lg:gap-2 2xl:gap-3">
             <NavLink to="/" end className={navItem}>Home</NavLink>
             <NavLink to="/how-to" className={navItem}>How It Works</NavLink>
+            <NavLink to="/platoon-graphics" className={navItem}>Graphics</NavLink>
             <NavLink to={isKid ? '/me' : '/login'} className={navItem}>
               <span className="lg:hidden">{isKid ? 'My Tehillim' : 'Soldier Login'}</span>
               <span className="hidden lg:inline">{isKid ? 'My Tehillim' : 'Soldier Login'}</span>
@@ -86,6 +87,7 @@ export default function Layout({ children }) {
           <div className="mx-auto flex max-w-[1400px] flex-col gap-1 px-3 py-2">
             <NavLink to="/" end className={menuLink}>Home</NavLink>
             <NavLink to="/how-to" className={menuLink}>How It Works</NavLink>
+            <NavLink to="/platoon-graphics" className={menuLink}>Graphics</NavLink>
             <NavLink to="/resources" className={menuLink}>Resources</NavLink>
             <NavLink to={isAdmin ? '/admin' : '/admin/login'} className={menuLink}>
               {isAdmin ? 'Admin' : 'School Admin'}

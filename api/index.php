@@ -22,6 +22,7 @@ require __DIR__ . '/schoolLogo.php';
 require __DIR__ . '/platoonRoll.php';
 require __DIR__ . '/soldierBoard.php';
 require __DIR__ . '/soldierRank.php';
+require __DIR__ . '/platoonGraphics.php';
 require __DIR__ . '/notify.php';
 require __DIR__ . '/campaignBoard.php';
 require __DIR__ . '/kidProgress.php';
@@ -51,5 +52,10 @@ require __DIR__ . '/routes/public.php';
 require __DIR__ . '/routes/reports.php';
 require __DIR__ . '/routes/soldier.php';
 require __DIR__ . '/routes/admin.php';
+
+// Perfect Platoon graphics (public download + staff office). Own routes only.
+if (wwtcDispatchPlatoonGraphics($method, $path)) {
+    exit;
+}
 
 wwtcError('Not found: ' . $method . ' ' . $path, 404);

@@ -1,24 +1,33 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Band, Button, Card, Field, Input } from '@/components/ui.jsx'
 import { IS_DEMO } from '@/lib/liveMode.js'
 
+function safeNext(value) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('://') || value.includes('\\')) {
+    return '/admin'
+  }
+  return value
+}
+
 export default function AdminLogin() {
   const { admin, loginAdmin } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next'))
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
-  if (admin) return <Navigate to="/admin" replace />
+  if (admin) return <Navigate to={next} replace />
 
   async function submit(e) {
     e.preventDefault()
     setError('')
     try {
       await loginAdmin(username, password)
-      navigate('/admin', { replace: true })
+      navigate(next, { replace: true })
     } catch (err) {
       setError(err.message)
     }

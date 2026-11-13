@@ -38,11 +38,8 @@ require_once __DIR__ . '/classOrder.php';
  * Rows are one per class id. The teacher and the class name are labels.
  * "4-boys" and "4-Boys" stay two platoons. No student name is selected.
  *
- * PR 28 (unmerged, cursor/perfect-platoon-graphics-2a8a) copies the old
- * mission-mark query as its own wwtcPerfectPlatoonRows() in
- * api/platoonGraphics.php and the daily job calls that. On merge, delete
- * that copy and keep this function — index.php on that branch already calls
- * wwtcPerfectPlatoonRows().
+ * The daily graphics job (api/bin/make-platoon-graphics.php) calls this
+ * function too, so a class on the home list is the class that gets a graphic.
  */
 
 require_once __DIR__ . '/teacherName.php';

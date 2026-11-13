@@ -631,8 +631,9 @@ export default function AdminDashboard() {
       <div className="mx-auto max-w-[1200px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted">Signed in as <span className="font-semibold text-navy">{admin.name}</span> {isSuper ? <Pill className="ml-1">HQ</Pill> : null}</p>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <div className="flex flex-wrap gap-2 sm:items-center">
             <Button to="/reports" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Monthly Reports</Button>
+            <Button to="/office/platoon-graphics" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Platoon Graphics</Button>
             <Button variant="ghost" className="!px-3 !text-[15px] max-sm:min-h-11" onClick={logoutAdmin}>Sign out</Button>
           </div>
         </div>

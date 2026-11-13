@@ -55,6 +55,7 @@ export default function PerfectPlatoons() {
         A platoon is a class — and it’s <span className="font-semibold text-white">perfect</span> when
         every single soldier in it finished their full quota of kapitlach this month
         {perSchool && schoolName ? <> at {schoolName}</> : null}.
+        <Link to="/platoon-graphics" className="mt-4 inline-block font-semibold text-white underline">Download or share the graphics</Link>
       </PageHero>
 
       <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 sm:py-12 lg:px-10">
