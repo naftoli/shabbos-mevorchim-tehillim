@@ -44,3 +44,28 @@ export function rankByRace(rows, sort = 'finished') {
 
 // Back-compat name for the schools race + reports.
 export const rankSchools = rankByRace
+
+// Two rows are tied when the selected percentage and its raw count do not
+// separate them. Name is only a display order (see rankByRace); it is not a score.
+function sameRaceScore(a, b, sort) {
+  return !(raceMetric(a, sort) - raceMetric(b, sort)) && !(raceCount(a, sort) - raceCount(b, sort))
+}
+
+/**
+ * The Race in rankByRace order, with a competition place on each row.
+ * Tied schools share a rank and the next place skips (1, 1, 3). A shared
+ * place inside 1–10 is the Top Base badge number; 11+ stays a plain number.
+ */
+export function rankRace(rows, sort = 'finished') {
+  const ordered = rankByRace(rows || [], sort)
+  const placed = []
+  let i = 0
+  while (i < ordered.length) {
+    let j = i + 1
+    while (j < ordered.length && sameRaceScore(ordered[i], ordered[j], sort)) j += 1
+    const rank = i + 1
+    for (let k = i; k < j; k += 1) placed.push({ ...ordered[k], rank })
+    i = j
+  }
+  return placed
+}

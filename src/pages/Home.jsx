@@ -13,7 +13,7 @@ import {
 } from '@/services/api.js'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
-import { rankSchools, raceMetric } from '@/lib/schoolRace.js'
+import { raceMetric, rankRace } from '@/lib/schoolRace.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { Button, Card, SchoolLogo, Input } from '@/components/ui.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
@@ -39,7 +39,6 @@ const RACE_FILLS = [
   'linear-gradient(90deg, #6fc0d0 0%, var(--color-race-teal) 55%, #0b7389 100%)',
 ]
 const SCHOOL_COLORS = ['#2a5fb8', '#0e8aa6', '#5b3fa8', '#c77d0e', '#1f7a4d', '#c0392b']
-const MEDALS = ['medal-gold', 'medal-silver', 'medal-bronze']
 const PLATOON_PAGE = 10
 
 function Eyebrow({ icon, iconClass = 'h-5', className = '', children }) {
@@ -69,7 +68,7 @@ function Stat({ value, label, icon, hint, iconBox = 'h-[60px] w-[72px] lg:h-[76p
 function SchoolsRace({ schools, period }) {
   const [sort, setSort] = useState('finished')
   const [visible, setVisible] = useState(10)
-  const ranked = rankSchools(schools, sort)
+  const ranked = rankRace(schools, sort)
   const metric = (s) => raceMetric(s, sort)
   const shown = ranked.slice(0, visible)
   return (
@@ -90,9 +89,9 @@ function SchoolsRace({ schools, period }) {
             className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-2 py-2.5 transition hover:bg-black/[0.03] sm:flex sm:gap-4 sm:px-3 lg:gap-5"
           >
             <span className="grid w-9 flex-none place-items-center sm:w-12 lg:w-14">
-              {i < 3 && s.saidMonth > 0
-                ? <img src={asset(`design/${MEDALS[i]}.png`)} alt={`#${i + 1}`} draggable="false" className="h-9 w-auto sm:h-[46px] lg:h-[52px]" />
-                : <span className="font-display text-[20px] font-bold italic leading-none text-blue-accent sm:text-[24px]">{i + 1}</span>}
+              {s.rank <= 10
+                ? <TopBaseBadge rank={s.rank} className="h-11 w-auto sm:h-12 lg:h-[52px]" />
+                : <span className="font-display text-[20px] font-bold italic leading-none text-blue-accent sm:text-[24px]">{s.rank}</span>}
             </span>
             <SchoolLogo school={{ ...s, color: SCHOOL_COLORS[i % SCHOOL_COLORS.length] }} size={44} />
             <span className="min-w-0 whitespace-normal font-display text-[17px] font-semibold leading-tight text-navy sm:w-56 sm:flex-none sm:text-[19px] lg:w-80 lg:text-[20px]">{s.name}</span>
