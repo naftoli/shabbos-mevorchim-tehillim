@@ -146,9 +146,10 @@ if ($method === 'GET' && $path === '/running-totals') {
     foreach (wwtcElapsedMonths() as $mo) {
         $jd = (int) $mo['jd'];
         $elapsedJds[] = $jd;
-        $r = wwtcReport($jd);
-        $r->setArmyResults();
-        $v = (int) ($r->getArmyDoneResults()['Kapitelach'][$jd] ?? 0);
+        // Same cached army pass as /running-totals/breakdown and /stats. armyDone
+        // is not touched by the override adjusters, so this is the figure the
+        // direct report produced, and the warm-cache cron keeps it hot.
+        $v = (int) (wwtcArmyAggregates($jd)['armyDone']['Kapitelach'][$jd] ?? 0);
         $thisYear += $v;
         if ($jd === $current) {
             $thisMonth = $v;

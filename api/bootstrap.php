@@ -157,6 +157,17 @@ function wwtcCacheTtl(): int
     return max(10, (int) (wwtcEnv('WWTC_CACHE_TTL') ?: 120));
 }
 
+/**
+ * Freshness window for data that no longer changes — an earlier campaign
+ * month, whose Shabbos Mevorchim has passed. Writes still flush the whole
+ * cache (wwtcAfterWrite), so a late correction is reflected at once; between
+ * writes these entries can live far longer than the default TTL.
+ */
+function wwtcFrozenCacheTtl(): int
+{
+    return max(wwtcCacheTtl(), (int) (wwtcEnv('WWTC_FROZEN_CACHE_TTL') ?: 86400));
+}
+
 function wwtcCacheDir(): string
 {
     $base = defined('MASHPIA_LOG_DIR') ? MASHPIA_LOG_DIR : sys_get_temp_dir();
@@ -215,8 +226,9 @@ function wwtcTryRefresh(string $file, callable $producer)
 }
 
 /** Cold miss: serialize concurrent first-computes so the army is built once. */
-function wwtcColdCompute(string $file, callable $producer)
+function wwtcColdCompute(string $file, callable $producer, ?int $ttl = null)
 {
+    $ttl = $ttl ?? wwtcCacheTtl();
     $lock = @fopen($file . '.lock', 'c');
     if (!$lock) {
         return $producer(); // can't lock (unwritable dir) — compute uncached
@@ -224,7 +236,7 @@ function wwtcColdCompute(string $file, callable $producer)
     flock($lock, LOCK_EX); // block: let the first request build it, others wait
     try {
         $entry = wwtcCacheRead($file); // another worker may have just filled it
-        if ($entry !== null && (time() - (int) ($entry['at'] ?? 0)) <= wwtcCacheTtl()) {
+        if ($entry !== null && (time() - (int) ($entry['at'] ?? 0)) <= $ttl) {
             return $entry['data'];
         }
         return wwtcCacheWrite($file, $producer);
@@ -263,14 +275,15 @@ function wwtcAfterWrite(): void
     wwtcFlushFileCache();
 }
 
-function wwtcCached(string $key, callable $producer)
+function wwtcCached(string $key, callable $producer, ?int $ttl = null)
 {
+    $ttl = $ttl ?? wwtcCacheTtl();
     $file = wwtcCacheFile($key);
     $entry = wwtcCacheRead($file);
 
     if ($entry !== null) {
         $age = time() - (int) ($entry['at'] ?? 0);
-        if ($age <= wwtcCacheTtl()) {
+        if ($age <= $ttl) {
             return $entry['data']; // fresh
         }
         // Stale. Serve the stale copy; refresh in the background if we can flush
@@ -285,7 +298,7 @@ function wwtcCached(string $key, callable $producer)
         return $fresh === null ? $entry['data'] : $fresh;
     }
 
-    return wwtcColdCompute($file, $producer);
+    return wwtcColdCompute($file, $producer, $ttl);
 }
 
 /**
@@ -293,24 +306,41 @@ function wwtcCached(string $key, callable $producer)
  * setArmyResults()+setASR() pass, which is the ~60s cost. Deterministic per SM
  * date, so cached. Returns plain arrays (JSON-safe) read straight off the report.
  */
+/**
+ * The raw army pass for one Shabbos Mevorchim date — the setArmyResults()+
+ * setASR() work that costs ~60s. Kept as its own function so the warm-cache
+ * cron can force-rebuild it (see api/bin/warm-cache.php) with the same
+ * producer wwtcArmyAggregates() caches.
+ */
+function wwtcComputeArmyAggregates(int $date, int $year): array
+{
+    $sm = wwtcReport($date, $year);
+    $sm->setArmyResults();
+    $sm->setASR($date);
+    return [
+        'schools'  => $sm->getSchools(),
+        'army'     => $sm->getArmyResults(),
+        'armyDone' => $sm->getArmyDoneResults(),
+        'kapGoal'  => $sm->getArmySchoolsResults()['Kapitelach'] ?? [],
+        'kapDone'  => $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [],
+        'minGoal'  => $sm->getArmySchoolsResults()['Minutes'] ?? [],
+        'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
+    ];
+}
+
 function wwtcArmyAggregates(?int $date = null, ?int $year = null): array
 {
     $year = $year ?: wwtcYear();
     $date = $date ?? wwtcCurrentDate();
+    // The current month changes as marks come in, so it keeps the short default
+    // TTL (and the warm-cache cron force-refreshes it every minute). Earlier
+    // months are frozen once their weekend passes, so they get a long TTL and
+    // are rebuilt only on demand — once per write-flush — rather than on the
+    // short cycle that made a cold /running-totals/breakdown time out.
+    $ttl = ($date === wwtcCurrentDate()) ? null : wwtcFrozenCacheTtl();
     $raw = wwtcCached("army_aggregates.$year.$date", static function () use ($date, $year) {
-        $sm = wwtcReport($date, $year);
-        $sm->setArmyResults();
-        $sm->setASR($date);
-        return [
-            'schools'  => $sm->getSchools(),
-            'army'     => $sm->getArmyResults(),
-            'armyDone' => $sm->getArmyDoneResults(),
-            'kapGoal'  => $sm->getArmySchoolsResults()['Kapitelach'] ?? [],
-            'kapDone'  => $sm->getArmySchoolsDoneResults()['Kapitelach'] ?? [],
-            'minGoal'  => $sm->getArmySchoolsResults()['Minutes'] ?? [],
-            'minDone'  => $sm->getArmySchoolsDoneResults()['Minutes'] ?? [],
-        ];
-    });
+        return wwtcComputeArmyAggregates($date, $year);
+    }, $ttl);
     // campaignBoard.php defines this once the school report is available. Overrides
     // are applied on the way out so the file cache stays the engine's own totals.
     if (function_exists('wwtcAdjustArmyAggregates')) {
