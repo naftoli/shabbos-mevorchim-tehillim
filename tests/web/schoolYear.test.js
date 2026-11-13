@@ -5,16 +5,20 @@ import { quotaFor } from '../../src/data/ladders.js'
 import { earliestMedalWhen } from '../../src/lib/medalWhen.js'
 import {
   DEFAULT_FIRST_MONTH,
+  allowSchoolPickFromRow,
   elapsedSchoolYearSlots,
   gradeEndMonth,
   gradeEndSheetMonth,
   firstMonthFromRow,
+  maySetSchoolYear,
   quotaForSchool,
   quotaSheetMonth,
   schoolYearMonthNames,
+  schoolYearPickerVisible,
   schoolYearSlots,
   schoolYearStartYear,
 } from '../../src/lib/schoolYear.js'
+import { schoolAllowsOwnStart, schoolYearStart, setSchoolYearPickStore, setSchoolYearStartStore } from '../../src/data/demo.js'
 
 const PLAIN = ['Tishrei', 'Cheshvan', 'Kislev', 'Teves', 'Shvat', 'Adar', 'Nissan', 'Iyar', 'Sivan', 'Tammuz', 'Av', 'Elul']
 const SHVAT_YEAR = ['Shvat', 'Adar', 'Nissan', 'Iyar', 'Sivan', 'Tammuz', 'Av', 'Elul', 'Tishrei', 'Cheshvan', 'Kislev', 'Teves']
@@ -118,6 +122,60 @@ test('a Shvat school that starts in a leap year lists Adar I then Adar II on the
   assert.ok(adars.every((slot) => slot.sheetMonth === 'Cheshvan' && slot.position === 2 && slot.year === 5787))
   assert.deepEqual(quotaForSchool('3', 'Adar I', 8, 'Shvat'), quotaFor('3', 'Cheshvan', 8))
   assert.deepEqual(quotaForSchool('3', 'Adar II', 8, 'Shvat'), quotaFor('3', 'Cheshvan', 8))
+})
+
+test('schools start in Tishrei and cannot pick a month unless HQ allows it', () => {
+  assert.equal(allowSchoolPickFromRow(null), false)
+  assert.equal(allowSchoolPickFromRow({}), false)
+  assert.equal(allowSchoolPickFromRow({ first_month: 'Shvat' }), false)
+  assert.equal(allowSchoolPickFromRow({ allow_school_pick: 0 }), false)
+  assert.equal(allowSchoolPickFromRow({ allowSchoolPick: false }), false)
+  assert.equal(allowSchoolPickFromRow({ allow_school_pick: '0' }), false)
+  assert.equal(allowSchoolPickFromRow({ allow_school_pick: 1 }), true)
+  assert.equal(allowSchoolPickFromRow({ allow_school_pick: '1' }), true)
+  assert.equal(allowSchoolPickFromRow({ allowSchoolPick: true }), true)
+  assert.equal(firstMonthFromRow({ first_month: 'Shvat', allow_school_pick: 0 }), 'Shvat')
+  assert.equal(firstMonthFromRow({ first_month: 'Nissan' }), 'Nissan')
+  assert.equal(schoolYearPickerVisible({ isSuper: false, allowSchoolPick: false }), false)
+  assert.equal(schoolYearPickerVisible({ isSuper: false, allowSchoolPick: 0 }), false)
+  assert.equal(schoolYearPickerVisible({ isSuper: false, allowSchoolPick: true }), true)
+  assert.equal(schoolYearPickerVisible({ isSuper: true, allowSchoolPick: false }), true)
+  assert.equal(maySetSchoolYear(null, true), false)
+  assert.equal(maySetSchoolYear({ type: 'kid', auth: 'super' }, true), false)
+  assert.equal(maySetSchoolYear({ kind: 'super' }, false), true)
+  assert.equal(maySetSchoolYear({ type: 'admin', auth: 'super' }, false), true)
+  assert.equal(maySetSchoolYear({ kind: 'school' }, false), false)
+  assert.equal(maySetSchoolYear({ type: 'admin', auth: 'school' }, false), false)
+  assert.equal(maySetSchoolYear({ type: 'admin', auth: '' }, false), false)
+  assert.equal(maySetSchoolYear({ kind: 'school' }, true), true)
+  assert.equal(maySetSchoolYear({ type: 'admin', auth: 'school' }, true), true)
+})
+
+test('demo mode keeps the picker off until HQ turns it on, and a saved month stays', () => {
+  const memory = new Map()
+  const previous = globalThis.localStorage
+  globalThis.localStorage = {
+    getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+    setItem: (key, value) => memory.set(key, String(value)),
+    removeItem: (key) => memory.delete(key),
+  }
+  try {
+    const id = 'cheder-menachem-sample'
+    assert.equal(schoolAllowsOwnStart(id), false)
+    assert.equal(schoolYearStart(id), 'Tishrei')
+    setSchoolYearStartStore(id, 'Shvat')
+    assert.equal(schoolYearStart(id), 'Shvat')
+    assert.equal(schoolAllowsOwnStart(id), false)
+    setSchoolYearPickStore(id, true)
+    assert.equal(schoolAllowsOwnStart(id), true)
+    assert.equal(schoolYearStart(id), 'Shvat')
+    setSchoolYearPickStore(id, false)
+    assert.equal(schoolAllowsOwnStart(id), false)
+    assert.equal(schoolYearStart(id), 'Shvat')
+  } finally {
+    if (previous === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = previous
+  }
 })
 
 test('medal timing for a Tishrei school is unchanged', () => {

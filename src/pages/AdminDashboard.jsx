@@ -9,7 +9,7 @@ import { GRADE_LABEL, LADDERS, MONTH_HEB, finishGrade } from '@/data/ladders.js'
 import { hiddenForScope, ladderOverrideMap, openLadders } from '@/lib/schoolLadders.js'
 import { sortClasses } from '@/lib/classOrder.js'
 import { PLAIN_MONTHS } from '@/lib/hebrewYear.js'
-import { firstMonthFromRow, gradeEndMonth } from '@/lib/schoolYear.js'
+import { allowSchoolPickFromRow, firstMonthFromRow, gradeEndMonth, schoolYearPickerVisible } from '@/lib/schoolYear.js'
 import {
   getSchools,
   getSchool,
@@ -19,6 +19,7 @@ import {
   notCompleted,
   setSchoolDedication,
   setSchoolYearStart,
+  setSchoolYearPick,
   setSchoolLadders,
   getSchoolLadders,
   removeSchoolDedication,
@@ -73,21 +74,26 @@ function HqTools() {
   )
 }
 
-// The month the school's first Shabbos Mevorchim blesses. Tishrei is today's
-// year (grade ends Elul). Shvat means Mevorchim Shvat is quota position 1
-// and the grade ends in Teves. HQ and that school's admin only — this page
-// is already limited to them.
-function SchoolYearSetting({ school, onSaved }) {
-  // Nothing saved (no yearStart on the school) is Tishrei, already selected.
+// The month the school's first Shabbos Mevorchim blesses. Tishrei, the first
+// month of the campaign year, is the start until HQ saves another month.
+// Shvat means Mevorchim Shvat is quota position 1 and the grade ends in Teves.
+// HQ always sees this card. A school admin sees the picker only after HQ
+// turns on "allow this school to pick its own start month".
+function SchoolYearSetting({ school, isSuper, onSaved }) {
   const saved = firstMonthFromRow(school)
+  const savedAllow = allowSchoolPickFromRow(school)
   const [month, setMonth] = useState(saved)
+  const [savedMonth, setSavedMonth] = useState(saved)
+  const [pick, setPick] = useState(savedAllow)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const showPicker = schoolYearPickerVisible({ isSuper, allowSchoolPick: savedAllow })
   async function save() {
     setBusy(true)
     setNote('')
     try {
       await setSchoolYearStart(school.id, month)
+      setSavedMonth(month)
       setNote(`Saved. The grade year ends in ${gradeEndMonth(month)}.`)
       onSaved()
     } catch (e) {
@@ -96,13 +102,51 @@ function SchoolYearSetting({ school, onSaved }) {
       setBusy(false)
     }
   }
+  async function savePick(next) {
+    setPick(next)
+    setBusy(true)
+    setNote('')
+    try {
+      await setSchoolYearPick(school.id, next)
+      setNote(next
+        ? 'Saved. This school’s admin can pick the start month.'
+        : 'Saved. This school starts in the first month of the campaign year unless HQ sets a month.')
+      onSaved()
+    } catch (e) {
+      setPick(!next)
+      setNote(e?.message || 'Could not save the school year.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!showPicker) return null
   return (
-    <Card className="p-5 sm:p-6">
+    <Card className="p-5 sm:p-6" id="school-year-start">
       <p className="sh">School year starts in</p>
       <p className="mt-1 text-sm text-muted">
-        The first Shabbos Mevorchim of the grade year. <span className="font-heb">{MONTH_HEB[month]}</span> is quota position 1.
+        Every school starts in Tishrei, the first month of the campaign year, unless HQ sets another month.
+        {' '}<span className="font-heb">{MONTH_HEB[month]}</span> is quota position 1.
         The grade ends in {gradeEndMonth(month)}.
       </p>
+      {isSuper ? (
+        <label className="mt-4 flex items-start gap-3 rounded-xl border border-line bg-[#eef4ff] px-3 py-3 text-sm text-navy">
+          <input
+            type="checkbox"
+            role="switch"
+            className="mt-0.5 h-5 w-5 shrink-0"
+            checked={pick}
+            disabled={busy}
+            onChange={(e) => savePick(e.target.checked)}
+            aria-label="Allow this school to pick its own start month"
+          />
+          <span>
+            <span className="font-semibold">Allow this school to pick its own start month</span>
+            <span className="mt-0.5 block text-muted">Off by default. When this is on, this school’s admin sees the start-month picker and can save a month.</span>
+          </span>
+        </label>
+      ) : (
+        <p className="mt-3 text-sm text-navy">HQ has allowed this school to choose its start month.</p>
+      )}
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="w-full text-sm sm:w-auto">
           <span className="mb-1 block font-semibold text-navy">First month</span>
@@ -117,7 +161,7 @@ function SchoolYearSetting({ school, onSaved }) {
             ))}
           </select>
         </label>
-        <Button variant="navy" onClick={save} disabled={busy || month === saved}>{busy ? 'Saving…' : 'Save'}</Button>
+        <Button variant="navy" onClick={save} disabled={busy || month === savedMonth}>{busy ? 'Saving…' : 'Save'}</Button>
       </div>
       {note ? <p className="mt-3 text-sm font-semibold text-navy">{note}</p> : null}
     </Card>
@@ -972,7 +1016,7 @@ export default function AdminDashboard() {
               <Link to={schoolCampaignPath(school.id, period)} className="mt-3 inline-block text-sm font-semibold text-blue hover:underline">View public campaign page →</Link>
             </Card>
 
-            <SchoolYearSetting key={school.id} school={school} onSaved={reloadSchool} />
+            <SchoolYearSetting key={school.id} school={school} isSuper={isSuper} onSaved={reloadSchool} />
 
             <SchoolLadderSetting key={`ladders-${school.id}`} school={school} onSaved={reloadSchool} />
 

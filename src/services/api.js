@@ -3,7 +3,7 @@
 // `if (!IS_DEMO) return mashpia.<same fn>()` — the Lulav pattern.
 
 import { quotaFor } from '@/data/ladders.js'
-import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
+import { DEFAULT_FIRST_MONTH, elapsedSchoolYearSlots, gradeEndMonth, maySetSchoolYear, quotaSheetMonth, schoolYearSlots, schoolYearStartYear } from '@/lib/schoolYear.js'
 import { canSeeClassRoll, rankForMedals } from '@/lib/decisions.js'
 import { effectiveKapQuota, metKap, overrideAccessStatus } from '@/lib/quotaOverride.js'
 import { cellFor, formatKapitlachQuota, generateCustomLadder } from '@/lib/customLadder.js'
@@ -43,6 +43,8 @@ import {
   setSchoolDedicationStore,
   schoolYearStart,
   setSchoolYearStartStore,
+  schoolAllowsOwnStart,
+  setSchoolYearPickStore,
   schoolHiddenLadders,
   hiddenLaddersForChild,
   demoLadderSettings,
@@ -856,6 +858,7 @@ function demoSchool(id, period) {
     classes: sortClasses(classes),
     dedication: schoolDedication(id),
     yearStart: schoolYearStart(id),
+    allowSchoolPick: schoolAllowsOwnStart(id),
     hiddenLadders: schoolHiddenLadders(id),
   }
 }
@@ -1094,11 +1097,56 @@ export async function setSchoolDedication(schoolId, text) {
   invalidate()
   return schoolDedication(schoolId)
 }
+function demoSignedInAdmin() {
+  try {
+    if (typeof localStorage === 'undefined') return null
+    const parsed = JSON.parse(localStorage.getItem('wwtc_session_admin') || 'null')
+    if (!parsed || !parsed.exp || parsed.exp < Date.now()) return null
+    return parsed.data || null
+  } catch {
+    return null
+  }
+}
+
+function assertDemoMaySetStartMonth(schoolId) {
+  const admin = demoSignedInAdmin()
+  if (!maySetSchoolYear(admin, schoolAllowsOwnStart(schoolId))) {
+    throw new Error('Only HQ can change the start month for this school.')
+  }
+  if (admin?.kind === 'school' && String(admin.schoolId) !== String(schoolId)) {
+    throw new Error('You do not have permission to perform this action.')
+  }
+}
+
 export async function setSchoolYearStart(schoolId, firstMonth) {
   if (!IS_DEMO) return mashpia.setSchoolYearStart({ schoolId, firstMonth })
+  assertDemoMaySetStartMonth(schoolId)
   setSchoolYearStartStore(schoolId, firstMonth)
   invalidate()
-  return { ok: true, schoolId, firstMonth: schoolYearStart(schoolId), gradeEnds: null }
+  const month = schoolYearStart(schoolId)
+  return {
+    ok: true,
+    schoolId,
+    firstMonth: month,
+    gradeEnds: gradeEndMonth(month),
+    allowSchoolPick: schoolAllowsOwnStart(schoolId),
+  }
+}
+
+export async function setSchoolYearPick(schoolId, allowSchoolPick) {
+  if (!IS_DEMO) return mashpia.setSchoolYearPick({ schoolId, allowSchoolPick })
+  if (!maySetSchoolYear(demoSignedInAdmin(), false)) {
+    throw new Error('Only HQ can let a school pick its start month.')
+  }
+  setSchoolYearPickStore(schoolId, allowSchoolPick)
+  invalidate()
+  return {
+    ok: true,
+    schoolId,
+    firstMonth: schoolYearStart(schoolId),
+    gradeEnds: gradeEndMonth(schoolYearStart(schoolId)),
+    allowSchoolPick: schoolAllowsOwnStart(schoolId),
+  }
 }
 
 function scopeRows(rows, idKey) {
