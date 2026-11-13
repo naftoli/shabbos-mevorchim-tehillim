@@ -147,13 +147,23 @@ function wwtcLiveElapsedTotals(): array
     }
     foreach (wwtcElapsedMonths() as $mo) {
         $jd = (int) $mo['jd'];
-        $report = wwtcReport($jd);
-        $report->setArmyResults();
-        $kap = (int) ($report->getArmyDoneResults()['Kapitelach'][$jd] ?? 0);
-        $minutes = 0;
         if (function_exists('wwtcArmyAggregates')) {
+            // Take both figures from the cached army pass (army_aggregates.*),
+            // which /stats, /schools and /reports already warm. This used to
+            // also run wwtcReport()->setArmyResults() directly for kapitlach — a
+            // second, uncached ~60s army pass per elapsed month, which is why a
+            // cold /running-totals/breakdown ran past Cloudflare's 100s limit
+            // and returned 524. armyDone is never touched by the override
+            // adjusters, so the kapitlach here is the same figure /running-totals
+            // shows.
             $agg = wwtcArmyAggregates($jd);
+            $kap = (int) ($agg['armyDone']['Kapitelach'][$jd] ?? 0);
             $minutes = (int) array_sum($agg['minDone'] ?? []);
+        } else {
+            $report = wwtcReport($jd);
+            $report->setArmyResults();
+            $kap = (int) ($report->getArmyDoneResults()['Kapitelach'][$jd] ?? 0);
+            $minutes = 0;
         }
         $out[$jd] = ['kapitlach' => $kap, 'minutes' => $minutes];
     }
