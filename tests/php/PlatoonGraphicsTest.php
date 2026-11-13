@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+// platoonGraphics.php uses array_key_first()/str_*() (PHP 7.3/8.0). Production
+// loads these via bootstrap.php's compat polyfills; load them here too so the
+// suite runs on the legacy PHP 7.2 the site deploys to.
+require __DIR__ . '/../../api/compat.php';
 require __DIR__ . '/../../api/platoonGraphics.php';
 
 function expect(bool $ok, string $message): void
@@ -217,28 +221,35 @@ if (!extension_loaded('gd')) {
     expect(is_string($stamp) && strncmp($stamp, "\x89PNG", 4) === 0, 'the placeholder file is a PNG');
 }
 
-$stub = $dir . '/render-stub.php';
-file_put_contents($stub, "<?php\n\$job = json_decode(file_get_contents(\$argv[1]), true);\nfile_put_contents(\$job['outPath'], 'nope');\n");
-putenv('WWTC_PLATOON_RENDER_CMD=' . PHP_BINARY . ' ' . $stub);
-$commandFailed = false;
-$commandMessage = '';
-try {
-    wwtcRenderPlatoonGraphic([
-        'schoolName' => 'Sample',
-        'classLabel' => 'Kitah Beis',
-        'logoPath' => '',
-        'month' => 'Cheshvan',
-        'year' => 5786,
-        'backgroundPath' => $dir . '/cheshvan.png',
-        'outPath' => $dir . '/command.png',
-    ]);
-} catch (RuntimeException $e) {
-    $commandFailed = true;
-    $commandMessage = $e->getMessage();
+// The external renderer runs the command through proc_open()'s array form,
+// which is PHP 7.4+. The site's legacy PHP 7.2 only ever uses the GD
+// placeholder (no WWTC_PLATOON_RENDER_CMD), so skip this path below 7.4.
+if (PHP_VERSION_ID >= 70400) {
+    $stub = $dir . '/render-stub.php';
+    file_put_contents($stub, "<?php\n\$job = json_decode(file_get_contents(\$argv[1]), true);\nfile_put_contents(\$job['outPath'], 'nope');\n");
+    putenv('WWTC_PLATOON_RENDER_CMD=' . PHP_BINARY . ' ' . $stub);
+    $commandFailed = false;
+    $commandMessage = '';
+    try {
+        wwtcRenderPlatoonGraphic([
+            'schoolName' => 'Sample',
+            'classLabel' => 'Kitah Beis',
+            'logoPath' => '',
+            'month' => 'Cheshvan',
+            'year' => 5786,
+            'backgroundPath' => $dir . '/cheshvan.png',
+            'outPath' => $dir . '/command.png',
+        ]);
+    } catch (RuntimeException $e) {
+        $commandFailed = true;
+        $commandMessage = $e->getMessage();
+    }
+    putenv('WWTC_PLATOON_RENDER_CMD');
+    expect($commandFailed && strpos($commandMessage, '1080') !== false, 'a command renderer must write a 1080×1080 PNG');
+    expect(wwtcPlatoonRendererId() === 'placeholder', 'with no command configured the renderer is the placeholder');
+} else {
+    echo "ok   - external command renderer skipped (proc_open array form needs PHP 7.4+)\n";
 }
-putenv('WWTC_PLATOON_RENDER_CMD');
-expect($commandFailed && strpos($commandMessage, '1080') !== false, 'a command renderer must write a 1080×1080 PNG');
-expect(wwtcPlatoonRendererId() === 'placeholder', 'with no command configured the renderer is the placeholder');
 
 expect(wwtcIsPlatoonGraphicsRoute('/platoon-graphics') === true, 'the public list is our route');
 expect(wwtcIsPlatoonGraphicsRoute('/platoon-graphics/school/61') === true, 'one school is our route');
