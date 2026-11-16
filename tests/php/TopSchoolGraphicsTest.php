@@ -112,4 +112,82 @@ expect(wwtcTopSchoolGraphicsTableReady() === false, 'without the database the To
 expect(wwtcTopBaseBadgePath(3) !== null && strpos((string) wwtcTopBaseBadgePath(3), 'top-base-3.webp') !== false, 'badge 3 uses the existing Top Base art');
 expect(wwtcTopBaseBadgePath(11) === null, 'there is no badge past 10');
 
+$wrapped = wwtcWrapGraphicLines(
+    ['CHEDER', 'CHABAD', 'PHILADELPHIA'],
+    strlen('PHILADELPHIA'),
+    static function ($text) {
+        return strlen($text);
+    }
+);
+expect($wrapped === ['CHEDER', 'CHABAD', 'PHILADELPHIA'], 'the sample school name wraps one word per line');
+
+$font = wwtcDisplayFontPath();
+$short = wwtcFitGraphicText(['OHR'], 200, 120, 80, $font, 0.85, 1.176);
+$long = wwtcFitGraphicText(
+    ['INTERNATIONAL', 'LEADERSHIP', 'ACADEMY', 'OF', 'GREATER', 'PHILADELPHIA'],
+    200,
+    120,
+    80,
+    $font,
+    0.85,
+    1.176
+);
+expect($long['size'] < $short['size'], 'a long school name uses a smaller size than a short one');
+expect(count($long['lines']) > 1, 'a long school name wraps');
+
+if (wwtcFinishedArtReady() && function_exists('imagettftext')) {
+    $dir = sys_get_temp_dir() . '/wwtc-finished-art-' . getmypid();
+    @mkdir($dir, 0775, true);
+    $one = wwtcRenderFinishedGraphic([
+        'kind' => 'top10',
+        'rank' => 1,
+        'schoolName' => 'Cheder Chabad Philadelphia',
+        'logoPath' => '',
+        'outPath' => $dir . '/one.png',
+    ]);
+    $two = wwtcRenderFinishedGraphic([
+        'kind' => 'top10',
+        'rank' => 2,
+        'schoolName' => 'Cheder Chabad Philadelphia',
+        'logoPath' => '',
+        'outPath' => $dir . '/two.png',
+    ]);
+    $tie = wwtcRenderFinishedGraphic([
+        'kind' => 'top10',
+        'rank' => 1,
+        'schoolName' => 'Another School',
+        'logoPath' => '',
+        'outPath' => $dir . '/tie.png',
+    ]);
+    $info = getimagesize($one);
+    expect($info && $info[0] === 1080 && $info[1] === 1080, 'a Top 10 graphic is a 1080 square');
+    expect(md5_file($one) !== md5_file($two), 'rank 1 and rank 2 use different numbered backgrounds');
+    expect(wwtcTopBlankPath(1) !== wwtcTopBlankPath(2), 'each rank has its own blank');
+    $onePx = imagecreatefrompng($one);
+    $tiePx = imagecreatefrompng($tie);
+    $badge = imagecolorat($onePx, 700, 860);
+    expect($badge === imagecolorat($tiePx, 700, 860), 'two schools tied for a rank use that rank’s background');
+    imagedestroy($onePx);
+    imagedestroy($tiePx);
+    $platoon = wwtcRenderFinishedGraphic([
+        'kind' => 'platoon',
+        'classLabel' => 'Kitah Gimmel 2',
+        'schoolName' => 'Cheder Chabad Philadelphia',
+        'logoPath' => '',
+        'outPath' => $dir . '/platoon.png',
+    ]);
+    $platoonInfo = getimagesize($platoon);
+    expect($platoonInfo && $platoonInfo[0] === 1080 && $platoonInfo[1] === 1080, 'a Perfect Platoon graphic is a 1080 square');
+    $huge = wwtcRenderFinishedGraphic([
+        'kind' => 'top10',
+        'rank' => 10,
+        'schoolName' => 'The International Leadership Academy of Greater Philadelphia and Surrounding Counties',
+        'logoPath' => '',
+        'outPath' => $dir . '/huge.png',
+    ]);
+    $hugeInfo = getimagesize($huge);
+    expect($hugeInfo && $hugeInfo[0] === 1080, 'a very long school name still writes the square');
+    unset($tie);
+}
+
 echo "ok   - top 10 school graphics\n";
