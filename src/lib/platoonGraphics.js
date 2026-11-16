@@ -2,6 +2,7 @@
 // Phone numbers are an office concern: toPublicSchools drops them.
 
 import { normalizeCampaignMonth, platoonClassLabel, kitahLabel } from './platoonGrade.js'
+import { compareSchoolGraphics, graphicSharePath } from './monthGraphics.js'
 
 export function graphicKey(row, year, month) {
   const schoolId = String(row.schoolId ?? row.school_id ?? '')
@@ -51,15 +52,21 @@ export function officeCounts(schools) {
   }
 }
 
-const PUBLIC_GRAPHIC_KEYS = ['id', 'className', 'grade', 'gradeLabel', 'classLabel', 'fileUrl', 'madeAt']
+const PUBLIC_GRAPHIC_KEYS = ['id', 'kind', 'rank', 'className', 'grade', 'gradeLabel', 'classLabel', 'fileUrl', 'madeAt']
 
 export function toPublicGraphic(graphic) {
-  const label = graphic.classLabel || platoonClassLabel(graphic.grade, graphic.className)
+  const kind = graphic.kind === 'top10' ? 'top10' : 'platoon'
+  const label = kind === 'top10'
+    ? (graphic.classLabel || 'Top 10 School')
+    : (graphic.classLabel || platoonClassLabel(graphic.grade, graphic.className))
+  const rank = Number(graphic.rank)
   const row = {
     id: graphic.id,
-    className: graphic.className,
-    grade: graphic.grade,
-    gradeLabel: graphic.gradeLabel || kitahLabel(graphic.grade) || '',
+    kind,
+    rank: kind === 'top10' && Number.isInteger(rank) && rank >= 1 && rank <= 10 ? rank : undefined,
+    className: kind === 'top10' ? '' : graphic.className,
+    grade: kind === 'top10' ? '' : graphic.grade,
+    gradeLabel: kind === 'top10' ? '' : (graphic.gradeLabel || kitahLabel(graphic.grade) || ''),
     classLabel: label,
     fileUrl: graphic.fileUrl || null,
     madeAt: graphic.madeAt || null,
@@ -75,7 +82,7 @@ export function toPublicSchool(school) {
     name: school.name,
     logo: school.logo || null,
     color: school.color || null,
-    graphics: (school.graphics || []).map(toPublicGraphic),
+    graphics: (school.graphics || []).slice().sort(compareSchoolGraphics).map(toPublicGraphic),
   }
 }
 
@@ -110,23 +117,54 @@ export function platoonGraphicsShareMessage({ schoolName, month, year, link }) {
   return `Mazel tov from the Tzivos Hashem Worldwide Tehillim Club! ${schoolName}'s Perfect Platoon graphics for ${month} ${year} are ready: ${link}`
 }
 
+export function schoolSetShareMessage({ schoolName, month, year, link, graphics }) {
+  const list = graphics || []
+  const hasTop = list.some((graphic) => graphic.kind === 'top10')
+  const hasPlatoon = list.some((graphic) => graphic.kind !== 'top10')
+  const what = hasTop && hasPlatoon
+    ? 'Top 10 and Perfect Platoon graphics'
+    : hasTop
+      ? 'Top 10 School graphic'
+      : 'Perfect Platoon graphics'
+  return `Mazel tov from the Tzivos Hashem Worldwide Tehillim Club! ${schoolName}'s ${what} for ${month} ${year} are ready: ${link}`
+}
+
 export function schoolGraphicsPath(schoolId) {
   return `/platoon-graphics/${encodeURIComponent(schoolId)}`
 }
 
-export function absoluteSchoolGraphicsUrl(schoolId) {
+function periodSearch(period) {
+  if (!period) return ''
+  const params = new URLSearchParams()
+  if (period.year) params.set('year', String(period.year))
+  if (period.month) params.set('month', String(period.month))
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+function siteUrl(pathAndQuery) {
   const base = (import.meta.env?.BASE_URL || '/shabbos-mevorchim-tehillim/').replace(/\/?$/, '/')
-  const path = `${base}platoon-graphics/${encodeURIComponent(schoolId)}`.replace(/([^:])\/{2,}/g, '$1/')
+  const path = `${base}${String(pathAndQuery).replace(/^\//, '')}`.replace(/([^:])\/{2,}/g, '$1/')
   if (typeof window === 'undefined') return path
   return new URL(path, window.location.origin).href
 }
 
+export function absoluteSchoolGraphicsUrl(schoolId, period) {
+  return siteUrl(`platoon-graphics/${encodeURIComponent(schoolId)}${periodSearch(period)}`)
+}
+
+export function absoluteGraphicShareUrl(schoolId, graphicId, period) {
+  return siteUrl(graphicSharePath(schoolId, graphicId, period))
+}
+
 export function graphicDownloadName(graphic) {
   const month = normalizeCampaignMonth(graphic.month || '').toLowerCase().replace(/\s+/g, '-')
-  const label = String(graphic.classLabel || graphic.className || 'platoon')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+  const label = graphic.kind === 'top10'
+    ? `top-${graphic.rank || '10'}`
+    : String(graphic.classLabel || graphic.className || 'platoon')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
   return `${month || 'month'}-${graphic.year || 'year'}-${label || 'platoon'}.png`
 }
 

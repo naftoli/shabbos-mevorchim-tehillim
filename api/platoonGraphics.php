@@ -95,6 +95,9 @@ Before the first run, on the server (not from this repo's deploy):
      if that constant exists, otherwise var/platoon-graphics inside this app.
   3. Put each month's background where api/platoon-graphics/backgrounds.php points.
      The job exits with an error instead of drawing when that file is missing.
+  4. Top 10 school graphics use the same job. Run api/sql/wwtc_top_school_graphics.sql
+     once as well. Until that file has been run, Perfect Platoon graphics still
+     run and the Top 10 step prints a note instead of failing the cron.
 
 TXT;
 }
@@ -377,28 +380,48 @@ function wwtcPublicSchoolsFromRows(array $rows, array $logos = []): array
         $id = (int) ($row['id'] ?? 0);
         $grade = (string) ($row['grade'] ?? '');
         $className = (string) ($row['class_name'] ?? $row['className'] ?? '');
+        $kind = (($row['kind'] ?? '') === 'top10') ? 'top10' : 'platoon';
+        $rank = (int) ($row['rank_place'] ?? $row['rank'] ?? 0);
         $fileUrl = null;
         if ($file !== '' && is_file($file)) {
-            $fileUrl = wwtcPlatoonGraphicPublicUrl($id);
+            $fileUrl = $kind === 'top10' ? wwtcTopGraphicPublicUrl($id) : wwtcPlatoonGraphicPublicUrl($id);
         }
-        $by[$sid]['graphics'][] = [
-            'id' => $id,
-            'className' => $className,
-            'grade' => $grade,
-            'gradeLabel' => (string) ($row['grade_label'] ?? $row['gradeLabel'] ?? (wwtcKitahLabel($grade) ?? '')),
-            'classLabel' => wwtcPlatoonClassLabel($grade, $className),
+        $graphic = [
+            'id' => $kind === 'top10' ? ('top-' . $id) : $id,
+            'kind' => $kind,
+            'className' => $kind === 'top10' ? '' : $className,
+            'grade' => $kind === 'top10' ? '' : $grade,
+            'gradeLabel' => $kind === 'top10' ? '' : (string) ($row['grade_label'] ?? $row['gradeLabel'] ?? (wwtcKitahLabel($grade) ?? '')),
+            'classLabel' => $kind === 'top10' ? 'Top 10 School' : wwtcPlatoonClassLabel($grade, $className),
             'fileUrl' => $fileUrl,
             'madeAt' => isset($row['made_at']) ? (string) $row['made_at'] : (isset($row['madeAt']) ? (string) $row['madeAt'] : null),
         ];
+        if ($kind === 'top10' && $rank >= 1 && $rank <= 10) {
+            $graphic['rank'] = $rank;
+        }
+        $by[$sid]['graphics'][] = $graphic;
     }
     $schools = array_values($by);
     usort($schools, static function ($a, $b) {
         return strcasecmp((string) $a['name'], (string) $b['name']);
     });
+    foreach ($schools as $i => $school) {
+        usort($schools[$i]['graphics'], 'wwtcComparePublicGraphics');
+    }
     return $schools;
 }
 
-function wwtcPlatoonGraphicPublicUrl(int $id): string
+function wwtcComparePublicGraphics(array $a, array $b): int
+{
+    $ak = (($a['kind'] ?? '') === 'top10') ? 0 : 1;
+    $bk = (($b['kind'] ?? '') === 'top10') ? 0 : 1;
+    if ($ak !== $bk) {
+        return $ak <=> $bk;
+    }
+    return strcasecmp((string) ($a['classLabel'] ?? ''), (string) ($b['classLabel'] ?? ''));
+}
+
+function wwtcGraphicsApiBase(): string
 {
     $base = '/shabbos-mevorchim-tehillim/api';
     $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
@@ -406,7 +429,12 @@ function wwtcPlatoonGraphicPublicUrl(int $id): string
     if (preg_match('#^(.*?)/api(?:/|$)#', $path, $m) && $m[1] !== '') {
         $base = rtrim($m[1], '/') . '/api';
     }
-    return $base . '/platoon-graphics/file/' . $id;
+    return $base;
+}
+
+function wwtcPlatoonGraphicPublicUrl(int $id): string
+{
+    return wwtcGraphicsApiBase() . '/platoon-graphics/file/' . $id;
 }
 
 function wwtcJsonHasKey(array $data, string $needle): bool
@@ -531,6 +559,15 @@ function wwtcRenderPlatoonGraphicPlaceholder(array $job): string
     wwtcBlitPlaceholderText($canvas, (string) ($job['classLabel'] ?? ''), 900, 3);
     $when = trim((string) ($job['month'] ?? '') . ' ' . (string) ($job['year'] ?? ''));
     wwtcBlitPlaceholderText($canvas, $when, 990, 3);
+    wwtcPasteImageFile($canvas, isset($job['logoPath']) ? (string) $job['logoPath'] : '', 70, 340, 300);
+    if (($job['kind'] ?? '') === 'top10') {
+        wwtcPasteImageFile($canvas, isset($job['badgePath']) ? (string) $job['badgePath'] : '', 560, 300, 420);
+    } else {
+        $art = dirname(__DIR__) . '/public/design/perfect-platoon-logo.webp';
+        if (is_file($art)) {
+            wwtcPasteImageFile($canvas, $art, 560, 300, 420);
+        }
+    }
 
     $out = (string) ($job['outPath'] ?? '');
     if ($out === '') {
@@ -549,6 +586,32 @@ function wwtcRenderPlatoonGraphicPlaceholder(array $job): string
         throw new RuntimeException('The placeholder renderer did not write a 1080×1080 PNG.');
     }
     return $out;
+}
+
+function wwtcPasteImageFile($canvas, string $path, int $x, int $y, int $box): void
+{
+    if ($path === '' || !is_file($path) || !function_exists('imagecreatefromstring')) {
+        return;
+    }
+    $raw = @file_get_contents($path);
+    if ($raw === false || $raw === '') {
+        return;
+    }
+    $src = @imagecreatefromstring($raw);
+    if (!$src) {
+        return;
+    }
+    $sw = imagesx($src);
+    $sh = imagesy($src);
+    if ($sw < 1 || $sh < 1) {
+        imagedestroy($src);
+        return;
+    }
+    $scale = min($box / $sw, $box / $sh);
+    $dw = max(1, (int) round($sw * $scale));
+    $dh = max(1, (int) round($sh * $scale));
+    imagecopyresampled($canvas, $src, $x, $y, 0, 0, $dw, $dh, $sw, $sh);
+    imagedestroy($src);
 }
 
 function wwtcBlitPlaceholderText($image, string $text, int $y, int $scale): void
@@ -580,16 +643,23 @@ function wwtcBlitPlaceholderText($image, string $text, int $y, int $scale): void
  */
 function wwtcRenderPlatoonGraphic(array $job): string
 {
-    $background = (string) ($job['backgroundPath'] ?? '');
-    if ($background === '' || !is_file($background)) {
-        throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
-    }
     $cmd = function_exists('wwtcEnv')
         ? wwtcEnv('WWTC_PLATOON_RENDER_CMD', (string) getenv('WWTC_PLATOON_RENDER_CMD'))
         : (string) getenv('WWTC_PLATOON_RENDER_CMD');
     $cmd = trim($cmd);
     if ($cmd !== '') {
+        $background = (string) ($job['backgroundPath'] ?? '');
+        if ($background === '' || !is_file($background)) {
+            throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
+        }
         return wwtcRenderPlatoonGraphicCommand($cmd, $job);
+    }
+    if (wwtcFinishedArtReady()) {
+        return wwtcRenderFinishedGraphic($job);
+    }
+    $background = (string) ($job['backgroundPath'] ?? '');
+    if ($background === '' || !is_file($background)) {
+        throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
     }
     return wwtcRenderPlatoonGraphicPlaceholder($job);
 }
@@ -1146,22 +1216,29 @@ function wwtcUpdatePlatoonGraphicPath(int $id, string $path): void
 
 function wwtcOfficeGraphicFromRow(array $row): array
 {
-    $grade = (string) $row['grade'];
-    $className = (string) $row['class_name'];
+    $grade = (string) ($row['grade'] ?? '');
+    $className = (string) ($row['class_name'] ?? '');
     $file = (string) ($row['file_path'] ?? '');
     $id = (int) $row['id'];
-    return [
-        'id' => $id,
-        'className' => $className,
-        'grade' => $grade,
-        'gradeLabel' => (string) ($row['grade_label'] ?? ''),
-        'classLabel' => wwtcPlatoonClassLabel($grade, $className),
-        'fileUrl' => ($file !== '' && is_file($file)) ? wwtcPlatoonGraphicPublicUrl($id) : null,
+    $kind = (($row['kind'] ?? '') === 'top10') ? 'top10' : 'platoon';
+    $rank = (int) ($row['rank_place'] ?? $row['rank'] ?? 0);
+    $graphic = [
+        'id' => $kind === 'top10' ? ('top-' . $id) : $id,
+        'kind' => $kind,
+        'rank' => ($kind === 'top10' && $rank >= 1 && $rank <= 10) ? $rank : null,
+        'className' => $kind === 'top10' ? '' : $className,
+        'grade' => $kind === 'top10' ? '' : $grade,
+        'gradeLabel' => $kind === 'top10' ? '' : (string) ($row['grade_label'] ?? ''),
+        'classLabel' => $kind === 'top10' ? 'Top 10 School' : wwtcPlatoonClassLabel($grade, $className),
+        'fileUrl' => ($file !== '' && is_file($file))
+            ? ($kind === 'top10' ? wwtcTopGraphicPublicUrl($id) : wwtcPlatoonGraphicPublicUrl($id))
+            : null,
         'madeAt' => (string) ($row['made_at'] ?? ''),
         'sent' => !empty($row['sent']),
         'sentAt' => !empty($row['sent_at']) ? (string) $row['sent_at'] : null,
         'isNew' => !empty($row['isNew']),
     ];
+    return $graphic;
 }
 
 /** @return array<int,array<string,mixed>> */
@@ -1186,6 +1263,9 @@ function wwtcOfficeSchoolsFromRows(array $rows, array $contacts, array $logos): 
     usort($schools, static function ($a, $b) {
         return strcasecmp((string) $a['name'], (string) $b['name']);
     });
+    foreach ($schools as $i => $school) {
+        usort($schools[$i]['graphics'], 'wwtcComparePublicGraphics');
+    }
     return $schools;
 }
 
@@ -1210,6 +1290,7 @@ function wwtcIsPlatoonGraphicsRoute(string $path): bool
         || $path === '/office/platoon-graphics/contact'
         || $path === '/office/platoon-graphics/sent'
         || (bool) preg_match('#^/platoon-graphics/school/\d+$#', $path)
+        || (bool) preg_match('#^/platoon-graphics/file/top-\d+$#', $path)
         || (bool) preg_match('#^/platoon-graphics/file/\d+$#', $path);
 }
 
@@ -1252,6 +1333,10 @@ function wwtcDispatchPlatoonGraphics(string $method, string $path): bool
 
 function wwtcHandlePlatoonGraphics(string $method, string $path): void
 {
+    if ($method === 'GET' && preg_match('#^/platoon-graphics/file/top-(\d+)$#', $path, $m)) {
+        wwtcServeTopSchoolGraphic((int) $m[1]);
+        return;
+    }
     if ($method === 'GET' && preg_match('#^/platoon-graphics/file/(\d+)$#', $path, $m)) {
         wwtcServePlatoonGraphic((int) $m[1]);
         return;
@@ -1298,6 +1383,7 @@ function wwtcPublicPlatoonGraphicsResponse(string $path): void
         'year' => $period['year'],
         'renderer' => wwtcPlatoonRendererId(),
         'storage' => wwtcPlatoonGraphicsTablesReady() ? 'ready' : 'missing',
+        'topStorage' => wwtcTopSchoolGraphicsTableReady() ? 'ready' : 'missing',
         'schools' => [],
     ];
     if ($period['holiday'] || $payload['storage'] !== 'ready') {
@@ -1307,7 +1393,10 @@ function wwtcPublicPlatoonGraphicsResponse(string $path): void
     if (preg_match('#^/platoon-graphics/school/(\d+)$#', $path, $m)) {
         $schoolFilter = [(int) $m[1]];
     }
-    $rows = wwtcLoadPlatoonGraphicRows((int) $period['year'], (string) $period['month'], $schoolFilter);
+    $rows = array_merge(
+        wwtcLoadPlatoonGraphicRows((int) $period['year'], (string) $period['month'], $schoolFilter),
+        wwtcLoadTaggedTopRows((int) $period['year'], (string) $period['month'], $schoolFilter)
+    );
     $logos = function_exists('wwtcSchoolLogos') ? wwtcSchoolLogos() : [];
     $payload['schools'] = wwtcPublicSchoolsFromRows($rows, $logos);
     wwtcJson($payload);
@@ -1337,8 +1426,12 @@ function wwtcOfficePlatoonGraphics(string $method, string $path): void
                 'year' => $period['year'],
                 'renderer' => wwtcPlatoonRendererId(),
                 'storage' => 'missing',
+                'topStorage' => wwtcTopSchoolGraphicsTableReady() ? 'ready' : 'missing',
                 'schools' => [],
                 'message' => 'Platoon graphics storage is not installed yet. Run api/sql/wwtc_platoon_graphics.sql once on mashpia.',
+                'topMessage' => wwtcTopSchoolGraphicsTableReady()
+                    ? null
+                    : 'Top 10 school graphics are not installed yet. Run api/sql/wwtc_top_school_graphics.sql once on mashpia.',
             ]);
         }
         wwtcError('Platoon graphics storage is not installed yet. Run api/sql/wwtc_platoon_graphics.sql once on mashpia.', 503);
@@ -1355,16 +1448,26 @@ function wwtcOfficePlatoonGraphics(string $method, string $path): void
     if ($method !== 'GET' || $path !== '/office/platoon-graphics') {
         wwtcError('Not found: ' . $method . ' ' . $path, 404);
     }
+    $topReady = wwtcTopSchoolGraphicsTableReady();
+    $topMessage = $topReady
+        ? null
+        : 'Top 10 school graphics are not installed yet. Run api/sql/wwtc_top_school_graphics.sql once on mashpia. Perfect Platoon graphics still show.';
     if ($period['holiday']) {
         wwtcJson([
             'month' => $period['month'],
             'year' => $period['year'],
             'renderer' => wwtcPlatoonRendererId(),
             'storage' => 'ready',
+            'topStorage' => $topReady ? 'ready' : 'missing',
+            'topMessage' => $topMessage,
             'schools' => [],
         ]);
     }
-    $rows = wwtcLoadPlatoonGraphicRows((int) $period['year'], (string) $period['month'], is_array($scope) ? $scope : null);
+    $scopeIds = is_array($scope) ? $scope : null;
+    $rows = array_merge(
+        wwtcLoadPlatoonGraphicRows((int) $period['year'], (string) $period['month'], $scopeIds),
+        wwtcLoadTaggedTopRows((int) $period['year'], (string) $period['month'], $scopeIds)
+    );
     $ids = [];
     foreach ($rows as $row) {
         $ids[(int) $row['school_id']] = (int) $row['school_id'];
@@ -1376,6 +1479,8 @@ function wwtcOfficePlatoonGraphics(string $method, string $path): void
         'year' => $period['year'],
         'renderer' => wwtcPlatoonRendererId(),
         'storage' => 'ready',
+        'topStorage' => $topReady ? 'ready' : 'missing',
+        'topMessage' => $topMessage,
         'schools' => wwtcOfficeSchoolsFromRows($rows, $contacts, $logos),
     ]);
 }
@@ -1417,13 +1522,17 @@ function wwtcOfficeMarkSent(array $actor, $scope, array $period): void
             wwtcError('Unmark one graphic at a time.', 422);
         }
         $updated = wwtcMarkSchoolGraphicsSent($schoolId, $who, $year, $month);
+        $updated += wwtcMarkSchoolTopGraphicsSent($schoolId, $who, $year, $month);
         wwtcJson(['ok' => true, 'updated' => $updated]);
     }
     $ids = $input['ids'] ?? [];
     if (!is_array($ids)) {
         wwtcError('Say which graphics to mark.', 422);
     }
-    $updated = wwtcSetPlatoonGraphicsSent($ids, $sent, $who, $year, $month, is_array($scope) ? $scope : null);
+    list($platoonIds, $topIds) = wwtcSplitGraphicIds($ids);
+    $scopeIds = is_array($scope) ? $scope : null;
+    $updated = wwtcSetPlatoonGraphicsSent($platoonIds, $sent, $who, $year, $month, $scopeIds);
+    $updated += wwtcSetTopSchoolGraphicsSent($topIds, $sent, $who, $year, $month, $scopeIds);
     wwtcJson(['ok' => true, 'updated' => $updated]);
 }
 
@@ -1458,29 +1567,47 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
     $fresh = wwtcNewPlatoonJobs($platoons, $existing, $year, $month);
     $already = count($platoons) - count($fresh);
     echo "Perfect platoons {$month} {$year}: " . count($platoons) . " perfect, {$already} already made, " . count($fresh) . " new.\n";
+    $topPlan = wwtcPlanTopSchoolGraphics($year, $month, $jd, $opts);
+    if ($topPlan['summary'] !== '') {
+        echo $topPlan['summary'] . "\n";
+    }
+    if ($topPlan['note'] !== '') {
+        fwrite(STDERR, $topPlan['note'] . "\n");
+    }
     if ($opts['dryRun'] && !$opts['rerender']) {
         foreach ($fresh as $platoon) {
             $label = wwtcPlatoonClassLabel((string) $platoon['grade'], (string) $platoon['className']);
             echo "would make {$platoon['school']} {$label}\n";
         }
-        return 0;
+        foreach ($topPlan['targets'] as $target) {
+            $verb = $target['action'] === 'redraw' ? 'would redraw' : 'would make';
+            echo "{$verb} {$target['schoolName']} Top 10 #{$target['rank']}\n";
+        }
+        return !empty($topPlan['error']) ? 1 : 0;
     }
     $targets = $opts['rerender'] ? $existing : $fresh;
-    if (!$targets) {
-        // Nothing to draw. A missing background is a note, not a failed cron,
-        // until a new platoon actually needs the file.
-        try {
-            wwtcBackgroundPathForMonth($month);
-        } catch (RuntimeException $e) {
-            fwrite(STDERR, "Note: " . $e->getMessage() . "\n");
+    $topTargets = $topPlan['targets'];
+    if (!$targets && !$topTargets) {
+        // Nothing to draw. A missing month background only matters when Tab's
+        // square art is not in the repo.
+        if (!wwtcFinishedArtReady()) {
+            try {
+                wwtcBackgroundPathForMonth($month);
+            } catch (RuntimeException $e) {
+                fwrite(STDERR, "Note: " . $e->getMessage() . "\n");
+            }
         }
-        return 0;
+        return !empty($topPlan['error']) ? 1 : 0;
     }
-    try {
-        $background = wwtcBackgroundPathForMonth($month);
-    } catch (RuntimeException $e) {
-        fwrite(STDERR, $e->getMessage() . "\n");
-        return 1;
+    if (wwtcFinishedArtReady()) {
+        $background = wwtcPlatoonBlankPath();
+    } else {
+        try {
+            $background = wwtcBackgroundPathForMonth($month);
+        } catch (RuntimeException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return 1;
+        }
     }
     $dir = wwtcPlatoonGraphicsDir();
     if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
@@ -1507,6 +1634,7 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
             'month' => $month,
             'year' => $year,
             'backgroundPath' => $background,
+            'kind' => 'platoon',
             'outPath' => $dir . '/' . wwtcPlatoonGraphicFilename([
                 'schoolId' => $schoolId,
                 'className' => $parts['className'],
@@ -1545,8 +1673,14 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
             fwrite(STDERR, "FAILED {$schoolName} {$className}: " . $e->getMessage() . "\n");
         }
     }
-    echo ($opts['rerender'] ? 'Redrew ' : 'Made ') . "{$made}." . ($failed ? " {$failed} failed." : '') . "\n";
-    return $failed ? 2 : 0;
+    if ($targets) {
+        echo ($opts['rerender'] ? 'Redrew ' : 'Made ') . "{$made}." . ($failed ? " {$failed} failed." : '') . "\n";
+    }
+    $topFailed = $topTargets ? wwtcDrawTopSchoolGraphics($topTargets, $dir, $month, $year, $background) : 0;
+    if ($failed || $topFailed) {
+        return 2;
+    }
+    return !empty($topPlan['error']) ? 1 : 0;
 }
 
 function wwtcCliImportPlatoonLedger(array $argv): int
@@ -1645,3 +1779,6 @@ function wwtcCliImportPlatoonLedger(array $argv): int
     echo "Imported {$inserted}, skipped {$skipped} already made, {$bad} row(s) need a look.\n";
     return $bad && $inserted === 0 ? 1 : 0;
 }
+
+require_once __DIR__ . '/topSchoolGraphics.php';
+require_once __DIR__ . '/graphicArt.php';

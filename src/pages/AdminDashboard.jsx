@@ -953,6 +953,7 @@ export default function AdminDashboard() {
           <p className="text-sm text-muted">Signed in as <span className="font-semibold text-navy">{admin.name}</span> {isSuper ? <Pill className="ml-1">HQ</Pill> : null}</p>
           <div className="flex flex-wrap gap-2 sm:items-center">
             <Button to="/reports" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Monthly Reports</Button>
+            <Button to="/office/share-graphics" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Share graphics</Button>
             <Button to="/office/platoon-graphics" variant="outline" className="!px-3 !text-[15px] max-sm:min-h-11">Platoon Graphics</Button>
             <Button variant="ghost" className="!px-3 !text-[15px] max-sm:min-h-11" onClick={logoutAdmin}>Sign out</Button>
           </div>

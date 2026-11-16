@@ -12,6 +12,8 @@ import KidDashboard from './pages/KidDashboard.jsx'
 import Medals from './pages/Medals.jsx'
 import PerfectPlatoons from './pages/PerfectPlatoons.jsx'
 import PlatoonGraphics from './pages/PlatoonGraphics.jsx'
+import GraphicShare from './pages/GraphicShare.jsx'
+import SchoolGraphicsShare from './pages/SchoolGraphicsShare.jsx'
 
 const PlatoonGraphicsOffice = lazy(() => import('./pages/PlatoonGraphicsOffice.jsx'))
 import AdminLogin from './pages/AdminLogin.jsx'
@@ -101,7 +103,9 @@ export default function App() {
         <Route path="/medals" element={<Medals />} />
         <Route path="/perfect-platoons" element={<PerfectPlatoons />} />
         <Route path="/platoon-graphics" element={<PlatoonGraphics />} />
+        <Route path="/platoon-graphics/:schoolId/share/:graphicId" element={<GraphicShare />} />
         <Route path="/platoon-graphics/:schoolId" element={<PlatoonGraphics />} />
+        <Route path="/office/share-graphics" element={<SchoolGraphicsShare />} />
         <Route path="/office/platoon-graphics" element={
           <Suspense fallback={<p className="px-4 py-16 text-center text-muted">Opening the office…</p>}>
             <PlatoonGraphicsOffice />
