@@ -3,6 +3,7 @@
 // staff routes and are never returned by the public graphics API.
 
 import { IS_DEMO } from '@/lib/liveMode.js'
+import { demoRaceSchools } from './api.js'
 import * as mashpia from './mashpia.js'
 import {
   demoMarkGraphicsSent,
@@ -13,7 +14,7 @@ import {
 
 export function getOfficePlatoonGraphics(period) {
   if (!IS_DEMO) return mashpia.getOfficePlatoonGraphics(period)
-  return demoOfficePlatoonGraphics(period)
+  return demoOfficePlatoonGraphics(period, undefined, demoRaceSchools(period))
 }
 
 export function saveSchoolWhatsapp(schoolId, whatsapp) {
@@ -26,7 +27,7 @@ export function markPlatoonGraphicsSent(body) {
   return demoMarkGraphicsSent(body)
 }
 
-export function markSchoolGraphicsSent(schoolId) {
+export function markSchoolGraphicsSent(schoolId, period) {
   if (!IS_DEMO) return mashpia.markSchoolGraphicsSent(schoolId)
-  return demoMarkSchoolSent(schoolId)
+  return demoMarkSchoolSent(schoolId, period)
 }

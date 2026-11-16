@@ -8,7 +8,9 @@ declare(strict_types=1);
  *   15 6 * * * php /ABSOLUTE/PATH/shabbos-mevorchim-tehillim/api/bin/make-platoon-graphics.php >> /var/log/wwtc-platoon-graphics.log 2>&1
  *
  * Reads this month's perfect platoons with the same query as GET /perfect-platoons
- * and draws only the ones that are not already in the ledger.
+ * and draws only the ones that are not already in the ledger. The same run
+ * draws one Top 10 graphic for each school in that month's top 10, using the
+ * same place as The Race. Last month's files stay in the ledger.
  */
 
 if (PHP_SAPI !== 'cli') {

@@ -2,10 +2,11 @@ import { useRef, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import { PageHero } from './_page.jsx'
 import { Button, Card, Input, Pill, SchoolLogo, Spinner } from '@/components/ui.jsx'
+import GraphicMonthField from '@/components/GraphicMonthField.jsx'
 import PlatoonGraphicPreview from '@/components/PlatoonGraphicPreview.jsx'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { CURRENT_MONTH } from '@/services/api.js'
+import { CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
 import {
   getOfficePlatoonGraphics,
   markPlatoonGraphicsSent,
@@ -18,7 +19,7 @@ import {
   filterOfficeTab,
   normalizeWhatsapp,
   officeCounts,
-  platoonGraphicsShareMessage,
+  schoolSetShareMessage,
   whatsAppSchoolUrl,
 } from '@/lib/platoonGraphics.js'
 
@@ -33,9 +34,12 @@ export default function PlatoonGraphicsOffice() {
   const { admin, isSuper } = useAuth()
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'sent' || params.get('tab') === 'all' ? params.get('tab') : 'to-send'
+  const yearParam = params.get('year') || String(CAMPAIGN_YEAR)
+  const monthParam = params.get('month') || CURRENT_MONTH
+  const period = { year: yearParam, month: monthParam }
   const { data, loading, error, reload } = useLiveData(
-    () => (admin ? getOfficePlatoonGraphics() : Promise.resolve(null)),
-    [admin],
+    () => (admin ? getOfficePlatoonGraphics(period) : Promise.resolve(null)),
+    [admin, yearParam, monthParam],
   )
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,8 +52,8 @@ export default function PlatoonGraphicsOffice() {
   const schools = data?.schools ?? []
   const counts = officeCounts(schools)
   const visible = filterOfficeTab(schools, tab)
-  const month = data?.month || CURRENT_MONTH
-  const year = data?.year || ''
+  const month = monthParam || data?.month || CURRENT_MONTH
+  const year = yearParam || data?.year || ''
   const placeholder = IS_DEMO || data?.renderer === 'placeholder'
   const stillLoading = loading && data == null
 
@@ -57,6 +61,13 @@ export default function PlatoonGraphicsOffice() {
     const query = new URLSearchParams(params)
     if (next === 'to-send') query.delete('tab')
     else query.set('tab', next)
+    setParams(query, { replace: true })
+  }
+
+  function writeMonth({ year: nextYear, month: nextMonth }) {
+    const query = new URLSearchParams(params)
+    query.set('year', String(nextYear))
+    query.set('month', nextMonth)
     setParams(query, { replace: true })
   }
 
@@ -80,10 +91,10 @@ export default function PlatoonGraphicsOffice() {
   }
 
   async function whatsApp(school, event) {
-    const link = absoluteSchoolGraphicsUrl(school.id)
+    const link = absoluteSchoolGraphicsUrl(school.id, { month, year })
     const href = whatsAppSchoolUrl(
       school.whatsapp,
-      platoonGraphicsShareMessage({ schoolName: school.name, month, year, link }),
+      schoolSetShareMessage({ schoolName: school.name, month, year, link, graphics: school.graphics }),
     )
     if (!href) {
       event?.preventDefault()
@@ -95,7 +106,7 @@ export default function PlatoonGraphicsOffice() {
     setBusy(true)
     setNote('')
     try {
-      await markSchoolGraphicsSent(school.id)
+      await markSchoolGraphicsSent(school.id, { month, year })
       setNote(`Marked ${school.name} sent.`)
       reload()
     } catch (err) {
@@ -120,11 +131,18 @@ export default function PlatoonGraphicsOffice() {
 
   return (
     <>
-      <PageHero eyebrow={isSuper ? 'HQ office' : 'School office'} title="Send Perfect Platoon graphics">
-        WhatsApp a school its public graphics link. The number stays on this page — it is never on the public site.
+      <PageHero eyebrow={isSuper ? 'HQ office' : 'School office'} title="Send graphics to schools">
+        Send each school its Top 10 graphic and its Perfect Platoon graphics for the month. The number stays on this page — it is never on the public site.
       </PageHero>
 
       <div className="mx-auto max-w-[900px] px-4 py-8 sm:px-6 sm:py-12">
+        <GraphicMonthField
+          campaignYear={CAMPAIGN_YEAR}
+          currentMonth={CURRENT_MONTH}
+          year={year}
+          month={month}
+          onChange={writeMonth}
+        />
         <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Graphics to send">
           {[
             ['to-send', `To send (${counts.toSend})`],
@@ -155,6 +173,11 @@ export default function PlatoonGraphicsOffice() {
             <p className="text-sm text-navy">{data.message || 'Run api/sql/wwtc_platoon_graphics.sql once on the server.'}</p>
           </Card>
         ) : null}
+        {data?.topStorage === 'missing' ? (
+          <Card className="mt-4 p-5">
+            <p className="text-sm text-navy">{data.topMessage || 'Run api/sql/wwtc_top_school_graphics.sql once on the server.'}</p>
+          </Card>
+        ) : null}
         {stillLoading ? <Spinner label="Getting the office" /> : null}
         {error ? (
           <p className="mt-4 text-sm text-navy">
@@ -176,11 +199,12 @@ export default function PlatoonGraphicsOffice() {
           {visible.map((school) => {
             const href = whatsAppSchoolUrl(
               school.whatsapp,
-              platoonGraphicsShareMessage({
+              schoolSetShareMessage({
                 schoolName: school.name,
                 month,
                 year,
-                link: absoluteSchoolGraphicsUrl(school.id),
+                link: absoluteSchoolGraphicsUrl(school.id, { month, year }),
+                graphics: school.graphics,
               }),
             )
             return (
@@ -200,24 +224,25 @@ export default function PlatoonGraphicsOffice() {
 
                 {href ? (
                   <Button as="a" href={href} target="_blank" rel="noopener noreferrer" variant="green" className="mt-3 w-full sm:w-auto" onClick={(event) => whatsApp(school, event)}>
-                    WhatsApp school
+                    Send to school
                   </Button>
                 ) : (
                   <Button variant="green" className="mt-3 w-full sm:w-auto" onClick={(event) => whatsApp(school, event)}>
-                    Add a number to WhatsApp
+                    Add a number to send
                   </Button>
                 )}
+                <p className="mt-2 text-xs text-muted">Opens WhatsApp with this month’s link. The link has the Top 10 graphic and every Perfect Platoon.</p>
 
                 <ul className="mt-4 space-y-3">
                   {school.graphics.map((graphic) => (
                     <li key={graphic.id} className="rounded-2xl bg-[#eef4ff] p-3">
                       <div className="flex flex-col gap-3 sm:flex-row">
                         <div className="w-full sm:w-28 sm:shrink-0">
-                          <PlatoonGraphicPreview schoolName={school.name} graphic={graphic} placeholder={placeholder} />
+                          <PlatoonGraphicPreview school={school} graphic={graphic} placeholder={placeholder} month={month} year={year} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-navy">{graphic.classLabel || graphic.className}</p>
+                            <p className="font-semibold text-navy">{graphic.kind === 'top10' ? 'Top 10 School' : (graphic.classLabel || graphic.className)}</p>
                             {graphic.isNew ? <Pill>New</Pill> : null}
                             {graphic.sent ? <span className="text-xs font-semibold uppercase tracking-wide text-green">Sent</span> : null}
                           </div>

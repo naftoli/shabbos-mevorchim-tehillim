@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHero } from './_page.jsx'
 import { Button, Card, Input, SchoolLogo, Spinner } from '@/components/ui.jsx'
+import GraphicMonthField from '@/components/GraphicMonthField.jsx'
 import PlatoonGraphicPreview from '@/components/PlatoonGraphicPreview.jsx'
 import { useLiveData } from '@/lib/useLiveData.js'
-import { getPublicPlatoonGraphics, CURRENT_MONTH } from '@/services/api.js'
+import { CAMPAIGN_YEAR, getPublicPlatoonGraphics, CURRENT_MONTH } from '@/services/api.js'
 import { MONTH_HEB } from '@/data/ladders.js'
-import { asset } from '@/lib/asset.js'
+import { downloadPoster } from '@/lib/graphicPoster.js'
 import { IS_DEMO } from '@/lib/liveMode.js'
+import { parentShareMessage, withDemoFlag } from '@/lib/monthGraphics.js'
 import {
-  absoluteSchoolGraphicsUrl,
+  absoluteGraphicShareUrl,
   graphicDownloadName,
-  platoonGraphicsShareMessage,
   shareOrDownload,
   downloadUrl,
 } from '@/lib/platoonGraphics.js'
@@ -19,12 +20,14 @@ import {
 export default function PlatoonGraphics() {
   const { schoolId } = useParams()
   const navigate = useNavigate()
-  const { data, loading, error, reload } = useLiveData(() => getPublicPlatoonGraphics(), [])
+  const [params, setParams] = useSearchParams()
+  const year = params.get('year') || String(CAMPAIGN_YEAR)
+  const month = params.get('month') || CURRENT_MONTH
+  const period = useMemo(() => ({ year, month }), [year, month])
+  const { data, loading, error, reload } = useLiveData(() => getPublicPlatoonGraphics(period), [year, month])
   const [query, setQuery] = useState('')
   const [note, setNote] = useState('')
   const schools = data?.schools ?? []
-  const month = data?.month || CURRENT_MONTH
-  const year = data?.year || ''
   const placeholder = IS_DEMO || data?.renderer === 'placeholder'
   const q = query.trim().toLowerCase()
   const matches = useMemo(() => {
@@ -35,15 +38,36 @@ export default function PlatoonGraphics() {
   const selected = schoolId ? schools.find((school) => String(school.id) === String(schoolId)) : null
   const stillLoading = loading && data == null
 
+  function writeMonth({ year: nextYear, month: nextMonth }) {
+    const query = new URLSearchParams(params)
+    query.set('year', String(nextYear))
+    query.set('month', nextMonth)
+    setParams(query, { replace: true })
+  }
+
+  function openSchool(id) {
+    const query = new URLSearchParams(params)
+    query.set('year', String(year))
+    query.set('month', month)
+    navigate({ pathname: `/platoon-graphics/${id}`, search: query.toString() })
+  }
+
   async function onShare(school, graphic) {
     setNote('')
-    const link = absoluteSchoolGraphicsUrl(school.id)
+    const link = withDemoFlag(absoluteGraphicShareUrl(school.id, graphic.id, period))
     try {
       const action = await shareOrDownload({
-        title: `${school.name} ${graphic.classLabel}`,
-        text: platoonGraphicsShareMessage({ schoolName: school.name, month, year, link }),
+        title: graphic.kind === 'top10' ? `${school.name} Top 10` : `${school.name} ${graphic.classLabel}`,
+        text: parentShareMessage({
+          schoolName: school.name,
+          month,
+          year,
+          link,
+          platoonName: graphic.classLabel,
+          kind: graphic.kind,
+        }),
         url: link,
-        fileUrl: graphic.fileUrl || (placeholder ? asset('design/platoon-graphic-placeholder.png') : null),
+        fileUrl: graphic.fileUrl || null,
         filename: graphicDownloadName({ ...graphic, month, year }),
       })
       setNote(action === 'download' ? 'Download started.' : action === 'copy-link' ? 'Link copied.' : 'Share sheet opened.')
@@ -53,14 +77,14 @@ export default function PlatoonGraphics() {
     }
   }
 
-  function onDownload(school, graphic) {
-    const fileUrl = graphic.fileUrl || (placeholder ? asset('design/platoon-graphic-placeholder.png') : null)
-    if (!fileUrl) {
-      setNote('This graphic has not been posted yet.')
+  async function onDownload(school, graphic) {
+    if (graphic.fileUrl) {
+      downloadUrl(graphic.fileUrl, graphicDownloadName({ ...graphic, month, year }))
+      setNote(`Downloading ${school.name}, ${graphic.classLabel || 'Top 10 School'}.`)
       return
     }
-    downloadUrl(fileUrl, graphicDownloadName({ ...graphic, month, year }))
-    setNote(`Downloading ${school.name}, ${graphic.classLabel}.`)
+    const ok = await downloadPoster({ school, graphic, month, year })
+    setNote(ok ? `Downloading ${school.name}.` : 'This graphic has not been posted yet.')
   }
 
   return (
@@ -70,7 +94,14 @@ export default function PlatoonGraphics() {
       </PageHero>
 
       <div className="mx-auto max-w-[900px] px-4 py-8 sm:px-6 sm:py-12">
-        <label className="block">
+        <GraphicMonthField
+          campaignYear={CAMPAIGN_YEAR}
+          currentMonth={CURRENT_MONTH}
+          year={year}
+          month={month}
+          onChange={writeMonth}
+        />
+        <label className="mt-4 block">
           <span className="mb-2 block text-sm font-semibold text-navy">Find your school</span>
           <Input
             type="search"
@@ -96,7 +127,7 @@ export default function PlatoonGraphics() {
               <button
                 key={school.id}
                 type="button"
-                onClick={() => { setQuery(''); navigate(`/platoon-graphics/${school.id}`) }}
+                onClick={() => { setQuery(''); openSchool(school.id) }}
                 className="flex min-h-11 w-full items-center gap-3 rounded-2xl bg-card px-3 py-3 text-left shadow-card"
               >
                 <SchoolLogo school={school} size={40} />
@@ -142,10 +173,10 @@ export default function PlatoonGraphics() {
                   <Card className="p-4 sm:p-5">
                     <div className="flex flex-col gap-4 sm:flex-row">
                       <div className="w-full sm:w-56 sm:shrink-0">
-                        <PlatoonGraphicPreview schoolName={selected.name} graphic={graphic} placeholder={placeholder} />
+                        <PlatoonGraphicPreview school={selected} graphic={graphic} placeholder={placeholder} month={month} year={year} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-display text-xl font-black text-navy">{graphic.classLabel || graphic.className}</p>
+                        <p className="font-display text-xl font-black text-navy">{graphic.kind === 'top10' ? 'Top 10 School' : (graphic.classLabel || graphic.className)}</p>
                         <p className="mt-1 text-sm text-muted">{graphic.className}{graphic.gradeLabel ? ` · ${graphic.gradeLabel}` : ''}</p>
                         <div className="mt-4 grid grid-cols-2 gap-2 sm:flex">
                           <Button variant="navy" className="w-full sm:w-auto" onClick={() => onDownload(selected, graphic)}>Download</Button>
