@@ -558,7 +558,7 @@ export default function KidDashboard() {
           </Card>
         ) : null}
 
-        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionsTotal={progress.missionsTotal} missionHistory={progress.missionHistory} year={campaignYear} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
+        <TehillimTraining grade={kid.grade} ladder={kid.ladder} months={progress.months} priorMissions={progress.priorMissions} missionHistory={progress.missionHistory} year={campaignYear} quotaGrid={progress.customLadder} firstMonth={yearStart} anchorMonth={cur.month} />
 
         <MedalBoard
           progress={progress}

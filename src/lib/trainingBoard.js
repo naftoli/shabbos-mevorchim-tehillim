@@ -187,11 +187,29 @@ export function buildTraining({ grade, ladder, months, priorMissions = 0, histor
       title: g === 'pre1a' ? 'Pre-1A' : (GRADE_LABEL[g] ? `${GRADE_LABEL[g]} Grade` : finishGradeLabel(g)),
       missions,
       done: missions.filter((m) => m.record && m.met).length,
+      total: missions.length,
     }
   })
-  const total = boards.reduce((n, b) => n + b.missions.length, 0)
+  const total = boards.reduce((n, b) => n + b.total, 0)
   const done = boards.reduce((n, b) => n + b.done, 0)
-  return { boards, total, done, priorMissions }
+  // Done boxes are a subset of the boxes on the ladder, so earned cannot pass the total.
+  return { boards, total, done: Math.min(done, total), priorMissions }
+}
+
+/**
+ * The ladder cheshbon. Earned is the Done boxes on the sections, total is
+ * every box those sections show (a leap year is 13, Adar I and Adar II).
+ * Both are the sums of the sections, and earned is never more than the total.
+ */
+export function trainingCheshbon(board) {
+  const sections = (board?.boards || []).map((b) => ({
+    grade: b.grade,
+    done: b.done,
+    total: b.total ?? (b.missions ? b.missions.length : 0),
+  }))
+  const total = sections.reduce((n, s) => n + s.total, 0)
+  const done = sections.reduce((n, s) => n + s.done, 0)
+  return { sections, earned: Math.min(done, total), total }
 }
 
 /** Flat chronological list for streaks: prior-year rows first, then this year. */
