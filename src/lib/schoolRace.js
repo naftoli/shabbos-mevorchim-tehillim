@@ -69,3 +69,12 @@ export function rankRace(rows, sort = 'finished') {
   }
   return placed
 }
+
+/**
+ * Schools whose Race place is 1–10 on the finished view — the same list and
+ * the same badge number as The Race and Schools, Ranked. A tie inside the
+ * top 10 keeps every school that shares that place. Rank 11+ is left out.
+ */
+export function topTenFromRace(rows) {
+  return rankRace(rows, 'finished').filter((row) => row.rank <= 10)
+}

@@ -2,7 +2,8 @@
 // (555) and are loaded only when the office page asks for them.
 
 import { CAMPAIGN_YEAR, CURRENT_MONTH } from '@/data/demo.js'
-import { demoPlatoonGraphicRows } from './platoonGraphicsDemo.js'
+import { collectDemoGraphics, demoPlatoonGraphicRows, isDemoArchivePeriod } from './platoonGraphicsDemo.js'
+import { previousCampaignMonth, topGraphicId } from './monthGraphics.js'
 import { normalizeCampaignMonth } from './platoonGrade.js'
 import { decorateGraphics } from './platoonGraphics.js'
 
@@ -10,7 +11,7 @@ const STORAGE_KEY = 'wwtc.demo.platoonOffice'
 
 // Which seed graphics start out already sent. 2 is Cheder's second platoon,
 // so its other platoon shows as NEW. 3 and 4 are a school that is fully sent.
-const SEED_SENT = { 2: true, 3: true, 4: true }
+const SEED_SENT = { 2: true, 3: true, 4: true, 'top-bais-chaya-mushka-sample': true }
 
 const SEED_CONTACTS = {
   'cheder-menachem-sample': '17185550101',
@@ -55,17 +56,18 @@ function monthMatches(period) {
   return month === normalizeCampaignMonth(CURRENT_MONTH) && year === String(CAMPAIGN_YEAR)
 }
 
-export function demoOfficePlatoonGraphics(period, viewer) {
+export function demoOfficePlatoonGraphics(period, viewer, schoolRows) {
   const month = period?.month ? normalizeCampaignMonth(period.month) : CURRENT_MONTH
   const year = period?.year || CAMPAIGN_YEAR
-  const empty = { month, year, renderer: 'placeholder', storage: 'ready', schools: [], forbidden: false }
+  const empty = { month, year, renderer: 'placeholder', storage: 'ready', topStorage: 'ready', schools: [], forbidden: false }
   const who = viewer === undefined ? readAdmin() : viewer
   if (!who || (who.kind !== 'super' && who.kind !== 'school')) {
     return { ...empty, forbidden: true }
   }
-  if (!monthMatches(period)) return empty
+  if (!monthMatches(period) && !isDemoArchivePeriod(period)) return empty
   const state = loadState()
-  const graphics = decorateGraphics(demoPlatoonGraphicRows().map((row) => ({
+  const source = collectDemoGraphics(period, schoolRows)
+  const graphics = decorateGraphics(source.map((row) => ({
     ...row,
     sent: !!state.sent[row.id],
   })))
@@ -92,7 +94,18 @@ export function demoOfficePlatoonGraphics(period, viewer) {
   const visible = who.kind === 'school'
     ? schools.filter((school) => String(school.id) === String(who.schoolId))
     : schools
-  return { month: CURRENT_MONTH, year: CAMPAIGN_YEAR, renderer: 'placeholder', storage: 'ready', schools: visible, forbidden: false }
+  const shown = isDemoArchivePeriod(period)
+    ? previousCampaignMonth(CAMPAIGN_YEAR, CURRENT_MONTH)
+    : { month: CURRENT_MONTH, year: CAMPAIGN_YEAR }
+  return {
+    month: shown.month,
+    year: shown.year,
+    renderer: 'placeholder',
+    storage: 'ready',
+    topStorage: 'ready',
+    schools: visible,
+    forbidden: false,
+  }
 }
 
 export function demoSaveWhatsapp(schoolId, whatsapp) {
@@ -110,12 +123,23 @@ export function demoMarkGraphicsSent({ ids, sent }) {
   return { ok: true, updated: (ids || []).length }
 }
 
-export function demoMarkSchoolSent(schoolId) {
+export function demoMarkSchoolSent(schoolId, period) {
   const state = loadState()
   let updated = 0
-  for (const row of demoPlatoonGraphicRows()) {
-    if (row.schoolId === schoolId && !state.sent[row.id]) {
-      state.sent[row.id] = true
+  const ids = []
+  if (isDemoArchivePeriod(period)) {
+    for (const row of collectDemoGraphics(period)) {
+      if (row.schoolId === schoolId) ids.push(row.id)
+    }
+  } else {
+    for (const row of demoPlatoonGraphicRows()) {
+      if (row.schoolId === schoolId) ids.push(row.id)
+    }
+    ids.push(topGraphicId(schoolId))
+  }
+  for (const id of ids) {
+    if (!state.sent[id]) {
+      state.sent[id] = true
       updated += 1
     }
   }

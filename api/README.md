@@ -304,7 +304,10 @@ until `WWTC_PLATOON_RENDER_CMD` points at Sholem's `platoon_render.py`.
 
 Full notes, the crontab line, the ledger import columns, and what has to be
 on the server: `api/platoon-graphics/README.md`. Run
-`api/sql/wwtc_platoon_graphics.sql` once by hand. The app does not run it.
+`api/sql/wwtc_platoon_graphics.sql` and `api/sql/wwtc_top_school_graphics.sql`
+once by hand. The app does not run them. The Top 10 graphic uses the same
+place as The Race. Until the Top 10 SQL has been run, Perfect Platoon
+graphics still run.
 
 ```
 15 6 * * * php /ABSOLUTE/PATH/shabbos-mevorchim-tehillim/api/bin/make-platoon-graphics.php >> /var/log/wwtc-platoon-graphics.log 2>&1

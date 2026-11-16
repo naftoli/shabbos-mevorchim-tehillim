@@ -366,9 +366,22 @@ export async function getPerfectPlatoons(period) {
   return sortPlatoons(rows)
 }
 
+export function demoRaceSchools(period) {
+  const month = demoDataMonth(period?.month || CURRENT_MONTH)
+  const year = period?.year || CAMPAIGN_YEAR
+  return schoolsFor(month, year).map((school) => ({
+    id: school.id,
+    name: school.name,
+    color: school.color,
+    logo: school.logo || null,
+    pctMet: school.pctMet,
+    metMonth: school.metMonth,
+  }))
+}
+
 export async function getPublicPlatoonGraphics(period) {
   if (!IS_DEMO) return mashpia.getPublicPlatoonGraphics(period)
-  return demoPublicPlatoonGraphics(period)
+  return demoPublicPlatoonGraphics(period, demoRaceSchools(period))
 }
 
 function demoPerfectPlatoons(month = CURRENT_MONTH, year = CAMPAIGN_YEAR) {

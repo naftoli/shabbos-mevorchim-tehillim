@@ -44,11 +44,29 @@ Optional: `WWTC_SCHOOL_LOGOS_DIR` if the school shields are not under the web
 root at `/schoolLogos/`. `WWTC_PUBLIC_BASE` is not required; the office builds
 the public link from the site the staff member is using.
 
+## Top 10 school graphics
+
+The same daily job also draws one graphic for each school in that month's
+top 10. The place is the finished-view rank from The Race / Schools, Ranked
+(percent of soldiers who met, then how many met). Ties share a badge number.
+Rank 11 and after are not drawn. Each month keeps its own rows. A later month
+does not replace the previous month's files.
+
+Run `api/sql/wwtc_top_school_graphics.sql` once, by hand, on the mashpia
+database. Until that file has been run, Perfect Platoon graphics still run
+and the job prints a note instead of failing. Student names are not stored.
+
+The picture uses the same renderer as a Perfect Platoon. The job adds
+`kind`, `rank`, and `badgePath` (the numbered Top Base shield) so the
+renderer can stamp the badge. The placeholder paints the shield when that
+file can be read, and still says PLACEHOLDER.
+
 ## Daily job
 
 `php api/bin/make-platoon-graphics.php` reads this month's perfect platoons
 with `wwtcPerfectPlatoonRows()`, the same mission-mark query as
-`GET /perfect-platoons`. It does not open a browser.
+`GET /perfect-platoons`, then the top 10 from `wwtcNationwideSchools()`
+re-ranked with `wwtcTopTenFromRace()`. It does not open a browser.
 
 A class already in the ledger for that month and year is skipped. A second run
 the same day prints `0 new` and draws nothing.
