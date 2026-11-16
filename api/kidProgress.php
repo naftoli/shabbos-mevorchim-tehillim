@@ -7,6 +7,8 @@ declare(strict_types=1);
  * GET /me/progress payload. Loaded by the API router.
  */
 
+require_once __DIR__ . '/trainingCount.php';
+
 /**
  * A soldier's elapsed-month progress (quota/said/minutes per month, met), by
  * direct per-month queries mirroring ShabbosMevorchim::setStudentResults(): the
@@ -339,5 +341,24 @@ function wwtcKidProgress(array $kid): array
     if ($openFlag) {
         $out['flagged'] = $openFlag;
     }
+    // The training card counts boxes, not the lifetime medal sum. Medals keep
+    // missionsTotal (Soldier::medalBoard). This pair matches the sections.
+    $finish = '';
+    if (!empty($out['customLadder']['finishGrade'])) {
+        $finish = (string) $out['customLadder']['finishGrade'];
+    }
+    $anchor = !empty($current['month']) ? (string) $current['month'] : '';
+    $ladderCount = wwtcCountTrainingLadder(
+        (string) ($out['grade'] ?? ''),
+        $out['ladder'] ?? 0,
+        isset($out['year']) ? (int) $out['year'] : null,
+        is_array($out['missionHistory'] ?? null) ? $out['missionHistory'] : [],
+        is_array($out['months'] ?? null) ? $out['months'] : [],
+        (string) ($out['yearStart'] ?? 'Tishrei'),
+        $anchor,
+        $finish
+    );
+    $out['ladderEarned'] = $ladderCount['earned'];
+    $out['ladderTotal'] = $ladderCount['total'];
     return $out;
 }
