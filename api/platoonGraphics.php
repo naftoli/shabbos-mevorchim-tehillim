@@ -643,16 +643,23 @@ function wwtcBlitPlaceholderText($image, string $text, int $y, int $scale): void
  */
 function wwtcRenderPlatoonGraphic(array $job): string
 {
-    $background = (string) ($job['backgroundPath'] ?? '');
-    if ($background === '' || !is_file($background)) {
-        throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
-    }
     $cmd = function_exists('wwtcEnv')
         ? wwtcEnv('WWTC_PLATOON_RENDER_CMD', (string) getenv('WWTC_PLATOON_RENDER_CMD'))
         : (string) getenv('WWTC_PLATOON_RENDER_CMD');
     $cmd = trim($cmd);
     if ($cmd !== '') {
+        $background = (string) ($job['backgroundPath'] ?? '');
+        if ($background === '' || !is_file($background)) {
+            throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
+        }
         return wwtcRenderPlatoonGraphicCommand($cmd, $job);
+    }
+    if (wwtcFinishedArtReady()) {
+        return wwtcRenderFinishedGraphic($job);
+    }
+    $background = (string) ($job['backgroundPath'] ?? '');
+    if ($background === '' || !is_file($background)) {
+        throw new RuntimeException(wwtcMissingBackgroundMessage((string) ($job['month'] ?? ''), $background));
     }
     return wwtcRenderPlatoonGraphicPlaceholder($job);
 }
@@ -1581,20 +1588,26 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
     $targets = $opts['rerender'] ? $existing : $fresh;
     $topTargets = $topPlan['targets'];
     if (!$targets && !$topTargets) {
-        // Nothing to draw. A missing background is a note, not a failed cron,
-        // until a new platoon or a Top 10 school actually needs the file.
-        try {
-            wwtcBackgroundPathForMonth($month);
-        } catch (RuntimeException $e) {
-            fwrite(STDERR, "Note: " . $e->getMessage() . "\n");
+        // Nothing to draw. A missing month background only matters when Tab's
+        // square art is not in the repo.
+        if (!wwtcFinishedArtReady()) {
+            try {
+                wwtcBackgroundPathForMonth($month);
+            } catch (RuntimeException $e) {
+                fwrite(STDERR, "Note: " . $e->getMessage() . "\n");
+            }
         }
         return !empty($topPlan['error']) ? 1 : 0;
     }
-    try {
-        $background = wwtcBackgroundPathForMonth($month);
-    } catch (RuntimeException $e) {
-        fwrite(STDERR, $e->getMessage() . "\n");
-        return 1;
+    if (wwtcFinishedArtReady()) {
+        $background = wwtcPlatoonBlankPath();
+    } else {
+        try {
+            $background = wwtcBackgroundPathForMonth($month);
+        } catch (RuntimeException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            return 1;
+        }
     }
     $dir = wwtcPlatoonGraphicsDir();
     if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
@@ -1621,6 +1634,7 @@ function wwtcCliMakePlatoonGraphics(array $argv): int
             'month' => $month,
             'year' => $year,
             'backgroundPath' => $background,
+            'kind' => 'platoon',
             'outPath' => $dir . '/' . wwtcPlatoonGraphicFilename([
                 'schoolId' => $schoolId,
                 'className' => $parts['className'],
@@ -1767,3 +1781,4 @@ function wwtcCliImportPlatoonLedger(array $argv): int
 }
 
 require_once __DIR__ . '/topSchoolGraphics.php';
+require_once __DIR__ . '/graphicArt.php';

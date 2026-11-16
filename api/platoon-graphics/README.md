@@ -56,10 +56,12 @@ Run `api/sql/wwtc_top_school_graphics.sql` once, by hand, on the mashpia
 database. Until that file has been run, Perfect Platoon graphics still run
 and the job prints a note instead of failing. Student names are not stored.
 
-The picture uses the same renderer as a Perfect Platoon. The job adds
-`kind`, `rank`, and `badgePath` (the numbered Top Base shield) so the
-renderer can stamp the badge. The placeholder paints the shield when that
-file can be read, and still says PLACEHOLDER.
+The picture uses the same renderer as a Perfect Platoon. Rank N is drawn on
+`public/graphics/top-base-blank-N.jpg`, which already contains that rank's
+Top Base badge. A tie uses the same file. The renderer adds only the school
+logo and the school name. Perfect Platoon graphics use
+`public/graphics/perfect-platoon-blank.jpg` and add the class label, the
+school name, and the logo.
 
 ## Daily job
 

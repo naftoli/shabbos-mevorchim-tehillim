@@ -12,6 +12,7 @@ import {
   previousCampaignMonth,
   teacherPacketMessage,
 } from '../../src/lib/monthGraphics.js'
+import { fitGraphicSize, wrapGraphicLines } from '../../src/lib/graphicFit.js'
 import { toPublicSchools } from '../../src/lib/platoonGraphics.js'
 import {
   demoArchiveRows,
@@ -129,6 +130,35 @@ test('the office demo shows Top 10 with the platoons and hides other schools fro
   const after = demoOfficePlatoonGraphics(undefined, { kind: 'super' }, race)
   const again = after.schools.find((school) => school.id === 'cheder-menachem-sample')
   assert.equal(again.graphics.every((graphic) => graphic.sent), true)
+})
+
+test('long school names wrap on spaces and shrink to stay inside the poster', () => {
+  const width = (text) => text.length
+  const lines = wrapGraphicLines(['CHEDER', 'CHABAD', 'PHILADELPHIA'], 'PHILADELPHIA'.length, width)
+  assert.deepEqual(lines, ['CHEDER', 'CHABAD', 'PHILADELPHIA'])
+  const short = fitGraphicSize({
+    words: ['OHR'],
+    maxWidth: 100,
+    maxHeight: 80,
+    maxSize: 40,
+    minSize: 8,
+    measure: (size, text) => text.length * size * 0.5,
+    capHeight: (size) => size * 0.7,
+    linePitch: (size) => size * 0.7 * 1.176,
+  })
+  const long = fitGraphicSize({
+    words: ['THIS', 'SCHOOL', 'NAME', 'IS', 'MUCH', 'TOO', 'LONG', 'FOR', 'ONE', 'LINE'],
+    maxWidth: 100,
+    maxHeight: 80,
+    maxSize: 40,
+    minSize: 8,
+    measure: (size, text) => text.length * size * 0.5,
+    capHeight: (size) => size * 0.7,
+    linePitch: (size) => size * 0.7 * 1.176,
+  })
+  assert.ok(long.size < short.size)
+  assert.ok(long.lines.length > 1)
+  assert.ok(long.height <= 80.5)
 })
 
 test('a parent link is one graphic, and teachers are not texted from this page', () => {

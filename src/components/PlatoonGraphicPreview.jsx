@@ -1,35 +1,30 @@
 import { useState } from 'react'
 import MonthGraphicArt from '@/components/MonthGraphicArt.jsx'
 
-// The square the public page and the office share. When the daily job has
-// posted a final PNG, that file is shown. Until then the card is drawn from
-// the Perfect Platoon shield or the numbered Top Base badge, and the caption
-// says the final file is not in yet.
-export default function PlatoonGraphicPreview({ schoolName, school, graphic, placeholder, month, year }) {
+// The square the public page and the office share. A posted PNG is the file
+// the daily job wrote. Until that file exists, the same poster is drawn in
+// the browser from Tab's blank and the school's own name and logo.
+export default function PlatoonGraphicPreview({ schoolName, school, graphic, month, year }) {
   const [failed, setFailed] = useState(false)
   const shown = school || { name: schoolName || '', logo: null, color: null }
-  const showFile = !placeholder && graphic?.fileUrl && !failed
   const label = `${shown.name || schoolName || ''} ${graphic?.classLabel || graphic?.className || ''}`.trim()
-  if (!showFile) {
+  if (graphic?.fileUrl && !failed) {
     return (
       <div className="w-full">
-        <MonthGraphicArt school={shown} graphic={graphic} month={month} year={year} />
-        {placeholder ? (
-          <p className="mt-2 text-xs text-muted">Placeholder — the final 1080×1080 art is not in yet.</p>
-        ) : null}
+        <img
+          src={graphic.fileUrl}
+          alt={label}
+          width={1080}
+          height={1080}
+          onError={() => setFailed(true)}
+          className="aspect-square w-full rounded-2xl object-cover"
+        />
       </div>
     )
   }
   return (
-    <div className="w-full">
-      <img
-        src={graphic.fileUrl}
-        alt={label}
-        width={1080}
-        height={1080}
-        onError={() => setFailed(true)}
-        className="aspect-square w-full rounded-2xl bg-[#d9e2ef] object-cover"
-      />
+    <div className="w-full overflow-hidden rounded-2xl">
+      <MonthGraphicArt school={shown} graphic={graphic} month={month} year={year} />
     </div>
   )
 }
