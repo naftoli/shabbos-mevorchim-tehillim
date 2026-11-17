@@ -22,14 +22,18 @@ export const MONTH_CHOOSER = 'wrap'
 export const BREADCRUMB_STYLE = 'site'
 
 /**
- * Streaks. A completed mission adds 1. A recorded miss breaks the streak and
- * the next completion starts again at 1. The best is kept.
- * Holidays count only when a real record exists (see STREAK_MISSING_BREAKS).
+ * Streaks follow a monthly task. A month the soldier did adds 1. A month they
+ * missed — nothing reported, or reported short of the quota — breaks the run.
+ * Count back from the latest month and stop at the first miss. If that latest
+ * month was missed, the current streak is 0. The longest run since they
+ * started is kept: it never goes down, and it is always at least the current
+ * streak. The month still open for reporting is not a miss yet.
+ * Holidays count only when a real record exists.
  */
 export const STREAK_COUNTS_HOLIDAYS = true
 
-/** A month with no record is skipped. It does not break a streak and it is not a miss. */
-export const STREAK_MISSING_BREAKS = false
+/** A month with no record is a miss. It breaks the streak. */
+export const STREAK_MISSING_BREAKS = true
 
 /**
  * D15. Which figure asks the chayol to confirm.

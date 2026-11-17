@@ -212,14 +212,54 @@ export function trainingCheshbon(board) {
   return { sections, earned: Math.min(done, total), total }
 }
 
-/** Flat chronological list for streaks: prior-year rows first, then this year. */
+// Months before this grade, oldest first, from the same marks the training
+// board uses. A month with no mark is a miss. The current grade is not
+// included — its elapsed months come from progress.months, which stops at
+// the month underway and does not invent the rest of the year.
+function priorMonthsFromHistory(progress, elapsed) {
+  const history = progress?.missionHistory
+  if (!history || typeof history !== 'object' || !Object.keys(history).length) return []
+  if (progress.grade == null || progress.grade === '') return []
+  const anchor = (elapsed || []).find((m) => m?.isCurrent) || (elapsed || [])[(elapsed || []).length - 1]
+  const board = buildTraining({
+    grade: progress.grade,
+    ladder: progress.ladder,
+    months: elapsed,
+    history,
+    year: progress.year,
+    quotaGrid: progress.customLadder || null,
+    firstMonth: progress.yearStart,
+    anchorMonth: anchor?.month,
+  })
+  const currentGrade = String(progress.grade)
+  const rows = []
+  for (const gradeBoard of board.boards) {
+    if (String(gradeBoard.grade) === currentGrade) continue
+    for (const mission of gradeBoard.missions) {
+      rows.push({
+        month: mission.key,
+        met: !!mission.met,
+        reported: !!mission.record,
+        holiday: !!mission.holiday,
+      })
+    }
+  }
+  return rows
+}
+
+/** Flat chronological list for streaks: every month since they started, then this year. */
 export function streakMissions(progress) {
-  const prior = progress?.historyMonths || []
   const current = progress?.months || []
-  const ordered = [...prior, ...current]
-  return ordered.map((m) => ({
+  const explicitPrior = progress?.historyMonths || []
+  const prior = explicitPrior.length ? explicitPrior : priorMonthsFromHistory(progress, current)
+  return [...prior, ...current].map((m) => ({
     met: !!m.met,
-    record: m.reported !== false,
-    holiday: m.month === 'Rosh Hashana' || m.month === 'Yom Kippur',
+    // reported:false or record:false is a month with no mark. A row that
+    // names neither is scored from met.
+    record: m.reported !== false && m.record !== false,
+    holiday: m.month === 'Rosh Hashana' || m.month === 'Yom Kippur' || !!m.holiday,
+    // The month still open for a report is not a miss and does not count yet
+    // unless they have already met it.
+    pending: !!(m.isCurrent && m.reportOpen !== false && !m.met),
   }))
 }
