@@ -231,10 +231,13 @@ function priorMonthsFromHistory(progress, elapsed) {
     firstMonth: progress.yearStart,
     anchorMonth: anchor?.month,
   })
-  const currentGrade = String(progress.grade)
+  // The ladder board also draws the grades still ahead. Those months have
+  // not happened, so they are not misses and they must not sit between last
+  // year and this year.
+  const currentGradeNum = gradeNum(progress.grade)
   const rows = []
   for (const gradeBoard of board.boards) {
-    if (String(gradeBoard.grade) === currentGrade) continue
+    if (gradeNum(gradeBoard.grade) >= currentGradeNum) continue
     for (const mission of gradeBoard.missions) {
       rows.push({
         month: mission.key,
