@@ -4,6 +4,7 @@ import { Brand, Button } from './ui.jsx'
 import ChatBuddy from './ChatBuddy.jsx'
 import { asset } from '../lib/asset.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import LanguageSwitch from './LanguageSwitch.jsx'
 import { IS_DEMO } from '../lib/liveMode.js'
 
 const navItem = ({ isActive }) =>
@@ -82,9 +83,15 @@ export default function Layout({ children }) {
             </button>
           </nav>
         </div>
+        <div className="border-t border-white/40">
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center px-3 py-1 sm:px-6 lg:px-10 2xl:max-w-[1612px] 2xl:pl-[46px] 2xl:pr-4">
+            <LanguageSwitch />
+          </div>
+        </div>
         {/* Phone-only disclosure menu. */}
         <nav id={menuId} hidden={!menuOpen} aria-label="Site menu" className="border-t border-line bg-sky/95 sm:hidden">
           <div className="mx-auto flex max-w-[1400px] flex-col gap-1 px-3 py-2">
+            <LanguageSwitch />
             <NavLink to="/" end className={menuLink}>Home</NavLink>
             <NavLink to="/how-to" className={menuLink}>How It Works</NavLink>
             <NavLink to="/platoon-graphics" className={menuLink}>Graphics</NavLink>
