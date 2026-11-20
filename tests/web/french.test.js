@@ -61,7 +61,7 @@ test('secrets and hebrew are not treated as copy to translate', () => {
 })
 
 test('the approved french sheet is used exactly', () => {
-  assert.equal(FRENCH_ENTRY_COUNT, 514)
+  assert.equal(FRENCH_ENTRY_COUNT, 1038)
   assert.equal(lookup('en', 'Home'), 'Home')
   assert.equal(lookup('fr', 'Home'), 'Accueil')
   assert.equal(lookup('fr', 'How It Works'), 'Comment ça marche')
@@ -82,6 +82,22 @@ test('the approved french sheet is used exactly', () => {
     'תשרי — votre école dans le monde, votre peloton dans votre base, et vous parmi les Chayolim de votre base.',
   )
   assert.equal(lookup('fr', 'This string is not on the sheet.'), 'This string is not on the sheet.')
+  assert.equal(lookup('fr', 'Open'), 'Ouvrir')
+  assert.equal(lookup('fr', '1st'), '1re')
+  assert.equal(lookup('fr', 'Pre-1A'), 'Pre-1A')
+  assert.equal(lookup('fr', '8th grade'), '8e année')
+  assert.equal(lookup('fr', 'Ladder 12'), 'Échelle 12')
+  assert.equal(lookup('fr', "Hi Rivka, I'm your virtual commander."), 'Salut Rivka, je suis votre commandant virtuel.')
+  assert.equal(lookup('fr', 'Mute Your Virtual Commander'), 'Couper le son de Your Virtual Commander')
+  assert.equal(lookup('fr', '12 Min'), '12 min')
+  assert.equal(
+    lookup('fr', 'Give one soldier their own finish: how many kapitlach (1–150), and by which grade.'),
+    'Donnez à un soldat son propre but : combien de chapitres (1–150), et en quelle classe.',
+  )
+  assert.equal(
+    lookup('fr', "Mazel tov from the Tzivos Hashem Worldwide Tehillim Club! Sample Cheder's graphics for Kislev 5787 are ready: https://example.com"),
+    'Mazel tov de la part du Worldwide Tehillim Club de Tzivos Hashem ! Les graphics de Sample Cheder pour Kislev 5787 sont prêts : https://example.com',
+  )
   assert.equal(lookup('he', 'Home'), 'Home')
   assert.equal(lookup('ru', 'Home'), 'Home')
 })

@@ -22,35 +22,44 @@ function escapeReg(value) {
 
 function compileTemplate(row) {
   const source = norm(row.en)
-  const parts = source.split(/\{(n|name|month|grade)\}/)
+  const parts = source.split(/\{([^{}]+)\}/)
+  if (parts.length < 3) return null
   const names = []
   let pattern = '^'
-  const slots = []
-  for (let i = 1; i < parts.length; i += 2) slots.push(parts[i])
+  let literalLen = 0
+  const slotCount = Math.floor(parts.length / 2)
   let slot = 0
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 0) {
       pattern += escapeReg(parts[i])
+      literalLen += parts[i].length
       continue
     }
-    const name = parts[i]
-    names.push(name)
-    const last = slot === slots.length - 1
+    names.push(parts[i])
+    const last = slot === slotCount - 1
     slot += 1
-    pattern += name === 'n' ? '(\\d[\\d,]*)' : (last ? '(.+)' : '(.+?)')
+    pattern += last ? '(.+)' : '(.+?)'
   }
   pattern += '$'
-  return { re: new RegExp(pattern), names, fr: row.fr }
+  return { re: new RegExp(pattern), names, fr: row.fr, literalLen, sourceLen: source.length }
 }
 
+// Longer literal text wins, so "Ladder 12 full breakdown" is not swallowed by "Ladder {n}".
 const TEMPLATES = FR_TEMPLATES.map(compileTemplate)
+  .filter(Boolean)
+  .sort((a, b) => b.literalLen - a.literalLen || b.sourceLen - a.sourceLen)
 
 function fill(template, names, groups) {
-  let out = template
+  const queues = new Map()
   names.forEach((name, i) => {
-    out = out.split(`{${name}}`).join(groups[i])
+    if (!queues.has(name)) queues.set(name, [])
+    queues.get(name).push(groups[i])
   })
-  return out
+  return template.replace(/\{([^{}]+)\}/g, (token, name) => {
+    const queue = queues.get(name)
+    if (!queue || queue.length === 0) return token
+    return queue.shift()
+  })
 }
 
 /** The approved French for one English string, or the English when none exists. */

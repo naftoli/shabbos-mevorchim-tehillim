@@ -1,4 +1,5 @@
 import { TARGET_LANGS } from '@/lib/pageTranslate.js'
+import { lookup } from '@/lib/i18n.js'
 import { useLanguage } from '@/context/LanguageContext.jsx'
 
 const CHOICES = [{ code: 'en', label: 'English' }, ...TARGET_LANGS]
@@ -23,7 +24,7 @@ export default function LanguageSwitch() {
           onClick={() => choose(item.code)}
           className={itemClass(lang === item.code)}
         >
-          {item.label}
+          {item.code === 'fr' && lang === 'fr' ? lookup('fr', 'French') : item.label}
         </button>
       ))}
     </div>
