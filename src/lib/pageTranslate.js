@@ -178,6 +178,26 @@ function blockCandidates(root, lang) {
   })
 }
 
+// React splits "Ladder {n} → finish training by {grade}" across text nodes.
+// When the joined text is one sheet row, show that French as a whole.
+function joinedCandidates(root, lang) {
+  const all = []
+  root.querySelectorAll('*').forEach((el) => {
+    if (el.parentElement?.closest('[data-fr-locked]')) return
+    if (el.closest('[data-no-translate]')) return
+    if (el.closest('script,style,noscript,code,textarea,svg')) return
+    if (el.children.length) return
+    const texts = [...el.childNodes].filter((node) => node.nodeType === 3 && (node.nodeValue || '').trim())
+    if (texts.length < 2) return
+    const { core } = splitEdges(englishText(el))
+    if (!shouldTranslateText(core)) return
+    const hit = lookup(lang, core)
+    if (hit === core) return
+    all.push(el)
+  })
+  return all
+}
+
 function applyBlocks(root, lang) {
   for (const el of blockCandidates(root, lang)) {
     const saved = cell(el, 'html')
@@ -243,5 +263,31 @@ export function applyLocale(root, lang) {
   if (!root || lang !== 'fr') return
   prune()
   applyBlocks(root, lang)
+  for (const el of joinedCandidates(root, lang)) {
+    const saved = cell(el, 'html')
+    const current = el.innerHTML
+    if (saved && saved.lang === lang && current === saved.translated) {
+      el.setAttribute('data-fr-locked', '')
+      continue
+    }
+    let english
+    if (saved && (current === saved.translated || current === saved.english)) english = saved.english
+    else english = current
+    const probe = el.ownerDocument.createElement('div')
+    probe.innerHTML = english
+    const { core } = splitEdges(probe.textContent ?? '')
+    const hit = lookup(lang, core)
+    if (!shouldTranslateText(core) || hit === core) continue
+    el.textContent = hit
+    el.setAttribute('data-fr-locked', '')
+    const translated = el.innerHTML
+    const read = () => el.innerHTML
+    const write = (value) => {
+      el.innerHTML = value
+      if (value === translated) el.setAttribute('data-fr-locked', '')
+      else el.removeAttribute('data-fr-locked')
+    }
+    putCell(el, 'html', { lang, english, translated, read, write })
+  }
   walk(root, lang)
 }
