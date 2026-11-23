@@ -622,3 +622,153 @@ WWTC_PUBLIC_BASE=https://mashpia.com/shabbos-mevorchim-tehillim
 7. Deploy `api/notify.php`, `api/notify-wednesday.php`, and the `api/index.php`
    route that serves `GET /api/notify-report`. Meta's servers must be able to
    fetch that URL when the document header is sent.
+
+## Parent reminder (Tuesday)
+
+The Tuesday after each Shabbos Mevorchim, every parent of a registered,
+enrolled soldier gets one message per child. The job is
+`api/notify-tuesday.php`. It uses the same Shabbos list as the Wednesday job
+(`wwtcNotifyLatestShabbos()` / `wwtcMonthDatesForYear()` / `calculateSM()`).
+Adar I and Adar II each get their own Tuesday in a leap year. The send day is
+the first Tuesday after that Shabbos, which is the day before that month's
+Wednesday follow-up.
+
+The default clock time is 08:00 America/New_York, the same hour as the
+Wednesday job. `WWTC_PARENT_REMINDER_HOUR` changes it (0–23, New York local
+time). The crontab hour and that variable have to be the same number. An
+empty variable means 8. The script does not send at a different hour unless
+you pass `--force`.
+
+```cron
+CRON_TZ=America/New_York
+0 8 * * 2 cd /path/to/shabbos-mevorchim-tehillim && TZ=America/New_York php api/notify-tuesday.php >> /path/outside/web/wwtc-notify.log 2>&1
+```
+
+`--only=123` is the parent `admins.admin_id`, and it sends every child of that
+parent. `--dry-run` prints the plan and does not send or insert a log row.
+`--force` runs on a day that is not that Tuesday, and at an hour other than
+`WWTC_PARENT_REMINDER_HOUR`. One successful send per parent per child per
+campaign month is stored in `wwtc_notify_sends` with `role = 'parent'` and
+`recipient_key = parent:{admin_id}:child:{user_id}`. Opt-outs are the same
+`wwtc_notify_opt_outs.phone_e164` rows the Wednesday job reads. A number not
+on WhatsApp (Cloud API **131026**, or the older **1013**) falls back to SMS.
+Any other WhatsApp error, including a template error, does not.
+
+```bash
+php api/notify-tuesday.php --dry-run
+php api/notify-tuesday.php --dry-run --only=123
+php api/notify-tuesday.php --force --only=123
+```
+
+### The message
+
+WhatsApp template `wwtc_parent_reminder` (or `WHATSAPP_TEMPLATE_PARENT`),
+category **Utility**, language `en`. The bold first line is a **TEXT** header
+with no variable. The body has one variable, the link. Submit this header:
+
+```text
+Reminder from the Worldwide Tehillim Club
+```
+
+Submit this body. `{{1}}` is the only variable. Leave it between the two
+sentences, with `Thank you!` after it:
+
+```text
+Did your child say Tehillim this Shabbos Mevorchim? Please mark their kapitlach on the site so they count toward their ladder, their platoon, and the whole worldwide army.
+{{1}}
+Thank you!
+```
+
+That is the whole message. Nothing else is added to the WhatsApp text. The
+sample value for `{{1}}` is any `https://` URL on mashpia.com, for example
+`https://mashpia.com/shabbos-mevorchim-tehillim/?handoff=sample`.
+
+What the parent sees, with the header in bold:
+
+```text
+*Reminder from the Worldwide Tehillim Club*
+Did your child say Tehillim this Shabbos Mevorchim? Please mark their kapitlach on the site so they count toward their ladder, their platoon, and the whole worldwide army.
+https://mashpia.com/shabbos-mevorchim-tehillim/?handoff=…
+Thank you!
+```
+
+`{{1}}` is that child's own page. The site already accepts `?handoff=` (the
+parent-site sign-in code) and opens `/me`, where the kapitlach are marked.
+The Tuesday job signs the same kind of code with `WWTC_TOKEN_SECRET` (the
+secret the site already uses to check `?handoff=`). It stays valid for
+`WWTC_NOTIFY_LINK_DAYS` (default 30, max 180), not the two-minute code the
+parent site mints for a tap. Anyone who has the link can open that child's
+page until it expires.
+
+SMS is the same words, then the same opt-out line the Wednesday texts use:
+
+```text
+*Reminder from the Worldwide Tehillim Club*
+Did your child say Tehillim this Shabbos Mevorchim? Please mark their kapitlach on the site so they count toward their ladder, their platoon, and the whole worldwide army.
+https://mashpia.com/shabbos-mevorchim-tehillim/?handoff=…
+Thank you!
+Reply STOP to opt out.
+```
+
+### Where the parent phone comes from
+
+This repo does not have a parent phone column. Do not guess one.
+
+What is certain:
+
+- A parent is an `admins` row linked by `admin_auths.role_id = 1`,
+  `admin_auths.auth = 'user'`, `admin_auths.id = users.user_id`.
+- `admin_auths` has no phone.
+- No query in this repo reads a phone from `users` or from a parent profile.
+- `admins.admin_phone_mobile`, `admin_phone_home`, and `admin_phone_work` are
+  the unconfirmed guess the Wednesday job uses for commanders and teachers.
+  The Tuesday job does not read them unless you set the env var below to a
+  column that actually exists.
+
+The only query that reads a parent phone is `wwtcParentReminderPhoneQuery()`
+in `api/notify-parent.php`.
+
+Set `WWTC_PARENT_PHONE_COLUMN` to `admins.COLUMN` or `users.COLUMN`. The job
+checks `information_schema` and will not send if that column is missing. If
+the phone is on some other table, edit `wwtcParentReminderPhoneQuery()` and
+nowhere else. Until one of those is done, a real run prints the reason and
+sends nothing. `--dry-run` still lists the children and the message.
+
+The children are registered (`users.user_registered > 0`), enrolled in
+Tehillim (`user_tracks.subject_id = 1`, `enrolled = 1`), in an eligible
+school (the same `wwtcEligibleSchools()` set as the Wednesday job). One
+parent with two children gets two messages, each with that child's link.
+
+### Env vars
+
+The Tuesday job reuses the Wednesday WhatsApp and Twilio settings. These are
+the ones it adds:
+
+```bash
+WHATSAPP_TEMPLATE_PARENT=wwtc_parent_reminder
+WWTC_PARENT_REMINDER_HOUR=8          # America/New_York, 0-23. 8 is 08:00. Match the crontab hour.
+WWTC_PARENT_PHONE_COLUMN=            # admins.COLUMN or users.COLUMN. Empty means do not send.
+WWTC_TOKEN_SECRET=                   # required. Signs the ?handoff= child link. At least 32 characters.
+WWTC_NOTIFY_LINK_DAYS=30             # how long that link works
+WWTC_PUBLIC_BASE=https://mashpia.com/shabbos-mevorchim-tehillim
+```
+
+`WWTC_NOTIFY_SIGNING_SECRET` is the Wednesday PDF link. The child page does
+not use it. The site verifies `?handoff=` with `WWTC_TOKEN_SECRET`.
+
+### What Naftoli does for the Tuesday reminder
+
+1. Run `api/sql/wwtc_notify.sql` again if `wwtc_notify_sends` already exists.
+   The file's `ALTER` adds `'parent'` to `role`. A fresh run creates it.
+   The job will not send until `role` includes `'parent'`.
+2. Find the live parent phone column. Set `WWTC_PARENT_PHONE_COLUMN`, or
+   edit `wwtcParentReminderPhoneQuery()` if it is not on `admins` or `users`.
+3. Submit the Utility template above and wait for Meta approval. Leave the
+   WhatsApp vars empty to send only SMS until then.
+4. Confirm `WWTC_TOKEN_SECRET` is the same secret the site uses for
+   `?handoff=`, at least 32 characters. Set `WWTC_PUBLIC_BASE` if the site
+   is not `https://mashpia.com/shabbos-mevorchim-tehillim`.
+5. Dry-run, then install the Tuesday crontab. Keep its hour equal to
+   `WWTC_PARENT_REMINDER_HOUR`.
+6. Deploy `api/notify-tuesday.php` and `api/notify-parent.php`. No new page
+   and no UI change: the link opens the existing `?handoff=` sign-in.
