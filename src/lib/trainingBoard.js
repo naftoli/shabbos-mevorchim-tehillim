@@ -33,6 +33,20 @@ const GRADE_ORDER = ['pre1a', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
 
 const gradeNum = (g) => (g === 'pre1a' ? 0 : Number(g) || 0)
 
+// class_grade is the class label ("1 Aleph", "5-B", "5A"), not only "1".
+// History rows are keyed by the leading number, the same way the server
+// counts grades. Number("1 Aleph") is not 1, so the older months stayed on
+// the board and dropped out of the longest run.
+function historyGradeNum(grade) {
+  const g = String(grade ?? '').trim().toLowerCase()
+  if (g === '') return -1
+  if (g.startsWith('pre')) return 0
+  const match = g.match(/^(\d{1,2})/)
+  if (!match) return -1
+  const n = Number(match[1])
+  return Number.isInteger(n) ? n : -1
+}
+
 // Grades to show on the board: training runs through the ladder's finish grade,
 // but a soldier who kept going past it (e.g. grade 6 still on ladder 5, which
 // finishes in grade 5) must still get their current grade's row — otherwise this
@@ -234,10 +248,11 @@ function priorMonthsFromHistory(progress, elapsed) {
   // The ladder board also draws the grades still ahead. Those months have
   // not happened, so they are not misses and they must not sit between last
   // year and this year.
-  const currentGradeNum = gradeNum(progress.grade)
+  const currentGradeNum = historyGradeNum(progress.grade)
+  if (currentGradeNum < 0) return []
   const rows = []
   for (const gradeBoard of board.boards) {
-    if (gradeNum(gradeBoard.grade) >= currentGradeNum) continue
+    if (historyGradeNum(gradeBoard.grade) >= currentGradeNum) continue
     for (const mission of gradeBoard.missions) {
       rows.push({
         month: mission.key,
