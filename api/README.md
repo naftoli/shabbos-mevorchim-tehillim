@@ -633,15 +633,15 @@ Adar I and Adar II each get their own Tuesday in a leap year. The send day is
 the first Tuesday after that Shabbos, which is the day before that month's
 Wednesday follow-up.
 
-The default clock time is 08:00 America/New_York, the same hour as the
-Wednesday job. `WWTC_PARENT_REMINDER_HOUR` changes it (0–23, New York local
+The default clock time is 18:00 America/New_York.
+`WWTC_PARENT_REMINDER_HOUR` changes it (0–23, New York local
 time). The crontab hour and that variable have to be the same number. An
-empty variable means 8. The script does not send at a different hour unless
+empty variable means 18. The script does not send at a different hour unless
 you pass `--force`.
 
 ```cron
 CRON_TZ=America/New_York
-0 8 * * 2 cd /path/to/shabbos-mevorchim-tehillim && TZ=America/New_York php api/notify-tuesday.php >> /path/outside/web/wwtc-notify.log 2>&1
+0 18 * * 2 cd /path/to/shabbos-mevorchim-tehillim && TZ=America/New_York php api/notify-tuesday.php >> /path/outside/web/wwtc-notify.log 2>&1
 ```
 
 `--only=123` is the parent `admins.admin_id`, and it sends every child of that
@@ -746,7 +746,7 @@ the ones it adds:
 
 ```bash
 WHATSAPP_TEMPLATE_PARENT=wwtc_parent_reminder
-WWTC_PARENT_REMINDER_HOUR=8          # America/New_York, 0-23. 8 is 08:00. Match the crontab hour.
+WWTC_PARENT_REMINDER_HOUR=18         # America/New_York, 0-23. 18 is 18:00. Match the crontab hour.
 WWTC_PARENT_PHONE_COLUMN=            # admins.COLUMN or users.COLUMN. Empty means do not send.
 WWTC_TOKEN_SECRET=                   # required. Signs the ?handoff= child link. At least 32 characters.
 WWTC_NOTIFY_LINK_DAYS=30             # how long that link works
