@@ -7,8 +7,8 @@ import { PERFECT_PLATOON_ART, PERFECT_PLATOON_ART_HEIGHT, PERFECT_PLATOON_ART_WI
 
 // Milestone copy stays exactly as published. The first ten names are crops of
 // design/how/medals.webp (1600×146); left/width are the opaque coin bounds.
-// Bronze, Silver, and Gold are milestones on this page but are not drawn in
-// that strip. Their disc colors are the ones already used in src/lib/medals.js.
+// Bronze, Silver, and Gold are not in that strip. Each one is its own file,
+// public/design/coin-reverse-<name>.png, so the real art replaces that file.
 const SPRITE_W = 1600
 const SPRITE_H = 146
 const MEDALS = [
@@ -22,12 +22,23 @@ const MEDALS = [
   ['68', 'Brown', { left: 1129, width: 148 }],
   ['81', 'Gray', { left: 1290, width: 148 }],
   ['95', 'Black', { left: 1451, width: 148 }],
-  ['110', 'Bronze', { color: '#8c6239', ink: '#ffffff' }],
-  ['126', 'Silver', { color: '#c5ced6', ink: '#1b2a4e' }],
-  ['143', 'Gold', { color: '#e0b000', ink: '#1b2a4e' }],
+  ['110', 'Bronze', { src: 'design/coin-reverse-bronze.png' }],
+  ['126', 'Silver', { src: 'design/coin-reverse-silver.png' }],
+  ['143', 'Gold', { src: 'design/coin-reverse-gold.png' }],
 ]
 
 function MedalMark({ n, art }) {
+  if (art.src) {
+    return (
+      <img
+        src={asset(art.src)}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className="mx-auto block w-[5.75rem] sm:w-[7.25rem] md:w-36"
+      />
+    )
+  }
   if (art.left != null) {
     return (
       <span

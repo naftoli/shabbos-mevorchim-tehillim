@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MEDALS, isPreYearMedalNote, medalFace } from '../../src/lib/medals.js'
@@ -23,11 +23,23 @@ test('dashboard coins use the reverse when earned and a pale crest when not', ()
   const gray = MEDALS.find((m) => m.name === 'Gray')
   const black = MEDALS.find((m) => m.name === 'Black')
   const gold = MEDALS.find((m) => m.name === 'Gold')
+  const bronze = MEDALS.find((m) => m.name === 'Bronze')
+  const silver = MEDALS.find((m) => m.name === 'Silver')
   assert.equal(medalFace(gray, true), 'reverse')
   assert.equal(medalFace(black, false), 'pale-front')
-  assert.equal(medalFace(gold, false), 'pale-disc')
-  assert.equal(medalFace(gold, true), 'color-disc')
-  assert.equal(gold.coin, undefined)
+  assert.equal(medalFace(gold, true), 'reverse')
+  assert.equal(medalFace(gold, false), 'pale-front')
+  assert.equal(medalFace(bronze, true), 'reverse')
+  assert.equal(medalFace(silver, false), 'pale-front')
+  assert.equal(gold.coin, 'gold')
+  assert.equal(bronze.coin, 'bronze')
+  assert.equal(silver.coin, 'silver')
+  assert.equal(medalFace({ name: 'Plain' }, true), 'color-disc')
+  assert.equal(medalFace({ name: 'Plain' }, false), 'pale-disc')
+  for (const coin of ['bronze', 'silver', 'gold']) {
+    assert.equal(existsSync(join(root, `public/design/coin-${coin}.png`)), true, coin)
+    assert.equal(existsSync(join(root, `public/design/coin-reverse-${coin}.png`)), true, `reverse ${coin}`)
+  }
 })
 
 test('unearned medals keep a faint trace of their color; earned medals stay full color', () => {

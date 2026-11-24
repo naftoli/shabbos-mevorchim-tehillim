@@ -8,6 +8,7 @@ import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js
 import MedalCoin from '@/components/MedalCoin.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
+import { asset } from '@/lib/asset.js'
 
 const TOTAL = MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1] // Black, the top tier
 
@@ -17,21 +18,26 @@ const STICKER_BASE = 'https://mashpia.com/mobile/img_new/stickers'
 const SUBJECT_STICKER = 'shabbos_mevorchim_tehillim'
 
 // The real medal "backs" the legacy board shows (the WWTC set). The file name is
-// the tier colour; the DB spells Gray as "grey" for the image. Tiers with no
-// back art (Bronze/Silver/Gold) fall back to the app's own coin.
+// the tier colour; the DB spells Gray as "grey" for the image. Bronze, Silver,
+// and Gold are not on that board yet. Their picture is the local file
+// public/design/coin-reverse-<coin>.png. Replace that file when the real art arrives.
 const BACK_BASE = 'https://mashpia.com/mobile/reg/images/backs/wwtc'
+const LOCAL_BACK = new Set(['bronze', 'silver', 'gold'])
 function backName(medal) {
   const n = (medal.coin || medal.name).toLowerCase()
   return n === 'gray' ? 'grey' : n
 }
 
 // The medal face: the legacy back image (dimmed until earned, lit when active),
-// or the coin fallback for tiers that have no back.
+// or the local file for tiers whose back is not published yet.
 function MedalImage({ medal, lit, active, size = 72 }) {
   if (!medal.coin) return <MedalCoin medal={medal} size={size} locked={!lit} active={active} />
+  const src = LOCAL_BACK.has(medal.coin)
+    ? asset(`design/coin-reverse-${medal.coin}.png`)
+    : `${BACK_BASE}/${backName(medal)}.png`
   return (
     <img
-      src={`${BACK_BASE}/${backName(medal)}.png`}
+      src={src}
       alt={`${medal.name} medal`}
       draggable="false"
       className="w-auto transition"
