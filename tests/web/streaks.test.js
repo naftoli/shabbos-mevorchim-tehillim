@@ -304,6 +304,43 @@ test('a plain year does not turn an Adar I mark into an extra month', () => {
   assert.equal(streak.best, 1)
 })
 
+test('older months count in the longest streak, and a run into this year is one run', () => {
+  // The class label is "1 Aleph", not "1". Those earlier months show on the
+  // board. Tammuz through Elul and this year's Tishrei and Cheshvan are one run.
+  const span = streakFromMissions(streakMissions({
+    grade: '1 Aleph',
+    ladder: 8,
+    year: 5786,
+    yearStart: 'Tishrei',
+    missionHistory: { pre1a: { Tammuz: 8, Av: 8, Elul: 8 } },
+    months: [done('Tishrei'), done('Cheshvan')],
+  }))
+  assert.equal(span.current, 5)
+  assert.equal(span.best, 5)
+
+  // The longer run is only in an earlier grade. A miss at Elul keeps this
+  // year at 2, and the longest stays the earlier 5.
+  const earlier = streakFromMissions(streakMissions({
+    grade: '4-B',
+    ladder: 8,
+    year: 5786,
+    yearStart: 'Tishrei',
+    missionHistory: {
+      3: Object.fromEntries(['Nissan', 'Iyar', 'Sivan', 'Tammuz', 'Av'].map((month) => [month, 6])),
+    },
+    months: [done('Tishrei'), done('Cheshvan')],
+  }))
+  assert.equal(earlier.current, 2)
+  assert.equal(earlier.best, 5)
+
+  const listed = streakFromMissions(streakMissions({
+    grade: '1 Aleph',
+    historyMonths: [done('Av'), done('Elul')],
+    months: [done('Tishrei')],
+  }))
+  assert.deepEqual(listed, { current: 3, best: 3 })
+})
+
 test('an explicit prior year is used as given and is not added again from history', () => {
   const streak = streakFromMissions(streakMissions({
     grade: '1',
