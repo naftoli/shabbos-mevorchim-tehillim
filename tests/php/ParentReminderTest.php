@@ -131,7 +131,7 @@ foreach ([5787 => true, 5784 => true, 5785 => false] as $year => $leap) {
     }
 }
 
-check('an unset hour is 08:00', wwtcParentReminderHour([])['hour'] === 8 && wwtcParentReminderHour(['WWTC_PARENT_REMINDER_HOUR' => ''])['error'] === '');
+check('an unset hour is 18:00', wwtcParentReminderHour([])['hour'] === 18 && wwtcParentReminderHour(['WWTC_PARENT_REMINDER_HOUR' => ''])['error'] === '');
 check('hour 15 is accepted', wwtcParentReminderHour(['WWTC_PARENT_REMINDER_HOUR' => '15'])['hour'] === 15);
 check('hour 24 is rejected', wwtcParentReminderHour(['WWTC_PARENT_REMINDER_HOUR' => '24'])['error'] !== '');
 check('the role enum must name parent', wwtcParentReminderRoleAccepted("enum('base','class')") === false && wwtcParentReminderRoleAccepted("enum('base','class','parent')") === true);

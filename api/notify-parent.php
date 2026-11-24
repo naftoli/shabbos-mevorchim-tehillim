@@ -79,10 +79,10 @@ function wwtcParentReminderHour(array $env): array
 {
     $raw = trim((string) ($env['WWTC_PARENT_REMINDER_HOUR'] ?? ''));
     if ($raw === '') {
-        return ['hour' => 8, 'error' => ''];
+        return ['hour' => 18, 'error' => ''];
     }
     if (!preg_match('/^\d{1,2}$/', $raw) || (int) $raw > 23) {
-        return ['hour' => 8, 'error' => 'WWTC_PARENT_REMINDER_HOUR must be an hour from 0 through 23. The default is 8 (08:00 America/New_York).'];
+        return ['hour' => 18, 'error' => 'WWTC_PARENT_REMINDER_HOUR must be an hour from 0 through 23. The default is 18 (18:00 America/New_York).'];
     }
     return ['hour' => (int) $raw, 'error' => ''];
 }
@@ -714,7 +714,7 @@ function wwtcParentReminderCli(array $argv): int
     if ($args['error'] === 'help') {
         echo "Usage: php api/notify-tuesday.php [--dry-run] [--only=<parent admin id>] [--force]\n";
         echo wwtcParentReminderPhoneSourceText() . "\n";
-        echo "Default send hour is 08:00 America/New_York (WWTC_PARENT_REMINDER_HOUR).\n";
+        echo "Default send hour is 18:00 America/New_York (WWTC_PARENT_REMINDER_HOUR).\n";
         return 0;
     }
     if ($args['error'] !== '') {
