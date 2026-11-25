@@ -95,6 +95,16 @@ function findWrite(FakePDO $db, string $needle): ?array
     return null;
 }
 
+/** How many recorded statements contain $needle. */
+function countWrites(FakePDO $db, string $needle): int
+{
+    $n = 0;
+    foreach ($db->queries as $q) {
+        if (strpos($q[0], $needle) !== false) { $n++; }
+    }
+    return $n;
+}
+
 $KAP_TASK = ['grid_id' => GRID_KAP, 'date_task_id' => 111, 'description' => 'א-מ', 'points' => 0.5];
 $MIN_TASK = ['grid_id' => GRID_MIN, 'date_task_id' => 222, 'description' => '36', 'points' => 0.5];
 $USER = 777;
@@ -153,23 +163,25 @@ wwtcApplyMark($db, $USER, SM_DATE, $KAP_TASK, 12, true);
 check('below quota: the typed count (12) is still saved', (findWrite($db, 'INSERT INTO date_tasks_marks')[1][':v'] ?? null) == 12);
 check('below quota: no mission credit written', findWrite($db, 'INSERT IGNORE INTO date_tasks_mission_marks') === null);
 
-echo "\n# 3. A child fixes an earlier entry: it is UPDATED in place, not duplicated\n";
+echo "\n# 3. A child fixes an earlier entry: delete-by-grid then insert, never duplicated\n";
 $db = new FakePDO();
 $db->existingMarkTaskId = 111; // a mark for this month already exists
 $db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 40];
 $db->missionMarkExists = false;
 wwtcApplyMark($db, $USER, SM_DATE, $KAP_TASK, 45, true);
-$upd = findWrite($db, 'UPDATE date_tasks_marks SET done_qty');
-check('correction updates the existing mark to the new count (45)', $upd !== null && ($upd[1][':v'] ?? null) == 45);
-check('correction does NOT insert a second mark', findWrite($db, 'INSERT INTO date_tasks_marks') === null);
-check('correction stays on the same Shabbos Mevorchim date', $upd !== null && ($upd[1][':d'] ?? null) == SM_DATE);
+$ins = findWrite($db, 'INSERT INTO date_tasks_marks');
+check('correction saves the new count (45)', $ins !== null && ($ins[1][':v'] ?? null) == 45);
+check('correction leaves exactly one mark row (one delete-by-grid, one insert)',
+    countWrites($db, 'DELETE dtm FROM date_tasks_marks') === 1 && countWrites($db, 'INSERT INTO date_tasks_marks') === 1);
+check('correction stays on the same Shabbos Mevorchim date', $ins !== null && ($ins[1][':d'] ?? null) == SM_DATE);
 
 echo "\n# 4. A child clears their entry to 0: the mark and its credit are removed\n";
 $db = new FakePDO();
 $db->existingMarkTaskId = 111;
 $db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 40];
 wwtcApplyMark($db, $USER, SM_DATE, $KAP_TASK, 0, true);
-check('cleared to 0: the mark is deleted from date_tasks_marks', findWrite($db, 'DELETE FROM date_tasks_marks WHERE date_task_id') !== null);
+check('cleared to 0: the mark is deleted from date_tasks_marks', findWrite($db, 'DELETE dtm FROM date_tasks_marks') !== null);
+check('cleared to 0: no mark is inserted', findWrite($db, 'INSERT INTO date_tasks_marks') === null);
 check('cleared to 0: the mission credit is deleted from date_tasks_mission_marks', findWrite($db, 'DELETE FROM date_tasks_mission_marks') !== null);
 
 echo "\n$tests checks, $failures failing\n";
