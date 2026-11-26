@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { STREAK_BAR_STEPS, STREAK_COPY, streakBarModel } from '../../src/lib/streakBar.js'
 
 test('the streak picture follows the real count and stops at six steps', () => {
@@ -13,6 +14,25 @@ test('the streak picture follows the real count and stops at six steps', () => {
   assert.equal(over.fill, 1)
   assert.equal(over.overflow, true)
   assert.equal(streakBarModel(2).active === 4, false)
+})
+
+test('the streak flame is the cropped artwork at its real proportions', () => {
+  const jsx = readFileSync(new URL('../../src/components/StreakBar.jsx', import.meta.url), 'utf8')
+  const file = readFileSync(new URL('../../public/design/icon-streak-flame.webp', import.meta.url))
+  assert.match(jsx, /design\/icon-streak-flame\.webp/)
+  assert.equal(jsx.includes('M32 4c8'), false)
+  assert.equal(file.toString('ascii', 0, 4), 'RIFF')
+  assert.equal(file.toString('ascii', 8, 12), 'WEBP')
+  assert.equal(file[20], 0x2f)
+  const bits = file.readUInt32LE(21)
+  const width = (bits & 0x3fff) + 1
+  const height = ((bits >> 14) & 0x3fff) + 1
+  assert.equal(width, 292)
+  assert.equal(height, 314)
+  assert.equal((bits >> 28) & 1, 1)
+  assert.match(jsx, /FLAME_WIDTH = 292/)
+  assert.match(jsx, /FLAME_HEIGHT = 314/)
+  assert.match(jsx, /\$\{FLAME_WIDTH\} \/ \$\{FLAME_HEIGHT\}/)
 })
 
 test('streak copy is the two approved paragraphs', () => {

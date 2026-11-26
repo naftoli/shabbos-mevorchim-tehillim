@@ -2,17 +2,9 @@ import { useState } from 'react'
 import { Button, Card } from '@/components/ui.jsx'
 import { fmt } from '@/lib/format.js'
 import { GRADE_LABEL } from '@/data/ladders.js'
-import { rankSoldiers, SOLDIER_PAGE } from '@/lib/soldierBoard.js'
+import { placeLabel, rankSoldiers, SOLDIER_PAGE } from '@/lib/soldierBoard.js'
 
 const RANK_MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }
-
-function placeLabel(row) {
-  if (row.medal === 1) return '1st place'
-  if (row.medal === 2) return '2nd place'
-  if (row.medal === 3) return '3rd place'
-  if (row.tied) return `Tied for ${row.rank}`
-  return `Rank ${row.rank}`
-}
 
 // School "Top Soldiers" board. Every caller shares this so ties, medals, and
 // the ten-at-a-time list stay the same wherever a soldier leaderboard appears.
@@ -36,7 +28,6 @@ export default function SoldierLeaderboard({ soldiers }) {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-muted">Kapitlach said this month. Ranked by this month only.</p>
       {ranked.length > visible ? (
         <div className="mt-6 flex justify-center">
           <Button variant="outline" onClick={() => setVisible((v) => v + SOLDIER_PAGE)}>View more</Button>

@@ -24,7 +24,7 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
       </span>
     )
   }
-  if (faces && (face === 'pale-disc' || face === 'color-disc')) {
+  if (faces && face === 'color-disc') {
     return (
       <span
         className={`inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
@@ -32,16 +32,30 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
           height: size,
           width: size,
           fontSize: size * 0.28,
-          background: face === 'pale-disc'
-            ? '#d5dde8'
-            : `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
-          color: face === 'pale-disc' ? '#9aa6b8' : medal.ink,
+          background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
+          color: medal.ink,
           boxShadow: '0 1px 2px rgba(29, 38, 85, 0.12)',
         }}
         role="img"
         aria-label={label}
       >
-        {face === 'color-disc' ? medal.threshold : ''}
+        {medal.threshold}
+      </span>
+    )
+  }
+  if (faces && face === 'pale-disc') {
+    return (
+      <span
+        className={`relative inline-grid flex-none place-items-center ${className}`}
+        style={{ height: size, width: size, boxShadow: '0 1px 2px rgba(29, 38, 85, 0.12)' }}
+        role="img"
+        aria-label={label}
+      >
+        <span
+          aria-hidden="true"
+          className="medal-unearned absolute inset-0 rounded-full"
+          style={{ background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.72), rgba(255,255,255,0) 60%), ${medal.color}` }}
+        />
       </span>
     )
   }
@@ -58,6 +72,28 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
       </span>
     )
   }
+  if (locked) {
+    return (
+      <span
+        className={`relative inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
+        style={{
+          height: size,
+          width: size,
+          fontSize: size * 0.3,
+          color: '#9aa6b8',
+          boxShadow: active ? '0 0 0 3px var(--color-gold), 0 1px 3px rgba(0,0,0,.25)' : '0 1px 3px rgba(0,0,0,.25)',
+        }}
+        title={label}
+      >
+        <span
+          aria-hidden="true"
+          className="medal-unearned absolute inset-0 rounded-full"
+          style={{ background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.72), rgba(255,255,255,0) 60%), ${medal.color}` }}
+        />
+        <span className="relative">{medal.threshold}</span>
+      </span>
+    )
+  }
   return (
     <span
       className={`inline-grid flex-none place-items-center rounded-full font-cond font-bold tabular-nums ${className}`}
@@ -65,8 +101,8 @@ export default function MedalCoin({ medal, size = 44, locked = false, active = f
         height: size,
         width: size,
         fontSize: size * 0.3,
-        background: locked ? '#d5dde8' : `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
-        color: locked ? '#9aa6b8' : medal.ink,
+        background: `radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,0) 58%), ${medal.color}`,
+        color: medal.ink,
         boxShadow: active ? '0 0 0 3px var(--color-gold), 0 1px 3px rgba(0,0,0,.25)' : '0 1px 3px rgba(0,0,0,.25)',
       }}
       title={label}

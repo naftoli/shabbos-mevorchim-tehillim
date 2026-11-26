@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
     if (!kid) return null
     const progress = await setKidLadder(kid.id, ladder)
     if (!progress) return null
-    const updated = { ...kid, ladder: Number(ladder) }
+    const updated = { ...kid, ladder: Number(ladder), hiddenLadders: progress.hiddenLadders || kid.hiddenLadders }
     setKid(updated)
     save(KID_KEY, updated)
     return progress

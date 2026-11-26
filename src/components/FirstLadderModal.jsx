@@ -3,8 +3,8 @@ import LadderCarousel from './LadderCarousel.jsx'
 
 // A graphic "pick your ladder" welcome shown the first time a soldier logs in,
 // before they've chosen a ladder. It presents the 3-card ladder coverflow
-// (centered on Ladder 4). Picking a card chooses it; X / Maybe later dismisses.
-export default function FirstLadderModal({ open, name, grade, onPick, onClose }) {
+// (centered on Ladder 8). Picking a card chooses it; X / Maybe later dismisses.
+export default function FirstLadderModal({ open, name, grade, onPick, onClose, hiddenLadders = null }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
@@ -48,7 +48,7 @@ export default function FirstLadderModal({ open, name, grade, onPick, onClose })
         {/* A preview of the ladder situation — tapping any card (or the button)
             opens the full ladder selection page. */}
         <div className="px-3 py-6 sm:px-6">
-          <LadderCarousel grade={grade} defaultLadder={8} onPick={onPick} preview height={380} cardWidth={272} spacing={232} />
+          <LadderCarousel grade={grade} defaultLadder={8} onPick={onPick} preview height={380} cardWidth={272} spacing={232} hiddenLadders={hiddenLadders} />
           <div className="mt-5 flex flex-col items-center gap-3">
             <button className="btn btn-gold !px-8 !py-3.5 !text-[20px]" onClick={onPick}>Pick my ladder</button>
             <button className="text-sm font-semibold text-muted hover:text-navy" onClick={onClose}>Maybe later</button>

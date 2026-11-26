@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, useNavigate, useSearchParams } from 'react-router-dom'
 import { IS_DEMO } from './lib/liveMode.js'
 import { useAuth } from './context/AuthContext.jsx'
@@ -11,6 +11,11 @@ import KidLogin from './pages/KidLogin.jsx'
 import KidDashboard from './pages/KidDashboard.jsx'
 import Medals from './pages/Medals.jsx'
 import PerfectPlatoons from './pages/PerfectPlatoons.jsx'
+import PlatoonGraphics from './pages/PlatoonGraphics.jsx'
+import GraphicShare from './pages/GraphicShare.jsx'
+import SchoolGraphicsShare from './pages/SchoolGraphicsShare.jsx'
+
+const PlatoonGraphicsOffice = lazy(() => import('./pages/PlatoonGraphicsOffice.jsx'))
 import AdminLogin from './pages/AdminLogin.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import Reports from './pages/Reports.jsx'
@@ -97,6 +102,15 @@ export default function App() {
         <Route path="/me" element={<KidDashboard />} />
         <Route path="/medals" element={<Medals />} />
         <Route path="/perfect-platoons" element={<PerfectPlatoons />} />
+        <Route path="/platoon-graphics" element={<PlatoonGraphics />} />
+        <Route path="/platoon-graphics/:schoolId/share/:graphicId" element={<GraphicShare />} />
+        <Route path="/platoon-graphics/:schoolId" element={<PlatoonGraphics />} />
+        <Route path="/office/share-graphics" element={<SchoolGraphicsShare />} />
+        <Route path="/office/platoon-graphics" element={
+          <Suspense fallback={<p className="px-4 py-16 text-center text-muted">Opening the office…</p>}>
+            <PlatoonGraphicsOffice />
+          </Suspense>
+        } />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/reports" element={<Reports />} />

@@ -2,46 +2,111 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Card, CrownIcon } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
-import { getKidProgress, CAMPAIGN_YEAR, CURRENT_MONTH } from '@/services/api.js'
+import { getKidProgress } from '@/services/api.js'
 import { useLiveData } from '@/lib/useLiveData.js'
 import { MEDALS, MEDAL_THRESHOLDS, legibleInk as legible } from '@/lib/medals.js'
 import MedalCoin from '@/components/MedalCoin.jsx'
 import { MONTH_HEB } from '@/data/ladders.js'
 import { fmt } from '@/lib/format.js'
+import { asset } from '@/lib/asset.js'
 
 const TOTAL = MEDAL_THRESHOLDS[MEDAL_THRESHOLDS.length - 1] // Black, the top tier
 
-// A single mission coin: gold once earned, a grey slot until then.
-function Coin({ n, earned }) {
+// The mission sticker, straight from the legacy Mission Board: the colour GIF
+// once the mission is earned, the greyscale (_bw) variant until then.
+const STICKER_BASE = 'https://mashpia.com/mobile/img_new/stickers'
+const SUBJECT_STICKER = 'shabbos_mevorchim_tehillim'
+
+// The real medal "backs" the legacy board shows (the WWTC set). The file name is
+// the tier colour; the DB spells Gray as "grey" for the image. Bronze, Silver,
+// and Gold are not on that board yet. Their picture is the local file
+// public/design/coin-reverse-<coin>.png. Replace that file when the real art arrives.
+const BACK_BASE = 'https://mashpia.com/mobile/reg/images/backs/wwtc'
+const LOCAL_BACK = new Set(['bronze', 'silver', 'gold'])
+function backName(medal) {
+  const n = (medal.coin || medal.name).toLowerCase()
+  return n === 'gray' ? 'grey' : n
+}
+
+// The medal face: the legacy back image (dimmed until earned, lit when active),
+// or the local file for tiers whose back is not published yet.
+function MedalImage({ medal, lit, active, size = 72 }) {
+  if (!medal.coin) return <MedalCoin medal={medal} size={size} locked={!lit} active={active} />
+  const src = LOCAL_BACK.has(medal.coin)
+    ? asset(`design/coin-reverse-${medal.coin}.png`)
+    : `${BACK_BASE}/${backName(medal)}.png`
   return (
-    <span
-      className={`grid h-9 w-9 flex-none place-items-center rounded-full text-[12px] font-bold tabular-nums ${earned ? 'text-navy ring-1 ring-black/5' : 'text-muted'}`}
-      style={{ background: earned ? 'linear-gradient(150deg, #ffe49a 0%, var(--color-gold) 70%)' : 'var(--color-track)' }}
-      title={earned ? `Mission ${n} — earned` : `Mission ${n}`}
-    >
-      {n}
-    </span>
+    <img
+      src={src}
+      alt={`${medal.name} medal`}
+      draggable="false"
+      className="w-auto transition"
+      style={{ height: size, opacity: lit ? 1 : 0.3, filter: active ? 'drop-shadow(0 0 6px var(--color-gold))' : undefined }}
+    />
   )
 }
 
-// One level: the tier medal + every mission coin that belongs to it.
-function Level({ medal, index, missionsTotal }) {
+// A single mission slot: numbered sticker that lights up when earned.
+function Sticker({ n, earned }) {
+  return (
+    <div
+      className="flex flex-none flex-col items-center gap-0.5"
+      title={earned ? `Mission ${n} — earned` : `Mission ${n}`}
+    >
+      <img
+        src={`${STICKER_BASE}/${SUBJECT_STICKER}${earned ? '' : '_bw'}.gif`}
+        alt=""
+        draggable="false"
+        className={`h-9 w-9 sm:h-10 sm:w-10 ${earned ? 'animate-pop' : 'opacity-70'}`}
+      />
+      <span className={`font-cond text-[11px] tabular-nums ${earned ? 'text-navy' : 'text-muted'}`}>{n}</span>
+    </div>
+  )
+}
+
+// One level: the tier medal + every mission sticker that belongs to it, mirroring
+// the legacy sticker board — a sticker strip plus a per-level status/progress.
+function Level({ medal, index, missionsTotal, date }) {
   const start = index === 0 ? 1 : MEDAL_THRESHOLDS[index - 1] + 1
   const end = medal.threshold
   const reached = missionsTotal >= end
   const active = missionsTotal >= start && missionsTotal < end // the level in progress
   const lit = reached || active
-  const coins = Array.from({ length: end - start + 1 }, (_, k) => start + k)
+  const levelCount = end - start + 1
+  const earnedInLevel = Math.max(0, Math.min(missionsTotal, end) - (start - 1))
+  const pct = Math.round((earnedInLevel / levelCount) * 100)
+  const toGo = end - missionsTotal
+  const slots = Array.from({ length: levelCount }, (_, k) => start + k)
   return (
-    <div className="flex flex-col gap-4 border-t border-line py-5 sm:flex-row sm:items-center sm:gap-6">
+    <div className="flex flex-col gap-4 border-t border-line py-5 sm:flex-row sm:items-start sm:gap-6">
       <div className="flex w-28 flex-none flex-col items-center gap-1 text-center">
-        <MedalCoin medal={medal} size={64} locked={!lit} active={active} />
+        <MedalImage medal={medal} lit={lit} active={active} size={72} />
         <span className="font-cond text-[11px] uppercase tracking-wide text-muted">Level {index + 1}</span>
         <span className="text-[13px] font-bold" style={{ color: lit ? legible(medal.color) : 'var(--color-muted)' }}>{medal.name}</span>
-        <span className="font-cond text-[11px] tabular-nums text-muted">{medal.threshold} missions</span>
+        {reached ? (
+          date ? (
+            <span className="font-heb text-[13px] leading-tight text-navy" dir="rtl">{date}</span>
+          ) : (
+            <span className="font-cond text-[11px] uppercase tracking-wide text-green">Earned ✓</span>
+          )
+        ) : active ? (
+          <span className="font-cond text-[11px] tabular-nums text-navy">{toGo} to {medal.name}</span>
+        ) : (
+          <span className="font-cond text-[11px] tabular-nums text-muted">{medal.threshold} missions</span>
+        )}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {coins.map((n) => <Coin key={n} n={n} earned={n <= missionsTotal} />)}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap gap-2">
+          {slots.map((n) => <Sticker key={n} n={n} earned={n <= missionsTotal} />)}
+        </div>
+        {active ? (
+          <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-track">
+            <div
+              className="h-full rounded-full transition-[width] duration-700"
+              style={{ width: `${Math.max(pct, 4)}%`, background: medal.color }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -53,18 +118,20 @@ export default function Medals() {
   if (!kid) return <Navigate to="/login" replace />
   if (!progress) {
     return (
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         One moment while your medals come up.
       </PageHero>
     )
   }
 
   const { missionsTotal, medal } = progress
+  const medalDates = progress.medalDates || {}
+  const dateFor = (m) => medalDates[(m.coin || m.name).toLowerCase()]
   const pct = Math.min(100, Math.round((missionsTotal / TOTAL) * 100))
 
   return (
     <>
-      <PageHero eyebrow={`My Medals · ${CAMPAIGN_YEAR}`} title="Medal Board">
+      <PageHero eyebrow="My Medals · this year" title="Medal Board">
         Earn one Shabbos Mevorchim Tehillim mission each month — by saying Tehillim on Shabbos Mevorchim.
       </PageHero>
 
@@ -72,7 +139,7 @@ export default function Medals() {
         {/* Status */}
         <Card className="overflow-hidden">
           <div className="hero-navy flex flex-wrap items-center gap-5 px-6 py-6">
-            <MedalCoin medal={medal.current || MEDALS[0]} size={64} className="flex-none" />
+            <MedalImage medal={medal.current || MEDALS[0]} lit={!!medal.current} active={false} size={72} />
             <div className="min-w-0 flex-1">
               <p className="font-cond text-sm uppercase tracking-wide text-gold">Tehillim Missions</p>
               <p className="font-display text-3xl font-black leading-none text-white">
@@ -93,7 +160,7 @@ export default function Medals() {
             </div>
             <p className="mt-3 text-center text-sm font-semibold text-navy">
               {medal.next ? (
-                <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span>.</span></>
+                <><span className="text-green">{medal.missionsToNext}</span> Mission{medal.missionsToNext === 1 ? '' : 's'} To <span style={{ color: legible(medal.next.color) }}>{medal.next.name}</span>! <span className="font-normal text-muted">Don’t miss Shabbos Mevorchim <span className="font-heb">{MONTH_HEB[progress.current?.month] ?? progress.current?.month}</span>.</span></>
               ) : (
                 <>Every medal earned — amazing! <CrownIcon className="inline-block h-4 w-auto align-text-bottom" /></>
               )}
@@ -103,7 +170,7 @@ export default function Medals() {
 
         {/* Levels */}
         <Card className="px-5 sm:px-6">
-          {MEDALS.map((m, i) => <Level key={m.index} medal={m} index={i} missionsTotal={missionsTotal} />)}
+          {MEDALS.map((m, i) => <Level key={m.index} medal={m} index={i} missionsTotal={missionsTotal} date={dateFor(m)} />)}
         </Card>
       </div>
     </>

@@ -23,8 +23,9 @@ const HEB_MONTH_TO_EN = {
   Tevet: 'Teves',
   Shevat: 'Shvat',
   Adar: 'Adar',
-  'Adar I': 'Adar',
-  'Adar II': 'Adar',
+  // Leap years: keep the two Adars distinct. A plain year only ever says "Adar".
+  'Adar I': 'Adar I',
+  'Adar II': 'Adar II',
   Nisan: 'Nissan',
   Iyar: 'Iyar',
   Sivan: 'Sivan',

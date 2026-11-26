@@ -4,9 +4,12 @@ export const MEDAL_THRESHOLDS = [5, 11, 18, 26, 35, 45, 56, 68, 81, 95, 110, 126
 
 // Names and colours taken straight from the Mashpia medal board source
 // (לבן/אדום/כתום/צהוב/ירוק/כחול/סגול/חום/אפור/שחור). `ink` is the number colour
-// for contrast on light vs. dark medals. `coin` names the real medal graphic
-// (public/design/coin-<name>.png) — the shield coin the client supplied in each
-// ladder colour.
+// for contrast on light vs. dark medals. `coin` names the medal graphic
+// (public/design/coin-<name>.png and public/design/coin-reverse-<name>.png).
+// Bronze, Silver, and Gold do not have Tzivos Hashem art yet. Each face is a
+// recolored copy of the blue coin: public/design/coin-<name>.png and
+// public/design/coin-reverse-<name>.png. Replace that file to drop in the real
+// art; leave the coin name as it is.
 export const MEDALS = [
   { name: 'White', color: '#d8dbde', ink: '#1b2a4e', coin: 'white' },
   { name: 'Red', color: '#aa2834', ink: '#ffffff', coin: 'red' },
@@ -18,9 +21,9 @@ export const MEDALS = [
   { name: 'Brown', color: '#6d4c38', ink: '#ffffff', coin: 'brown' },
   { name: 'Gray', color: '#71707b', ink: '#ffffff', coin: 'gray' },
   { name: 'Black', color: '#0a0515', ink: '#ffffff', coin: 'black' },
-  { name: 'Bronze', color: '#8c6239', ink: '#ffffff' },
-  { name: 'Silver', color: '#c5ced6', ink: '#1b2a4e' },
-  { name: 'Gold', color: '#e0b000', ink: '#1b2a4e' },
+  { name: 'Bronze', color: '#8c6239', ink: '#ffffff', coin: 'bronze' },
+  { name: 'Silver', color: '#c5ced6', ink: '#1b2a4e', coin: 'silver' },
+  { name: 'Gold', color: '#e0b000', ink: '#1b2a4e', coin: 'gold' },
 ].map((m, i) => ({ ...m, threshold: MEDAL_THRESHOLDS[i], index: i }))
 
 // A medal's own colour can be too light to read as text on a light card

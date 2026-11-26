@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Card } from './ui.jsx'
 import { asset } from '@/lib/asset.js'
-import { buildTraining } from '@/lib/trainingBoard.js'
+import { buildTraining, trainingCheshbon } from '@/lib/trainingBoard.js'
 
-export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionsTotal, missionHistory }) {
-  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory })
+export default function TehillimTraining({ grade, ladder, months, priorMissions = 0, missionHistory, year, quotaGrid = null, firstMonth = 'Tishrei', anchorMonth = null }) {
+  const board = buildTraining({ grade, ladder, months, priorMissions, history: missionHistory, year, quotaGrid, firstMonth, anchorMonth })
   const current = String(grade)
   const [open, setOpen] = useState(() => new Set([current]))
   const rootRef = useRef(null)
@@ -23,11 +23,12 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
     return () => observer.disconnect()
   }, [])
   const allOpen = board.boards.every((b) => open.has(b.grade))
-  // Lifetime missions earned (matches the medal board). The grid only draws checks
-  // for occasions we hold records for (this year), so the headline/bar use the
-  // lifetime total while earlier earned missions are summarized in the note below.
-  const earned = Number.isFinite(missionsTotal) ? missionsTotal : priorMissions + board.done
-  const pct = board.total ? Math.min(100, Math.round((earned / board.total) * 100)) : 0
+  // The headline is the boxes on this card. A lifetime medal total can count
+  // marks that are not a box here, so it is not used for this line.
+  const tally = trainingCheshbon(board)
+  const earned = tally.earned
+  const total = tally.total
+  const pct = total ? Math.min(100, Math.round((earned / total) * 100)) : 0
 
   function toggle(g) {
     setOpen((prev) => {
@@ -46,11 +47,13 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
         <div>
           <p className="sh">My Tehillim Training</p>
           <p className="mt-1 text-[13px] font-semibold text-muted">
-            Ladder {ladder || '—'} · every Shabbos Mevorchim, plus Rosh Hashana and Yom Kippur, through the grade this ladder finishes.
+            {quotaGrid
+              ? `Custom ladder · finish ${quotaGrid.targetKapitlach} kapitlach by ${quotaGrid.finishLabel}.`
+              : `Ladder ${ladder || '—'} · every Shabbos Mevorchim, plus Rosh Hashana and Yom Kippur, through the grade this ladder finishes.`}
           </p>
         </div>
         <div className="text-right">
-          <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{earned} earned · {board.total} missions on this ladder</p>
+          <p className="font-cond text-sm font-bold uppercase tracking-wide text-green">{earned} earned · {total} missions on this ladder</p>
           <button
             type="button"
             className="btn btn-o mt-2 !min-h-11 !px-4"
@@ -64,11 +67,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
       <div className="relative mt-3 h-2.5 w-full overflow-hidden rounded-full bg-track">
         <div className="h-full rounded-full" style={{ width: `${Math.max(pct, earned ? 2 : 0)}%`, background: 'var(--grad-progress)' }} />
       </div>
-      {priorMissions > 0 ? (
-        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">{priorMissions} earlier missions are on record in total. A Not Done line is not counted as a miss.</p>
-      ) : (
-        <p className="relative mt-3 text-[13px] font-semibold text-navy/75">A Not Done line is not counted as a miss. Only a saved report is checked off.</p>
-      )}
+      <p className="relative mt-3 text-[13px] font-semibold text-navy/75">A Not Done line is not counted as a miss. Only a saved report is checked off.</p>
       <div className="relative mt-4 space-y-2">
         {board.boards.map((g) => {
           const isOpen = open.has(g.grade)
@@ -80,7 +79,7 @@ export default function TehillimTraining({ grade, ladder, months, priorMissions 
                 </svg>
                 <span className="font-display text-[13px] font-black uppercase tracking-wide text-navy">My {g.title} Missions</span>
                 {g.grade === current ? <span className="rounded-full bg-gold/20 px-2 py-0.5 font-cond text-[11px] font-bold uppercase tracking-wide text-navy">You’re here</span> : null}
-                <span className="ml-auto font-cond text-[12px] font-bold uppercase tracking-wide text-muted">{g.done} checked</span>
+                <span className="ml-auto font-cond text-[12px] font-bold uppercase tracking-wide text-muted">{g.done} out of {g.total}</span>
               </button>
               {isOpen ? (
                 <div className="grid grid-cols-2 gap-1.5 px-4 pb-3 sm:grid-cols-4 lg:grid-cols-7">

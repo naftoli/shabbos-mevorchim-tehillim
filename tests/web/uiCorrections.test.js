@@ -26,7 +26,7 @@ test('the perfect platoon banner uses the short sentence and the existing artwor
   assert.equal(cuePerfectPlatoon(), BANNER_TEXT)
   assert.equal(cuePerfectPlatoon().includes('commander made it happen'), false)
   assert.equal(cuePerfectPlatoon().includes('—'), false)
-  assert.equal(PERFECT_PLATOON_ART, 'design/how/perfect-platoon.webp')
+  assert.equal(PERFECT_PLATOON_ART, 'design/perfect-platoon-logo.webp')
   assert.equal(PERFECT_PLATOON_ART.startsWith('/'), false)
 
   const banner = read('src/components/PerfectPlatoonBanner.jsx')

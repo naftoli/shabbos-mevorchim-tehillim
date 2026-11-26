@@ -109,6 +109,39 @@ function wwtcCanManageSchool($actor, int $schoolId, array $adminSchoolIds = []):
     return false;
 }
 
+/** @return int[] */
+function wwtcAdminAuthIds(int $adminId, string $auth): array
+{
+    global $MASHPIA_DB;
+    if ($adminId <= 0 || !isset($MASHPIA_DB)) {
+        return [];
+    }
+    try {
+        $stmt = $MASHPIA_DB->prepare(
+            'SELECT id FROM admin_auths WHERE admin_id = :id AND auth = :auth'
+        );
+        $stmt->execute([':id' => $adminId, ':auth' => $auth]);
+        $ids = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[] = (int) $id;
+        }
+        return $ids;
+    } catch (Exception $e) {
+        error_log('WWTC admin auth lookup failed: ' . $e->getMessage());
+        return [];
+    }
+}
+
+function wwtcRequireSchoolAdmin(int $schoolId): array
+{
+    $actor = wwtcRequireActor(['admin']);
+    $ids = (($actor['auth'] ?? '') === 'super') ? [] : wwtcAdminAuthIds((int) $actor['id'], 'school');
+    if (!wwtcCanManageSchool($actor, $schoolId, $ids)) {
+        wwtcError('You do not have permission to perform this action.', 403);
+    }
+    return $actor;
+}
+
 /**
  * Public payload never includes the roll. Staff payload sets roll=true and rows.
  * Summary keys are class-level only (name, counts, perfect). Rows are the only

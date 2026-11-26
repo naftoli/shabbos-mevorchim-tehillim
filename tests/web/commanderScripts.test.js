@@ -9,11 +9,13 @@ import {
   fillClimb,
   TRAINING_NOT_NOW,
   fillMission,
+  fillReview,
   fillStand,
   fillStreak,
   fillWelcome,
   missionQuota,
   readKidScripts,
+  reviewMonthsFromProgress,
   readTrainingAnswer,
   rememberScript,
   rememberTraining,
@@ -158,6 +160,62 @@ test('ties on a leaderboard share a rank and the next place skips', () => {
   assert.equal(placeAmong(rows, score, (row) => row.id, 'missing'), null)
 })
 
+test('the review walks last month and the month before with the real numbers', () => {
+  const text = fillReview([
+    { month: 'Tishrei', kapitlach: 7, minutes: 30, quotaKapitlach: 7, quotaMinutes: 30, met: true, reported: true },
+    { month: 'Cheshvan', kapitlach: 4, minutes: 10, quotaKapitlach: 11, quotaMinutes: 40, met: false, reported: true },
+  ])
+  assert.match(text, /^Let's take a look at what you did last month and the month before\./)
+  assert.match(text, /The month before was Tishrei\. You said 7 kapitlach in 30 minutes\. Your quota was 7 kapitlach, about 30 minutes\. You met your quota\./)
+  assert.match(text, /Last month was Cheshvan\. You said 4 kapitlach in 10 minutes\. Your quota was 11 kapitlach, about 40 minutes\. You did not meet your quota\./)
+  assert.match(text, /Keep going, one mission at a time\.$/)
+  assert.equal(text.includes('['), false)
+
+  const quiet = fillReview([
+    { month: 'Kislev', reported: false, quotaKapitlach: 12, quotaMinutes: 40, met: false },
+  ])
+  assert.match(quiet, /Last month was Kislev\. You have not reported what you said yet\./)
+  assert.equal(quiet.includes('You said'), false)
+  assert.equal(fillReview([]), null)
+  assert.equal(fillReview(null), null)
+
+  const fromProgress = reviewMonthsFromProgress({
+    months: [
+      { month: 'Tishrei', said: 5, saidMinutes: 20, quota: 5, minutes: 25, met: true, reported: true, isCurrent: false },
+      { month: 'Cheshvan', said: 1, saidMinutes: 4, quota: 8, minutes: 30, met: false, reported: true, isCurrent: false },
+      { month: 'Kislev', said: 9, saidMinutes: 40, quota: 9, minutes: 32, met: true, reported: true, isCurrent: true },
+      { month: 'Rosh Hashana', said: 9, saidMinutes: 40, quota: 9, minutes: 32, met: true, holiday: true },
+    ],
+  })
+  assert.deepEqual(fromProgress.map((row) => row.month), ['Tishrei', 'Cheshvan'])
+  assert.equal(fromProgress[1].kapitlach, 1)
+  assert.equal(fromProgress[1].minutes, 4)
+  assert.equal(fromProgress[1].met, false)
+})
+
+test('the review is part of the automatic guidance once the numbers are real', () => {
+  const withReview = {
+    name: 'Dovi',
+    ladder: 8,
+    gradeLabel: '8th grade',
+    quota: { kapitlach: 14, minutes: 40 },
+    heard: {},
+    resultsReady: false,
+    streakCurrent: null,
+    reviewMonths: [
+      { month: 'Tishrei', kapitlach: 5, minutes: 20, quotaKapitlach: 5, quotaMinutes: 25, met: true, reported: true },
+    ],
+  }
+  assert.deepEqual(selectCommanderScripts(withReview).map((item) => item.id), ['mission', 'review'])
+  const store = memory()
+  rememberScript(store, 's8', 'Kislev', 'review')
+  const heard = readKidScripts(store, 's8', 'Kislev')
+  assert.equal(heard.heard.review, true)
+  assert.equal(selectCommanderScripts({ ...withReview, heard: heard.heard }).some((item) => item.id === 'review'), false)
+  const next = readKidScripts(store, 's8', 'Teves')
+  assert.equal(next.heard.review, false)
+})
+
 test('a streak uses the real counts, and zero uses the no-streak script', () => {
   const going = fillStreak({ current: 4, longest: 9 })
   assert.match(going, /You've completed 4 missions in a row/)
@@ -217,6 +275,17 @@ test('each script is chosen once for its moment, per child per month', () => {
     streakLongest: 5,
   }
   assert.deepEqual(selectCommanderScripts(withLadder).map((item) => item.id), ['mission', 'stand', 'streak'])
+  const customOnly = {
+    name: 'Dovi',
+    customTarget: 150,
+    customFinish: '8th grade',
+    quota: { kapitlach: 40, minutes: 80 },
+    heard: {},
+    resultsReady: false,
+    streakCurrent: null,
+  }
+  assert.equal(selectCommanderScripts(customOnly)[0].id, 'mission')
+  assert.equal(selectCommanderScripts(customOnly).some((item) => item.id === 'welcome'), false)
   assert.deepEqual(
     selectCommanderScripts({ ...withLadder, resultsReady: false }).map((item) => item.id),
     ['mission', 'streak'],

@@ -92,3 +92,25 @@ test('the last done ladder carries across grades to later blank missions', () =>
   assert.equal(g2Tishrei.met, false)
   assert.equal(g2Tishrei.quota, onL9.v, 'grade-2 blank inherits grade-1 done ladder (9)')
 })
+
+test('a Cheshvan override wins over today\'s ladder quota', () => {
+  const grade = '3'
+  const today = quotaFor(grade, 'Cheshvan', 5)
+  const board = buildTraining({
+    grade,
+    ladder: 5,
+    months: [{
+      month: 'Cheshvan',
+      met: true,
+      reported: true,
+      quotaAdjusted: true,
+      quota: 5,
+      said: 5,
+    }],
+    history: {},
+  })
+  const cheshvan = cell(board, grade, 'Cheshvan')
+  assert.equal(cheshvan.met, true)
+  assert.equal(cheshvan.quota, 5)
+  assert.notEqual(cheshvan.quota, today.v)
+})
