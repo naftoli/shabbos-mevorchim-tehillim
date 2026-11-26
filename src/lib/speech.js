@@ -1,6 +1,11 @@
-// Browser speech for General 613. Uses the built-in Web Speech API only —
-// speechSynthesis to talk, SpeechRecognition to listen. No key, no paid service.
-// Both are optional: callers keep working when a browser doesn't have them.
+// Speech for the virtual commander.
+// speak() asks POST /api/speak for an eSpeak NG WAV. Ches and chaf in that
+// script are the phoneme x. If the endpoint is down, the browser's
+// speechSynthesis speaks spokenText() instead. SpeechRecognition listens.
+// No key, no paid service. Callers keep working when a browser has neither.
+// The chat text is not changed.
+
+import { phonemeScript } from './pronounce.js'
 
 const SILENCE_MS = 8000
 
@@ -17,10 +22,19 @@ export function stripForSpeech(text) {
     .trim()
 }
 
-// Ashkenazi speech forms for the commander's Hebrew and Yiddish words.
-// The on-screen text stays spelled the usual way. "ch" here is the guttural
-// ches (loch / Bach), never the English "ch" of "chair". Shabbos is left as
-// Shabbos: it has no ches. Longer words are replaced before the shorter ones.
+const SPEAK_ENDPOINT = `${import.meta.env?.BASE_URL ?? '/'}api/speak`
+
+// Plain text with 613 expanded. Hebrew words stay spelled normally here;
+// phonemeScript() is what POST /api/speak receives.
+function speechPlain(text) {
+  return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+}
+
+// Browser-voice forms for the commander's Hebrew and Yiddish words.
+// Used only when /api/speak is down. The on-screen text stays spelled the
+// usual way. "ch" here is the guttural ches (loch / Bach), never the English
+// "ch" of "chair". Shabbos is left as Shabbos: it has no ches. Longer words
+// are replaced before the shorter ones.
 const SPEECH_WORDS = [
   [/\bkapitlach\b/gi, 'kahpeetlockh'],
   [/\bkapitel\b/gi, 'kahpeetel'],
@@ -32,9 +46,18 @@ const SPEECH_WORDS = [
 
 // If a "613" is still spoken, say "six thirteen", not "six hundred and thirteen".
 export function spokenText(text) {
-  let spoken = stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
+  let spoken = speechPlain(text)
   for (const [pattern, say] of SPEECH_WORDS) spoken = spoken.replace(pattern, say)
   return spoken
+}
+
+let currentAudio = null
+
+function stopAudio() {
+  const audio = currentAudio
+  currentAudio = null
+  if (!audio) return
+  try { audio.pause() } catch { /* already stopped */ }
 }
 
 // Chrome drops an utterance that runs much past 15 seconds. Stay under that,
@@ -139,6 +162,7 @@ function voicesReady(synth) {
 
 export function stopSpeaking() {
   token += 1
+  stopAudio()
   if (!canSpeak()) return
   try { window.speechSynthesis.cancel() } catch { /* already idle */ }
 }
@@ -157,8 +181,15 @@ export function releaseCallMic() {
 // Call inside the Sign In click, before any await. A silent utterance counts as
 // the user gesture, so Chrome will allow the real greeting once the dashboard
 // is on screen. The mic permission is asked in that same gesture.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
+
 export function armVoice() {
   if (typeof window === 'undefined') return
+  try {
+    const unlock = new Audio(SILENT_WAV)
+    unlock.volume = 0
+    unlock.play().catch(() => {})
+  } catch { /* autoplay unlock is best-effort */ }
   try {
     const synth = window.speechSynthesis
     if (synth && typeof window.SpeechSynthesisUtterance === 'function') {
@@ -194,30 +225,72 @@ export function armVoice() {
  * 'blocked' means the browser refused autoplay (or never started). The caller
  * can retry from a user gesture. Never throws.
  */
-export function speak(text, { muted = false, gender = null } = {}) {
-  const chunks = speechChunks(text)
-  const my = ++token
-  const synth = canSpeak() ? window.speechSynthesis : null
+function playWav(bytes, my) {
+  const blob = new Blob([bytes], { type: 'audio/wav' })
+  const url = URL.createObjectURL(blob)
+  const audio = new Audio(url)
+  currentAudio = audio
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (status) => {
+      if (settled) return
+      settled = true
+      if (currentAudio === audio) currentAudio = null
+      URL.revokeObjectURL(url)
+      resolve(status)
+    }
+    audio.onended = () => finish(my === token ? 'spoken' : 'interrupted')
+    audio.onpause = () => { if (my !== token) finish('interrupted') }
+    audio.onerror = () => finish('error')
+    audio.play().then(() => {
+      if (my !== token) {
+        audio.pause()
+        finish('interrupted')
+      }
+    }).catch(() => finish('blocked'))
+  })
+}
 
+async function speakFromApi(script, my) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 20000)
+  try {
+    const res = await fetch(SPEAK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script }),
+      signal: ctrl.signal,
+    })
+    if (my !== token) return 'interrupted'
+    if (!res.ok) return null
+    const bytes = await res.arrayBuffer()
+    if (my !== token) return 'interrupted'
+    if (!bytes || bytes.byteLength < 44) return null
+    return playWav(bytes, my)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function speakWithBrowser(text, my, gender) {
+  const synth = canSpeak() ? window.speechSynthesis : null
+  const chunks = speechChunks(text)
   const cancelNow = () => {
     if (!synth) return
     try { synth.cancel() } catch { /* ignore */ }
   }
-
-  if (muted || !chunks.length || !synth) {
+  if (!chunks.length || !synth) {
     cancelNow()
-    if (muted) return Promise.resolve('muted')
-    if (!chunks.length) return Promise.resolve('empty')
     return Promise.resolve('unavailable')
   }
-
   return new Promise((resolve) => {
     let settled = false
     let started = false
     let startTimer = 0
     let safetyTimer = 0
     let safetyTries = 0
-    const totalChars = chunks.reduce((n, chunk) => n + chunk.length, 0)
     const finish = (status) => {
       if (settled) return
       settled = true
@@ -239,6 +312,7 @@ export function speak(text, { muted = false, gender = null } = {}) {
     }
     const queue = (voice) => {
       if (my !== token) { finish('interrupted'); return }
+      const totalChars = chunks.reduce((n, chunk) => n + chunk.length, 0)
       const last = chunks.length - 1
       chunks.forEach((chunk, index) => {
         const utter = new SpeechSynthesisUtterance(chunk)
@@ -296,6 +370,29 @@ export function speak(text, { muted = false, gender = null } = {}) {
     if (busy) cancelNow()
     window.setTimeout(go, busy ? 70 : 0)
   })
+}
+
+export function speak(text, { muted = false, gender = null } = {}) {
+  const plain = speechPlain(text)
+  const my = ++token
+  stopAudio()
+  if (canSpeak()) {
+    try { window.speechSynthesis.cancel() } catch { /* ignore */ }
+  }
+  if (muted) return Promise.resolve('muted')
+  if (!plain) return Promise.resolve('empty')
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return Promise.resolve('unavailable')
+  const script = phonemeScript(plain)
+  return speakFromApi(script, my).then((status) => {
+    if (status) return status
+    if (my !== token) return 'interrupted'
+    return speakWithBrowser(text, my, gender)
+  })
+}
+
+if (import.meta.env?.DEV && typeof window !== 'undefined') {
+  window.__wwtcSpeak = speak
+  window.__wwtcStop = stopSpeaking
 }
 
 /**

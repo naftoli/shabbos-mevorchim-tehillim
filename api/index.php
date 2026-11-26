@@ -12,6 +12,9 @@ declare(strict_types=1);
  *
  * Helpers live in sibling files. HTTP handlers live in routes/, loaded after
  * $method and $path are set so they share this script's scope.
+ * POST /speak is loaded with the other routes. It does not read the database;
+ * dev-router.php also handles it before bootstrap so local speech works
+ * when MySQL is down.
  */
 
 require __DIR__ . '/bootstrap.php';
@@ -52,6 +55,7 @@ require __DIR__ . '/routes/public.php';
 require __DIR__ . '/routes/reports.php';
 require __DIR__ . '/routes/soldier.php';
 require __DIR__ . '/routes/admin.php';
+require __DIR__ . '/routes/speak.php';
 
 // Perfect Platoon graphics (public download + staff office). Own routes only.
 if (wwtcDispatchPlatoonGraphics($method, $path)) {
