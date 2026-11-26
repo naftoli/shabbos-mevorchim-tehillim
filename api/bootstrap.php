@@ -1374,11 +1374,22 @@ function wwtcCompletionCounts(int $date, ?int $year = null): array
     static $cache = [];
     if (!isset($cache[$date])) {
         $cache[$date] = wwtcCached("completion_counts.$date", static function () use ($date, $MASHPIA_DB) {
+    // met counts DISTINCT eligible soldiers who earned the mission, over the SAME
+    // enrolled/registered roster the size query below uses — so met can never
+    // exceed size. A plain COUNT(*) over all mark rows double-counted a soldier
+    // who held marks under two ladders' missions and counted marks on soldiers
+    // outside the roster, which pushed the home-race and army "% met" past the
+    // enrolled headcount. Keep this roster identical to size. Perfect Platoons
+    // do not read this query; they use wwtcPerfectPlatoonRows().
     $met = $MASHPIA_DB->prepare(
-        'SELECT u.school_id, u.class_id, COUNT(*) n
+        'SELECT u.school_id, u.class_id, COUNT(DISTINCT mm.user_id) n
            FROM date_tasks_mission_marks mm
            JOIN users u ON u.user_id = mm.user_id
+           JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
+           JOIN schools s ON s.school_id = u.school_id
+           JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
           WHERE mm.subject_id = ' . WWTC_SUBJECT_ID . ' AND mm.mark_date = :d
+            AND u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE . '
           GROUP BY u.school_id, u.class_id'
     );
     $met->execute([':d' => $date]);
@@ -1412,4 +1423,43 @@ function wwtcCompletionCounts(int $date, ?int $year = null): array
         });
     }
     return wwtcOverlayCompletionCountsForDate($cache[$date], $date, $year);
+}
+
+/**
+ * Eligible soldiers who earned the kapitelach mission on a Shabbos-Mevorchim
+ * date, as [user_id => true]. Same roster and mission-mark signal as
+ * wwtcCompletionCounts (home-race finished count, army % met, school headline),
+ * so a page does not re-query marks with a looser filter. Optional $schoolId
+ * scopes it to one base. Class stars, the base report, and the platoon roll
+ * take size/met/perfect from the shared kapitlach roster instead
+ * (wwtcApplyPerfectRosterToSchool), which is a different signal.
+ */
+function wwtcMarkedUserIds(int $date, ?int $schoolId = null): array
+{
+    global $MASHPIA_DB;
+    static $cache = [];
+    $key = $date . '.' . ($schoolId ?? 0);
+    if (isset($cache[$key])) {
+        return $cache[$key];
+    }
+    $sql = 'SELECT DISTINCT mm.user_id
+              FROM date_tasks_mission_marks mm
+              JOIN users u ON u.user_id = mm.user_id
+              JOIN user_tracks ut ON ut.user_id = u.user_id AND ut.subject_id = ' . WWTC_SUBJECT_ID . ' AND ut.enrolled = 1
+              JOIN schools s ON s.school_id = u.school_id
+              JOIN classes c ON c.class_id = u.class_id AND c.school_id = u.school_id
+             WHERE mm.subject_id = ' . WWTC_SUBJECT_ID . ' AND mm.mark_date = :d
+               AND u.user_registered > 0 AND ' . WWTC_ROSTER_WHERE
+            . ($schoolId ? ' AND u.school_id = :sid' : '');
+    $stmt = $MASHPIA_DB->prepare($sql);
+    $params = [':d' => $date];
+    if ($schoolId) {
+        $params[':sid'] = $schoolId;
+    }
+    $stmt->execute($params);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $uid) {
+        $out[(int) $uid] = true;
+    }
+    return $cache[$key] = $out;
 }
