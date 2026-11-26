@@ -39,7 +39,8 @@
   --color-card: #c3dcff;
   --color-line: #bccfee;           /* hairlines */
   --color-muted: #46557d;          /* muted text */
-  --color-track: #cadcf8;          /* progress tracks / chips / soft fills */
+  --color-track: #cadcf8;          /* chips / soft fills */
+  --color-bar-track: #6f96c4;      /* unfilled progress bar; darker than the card, lighter than the fill */
 
   --font-display: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-sans: "Exo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -154,6 +155,9 @@ h1, h2, h3, h4 { line-height: 1.15; }
 }
 .hero-navy .text-gold { color: #fff; }
 
+body.wwtc-display header,
+body.wwtc-display footer { display: none; }
+
 .hero-glass {
   color: #fff;
   background: var(--glass-green);
@@ -191,6 +195,20 @@ h1, h2, h3, h4 { line-height: 1.15; }
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("./fonts/BebasNeue-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat ExtraBold Italic";
+  src: url("./fonts/Montserrat-ExtraBoldItalic.ttf") format("truetype");
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
 
 /* animations */
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -200,7 +218,46 @@ h1, h2, h3, h4 { line-height: 1.15; }
 
 .font-heb { font-family: var(--font-heb); direction: rtl; unicode-bidi: isolate; }
 
+/* Dashboard medal: the numbered reverse is always the resting face.
+   When motion is allowed, the crest turns away once to reveal it. */
+.medal-flip { position: relative; display: grid; place-items: center; }
+.medal-flip img { max-width: 100%; max-height: 100%; grid-area: 1 / 1; }
+.medal-flip-front { position: relative; }
+@media (prefers-reduced-motion: no-preference) {
+  .medal-flip-front {
+    animation: medal-turn-away 0.7s ease-in forwards;
+    transform-origin: center;
+  }
+}
+@keyframes medal-turn-away {
+  from { opacity: 1; transform: rotateY(0deg); }
+  to { opacity: 0; transform: rotateY(90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .medal-flip-front { display: none; }
+}
+/* Unearned crests and discs only. Earned coins never use this class: they
+   stay full color and flip to the numbered reverse. Mostly gray, lifted so
+   the face stays pale (the black 95 medal included), with saturation put
+   back on the color that grayscale leaves so a faint trace of the real
+   medal color shows. No dark drop shadow. */
+.medal-unearned {
+  opacity: 0.52;
+  filter: grayscale(0.8) brightness(1.32) saturate(3.2);
+  max-width: 100%;
+  max-height: 100%;
+}
+
 /* Hide the scrollbar but keep the area scrollable (used on cards that may
    overflow on long ladders but shouldn't show a track). */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Ladder comparison: one shared height so the frozen grade column stays
+   row-aligned with the scrolling ladders. Smooth sideways motion is skipped
+   when the reader asks for less motion. */
+.ladder-compare { --ladder-chart-h: clamp(22rem, 70vw, 32rem); }
+.ladder-compare-scroll { scroll-behavior: smooth; overscroll-behavior-x: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .ladder-compare-scroll { scroll-behavior: auto; }
+}

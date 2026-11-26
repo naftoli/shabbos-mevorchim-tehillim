@@ -64,42 +64,25 @@ function wwtcReconcileMissionMark(PDO $db, int $userId, int $date, int $taskId, 
 
 /**
  * Apply one grid's mark (kapitelach 8001 / minutes 8002) for a soldier on a date,
- * the single-soldier path of mark_tehillim2.php: update an existing mark, insert a
- * new one, or delete it when the value is cleared to 0, keeping the kapitelach
- * mission mark in sync. Runs inside the caller's transaction.
+ * the single-soldier path of mark_tehillim2.php. Delete-by-grid then insert: it
+ * clears any existing mark on this grid for the date (any ladder) and writes the
+ * one new mark, keeping the kapitelach mission mark in sync. Runs inside the
+ * caller's transaction.
  */
 function wwtcApplyMark(PDO $db, int $userId, int $date, array $task, int $val, bool $isKapitlach): void
 {
     $gridId = (int) $task['grid_id'];
 
-    // An existing mark on this grid for the date (any ladder's task row, as the
-    // teacher tool looks it up) — the soldier may have a mark from another ladder.
-    $find = $db->prepare(
-        'SELECT dtm.date_task_id FROM date_tasks_marks dtm
+    // Delete-by-grid, then insert. Clear ANY existing mark(s) on this grid for the
+    // date (any ladder) before writing the one mark, so a re-mark, a second ladder's
+    // row, or a concurrent double-submit can never leave two rows on the grid. This
+    // replaces the old find-one-then-update/insert, which raced and left cross-ladder
+    // duplicates.
+    $db->prepare(
+        'DELETE dtm FROM date_tasks_marks dtm
            JOIN date_tasks dt USING (date_task_id)
-          WHERE dtm.user_id = :uid AND dtm.mark_date = :d AND dt.grid_id = :grid
-          LIMIT 1'
-    );
-    $find->execute([':uid' => $userId, ':d' => $date, ':grid' => $gridId]);
-    $existing = $find->fetchColumn();
-
-    if ($existing !== false) {
-        $existingTaskId = (int) $existing;
-        if ($val === 0) {
-            $db->prepare('DELETE FROM date_tasks_marks WHERE date_task_id = :tid AND user_id = :uid AND mark_date = :d')
-               ->execute([':tid' => $existingTaskId, ':uid' => $userId, ':d' => $date]);
-            if ($isKapitlach) {
-                wwtcReconcileMissionMark($db, $userId, $date, $existingTaskId, 0, true);
-            }
-        } else {
-            $db->prepare('UPDATE date_tasks_marks SET done_qty = :v WHERE date_task_id = :tid AND user_id = :uid AND mark_date = :d')
-               ->execute([':v' => $val, ':tid' => $existingTaskId, ':uid' => $userId, ':d' => $date]);
-            if ($isKapitlach) {
-                wwtcReconcileMissionMark($db, $userId, $date, $existingTaskId, $val, false);
-            }
-        }
-        return;
-    }
+          WHERE dtm.user_id = :uid AND dtm.mark_date = :d AND dt.grid_id = :grid'
+    )->execute([':uid' => $userId, ':d' => $date, ':grid' => $gridId]);
 
     if ($val > 0) {
         // Sets the same columns mark_tehillim2.php does; the other NOT NULL columns
@@ -114,8 +97,12 @@ function wwtcApplyMark(PDO $db, int $userId, int $date, array $task, int $val, b
             ':tid' => (int) $task['date_task_id'], ':uid' => $userId, ':d' => $date, ':v' => $val,
             ':desc' => (string) ($task['description'] ?? ''), ':points' => (float) ($task['points'] ?? 0),
         ]);
-        if ($isKapitlach) {
-            wwtcReconcileMissionMark($db, $userId, $date, (int) $task['date_task_id'], $val, false);
-        }
+    }
+
+    if ($isKapitlach) {
+        // Reconcile this grid's mission mark against the new value; clearing to 0
+        // force-deletes it. A mark left on a ladder the soldier moved off is cleaned
+        // up by the reconcile cron (reconcile_tehillim_missions.php).
+        wwtcReconcileMissionMark($db, $userId, $date, (int) $task['date_task_id'], $val, $val === 0);
     }
 }

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 // Unit test for the Tehillim marking write path (api/marking.php), driven by a
 // fake PDO that records every statement and returns canned lookup rows. Verifies
-// the insert / update / delete branches and the kapitelach mission-mark
-// reconciliation against quota — the logic that writes children's records and
-// that the read-only prod account can't exercise directly.
+// the delete-by-grid + insert path and the kapitelach mission-mark reconciliation
+// against quota — the logic that writes children's records and that the read-only
+// prod account can't exercise directly.
 //
 // Run: php tests/php/MarkingTest.php   (any PHP 7.2+)
 
@@ -77,6 +77,15 @@ function ran(FakePDO $db, string $needle, $paramKey = null, $paramVal = null): b
     }
     return false;
 }
+/** How many recorded queries match $needle. */
+function countRan(FakePDO $db, string $needle): int
+{
+    $n = 0;
+    foreach ($db->queries as [$sql, $params]) {
+        if (strpos($sql, $needle) !== false) { $n++; }
+    }
+    return $n;
+}
 
 $KAP = ['grid_id' => 8001, 'date_task_id' => 111, 'description' => 'א-מ', 'points' => 0.5];
 $MIN = ['grid_id' => 8002, 'date_task_id' => 222, 'description' => '36', 'points' => 0.5];
@@ -107,16 +116,17 @@ $db->existingMarkTaskId = 111;
 $db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 10];
 $db->missionMarkExists = true;
 wwtcApplyMark($db, 777, $DATE, $KAP, 5, true);
-check('existing mark: updates done_qty', ran($db, 'UPDATE date_tasks_marks SET done_qty', ':v', 5));
+check('existing mark, new value: re-inserts with the new done_qty', ran($db, 'INSERT INTO date_tasks_marks', ':v', 5));
 check('dropped below quota: deletes the mission mark', ran($db, 'DELETE FROM date_tasks_mission_marks'));
-check('update path: never inserts a second mark', !ran($db, 'INSERT INTO date_tasks_marks'));
+check('delete-by-grid then exactly one insert (no second row)', ran($db, 'DELETE dtm FROM date_tasks_marks') && countRan($db, 'INSERT INTO date_tasks_marks') === 1);
 
 // 4) Existing mark cleared to 0 -> DELETE mark + force-delete mission mark.
 $db = new FakePDO();
 $db->existingMarkTaskId = 111;
 $db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 10];
 wwtcApplyMark($db, 777, $DATE, $KAP, 0, true);
-check('cleared to 0: deletes the mark', ran($db, 'DELETE FROM date_tasks_marks WHERE date_task_id'));
+check('cleared to 0: deletes the grid mark', ran($db, 'DELETE dtm FROM date_tasks_marks'));
+check('cleared to 0: inserts nothing', !ran($db, 'INSERT INTO date_tasks_marks'));
 check('cleared to 0: deletes the mission mark', ran($db, 'DELETE FROM date_tasks_mission_marks'));
 
 // 5) Minutes (grid 8002) never touches mission marks, whatever the value.
@@ -130,7 +140,31 @@ check('minutes: never writes a mission mark', !ran($db, 'date_tasks_mission_mark
 $db = new FakePDO();
 $db->existingMarkTaskId = false;
 wwtcApplyMark($db, 777, $DATE, $KAP, 0, true);
-check('zero + no existing mark: writes nothing', count($db->queries) === 1); // only the lookup SELECT
+check('zero + no existing mark: inserts nothing', !ran($db, 'INSERT INTO date_tasks_marks'));
+check('zero + no existing mark: still runs the delete-by-grid', ran($db, 'DELETE dtm FROM date_tasks_marks'));
+
+// 7) A mark always collapses the grid to one row: exactly one delete-by-grid then
+//    one insert, regardless of what (or how many) marks were there before — this is
+//    what prevents the cross-ladder / re-mark duplicates.
+$db = new FakePDO();
+$db->existingMarkTaskId = 999; // a mark from another ladder's task
+$db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 10];
+wwtcApplyMark($db, 777, $DATE, $KAP, 40, true);
+check('cross-ladder: one delete-by-grid', countRan($db, 'DELETE dtm FROM date_tasks_marks') === 1);
+check('cross-ladder: one insert on the posted task', countRan($db, 'INSERT INTO date_tasks_marks') === 1 && ran($db, 'INSERT INTO date_tasks_marks', ':tid', 111));
+
+// 8) Value exactly at quota earns the mission mark (boundary).
+$db = new FakePDO();
+$db->mission = ['date_tasks_mission_id' => 5, 'mission_name' => 'Tehillim', 'quantity' => 40];
+$db->missionMarkExists = false;
+wwtcApplyMark($db, 777, $DATE, $KAP, 40, true);
+check('exactly at quota: earns the mission mark', ran($db, 'INSERT IGNORE INTO date_tasks_mission_marks'));
+
+// 9) Minutes (8002) also delete-by-grid then insert, and never a mission mark.
+$db = new FakePDO();
+wwtcApplyMark($db, 777, $DATE, $MIN, 90, false);
+check('minutes: delete-by-grid then one insert', ran($db, 'DELETE dtm FROM date_tasks_marks') && countRan($db, 'INSERT INTO date_tasks_marks') === 1);
+check('minutes: still never writes a mission mark', !ran($db, 'date_tasks_mission_marks'));
 
 echo "\n$tests checks, $failures failing\n";
 exit($failures === 0 ? 0 : 1);

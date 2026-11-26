@@ -9,6 +9,12 @@
 function readDemoFlag() {
   if (typeof window === 'undefined') return false
   const params = new URLSearchParams(window.location.search)
+  // A handoff code is a live credential: the parent site's link means live
+  // data even in a tab that asked for the demo earlier.
+  if (params.get('handoff')) {
+    try { sessionStorage.setItem('wwtc.demo', '0') } catch { /* private mode */ }
+    return false
+  }
   if (params.has('demo')) {
     const v = params.get('demo')
     const on = v === '1' || v === 'true' || v === ''

@@ -1,9 +1,11 @@
-// Browser speech for the virtual commander. Uses the built-in Web Speech API only —
-// speechSynthesis to talk, SpeechRecognition to listen. No key, no paid service.
-// Both are optional: callers keep working when a browser doesn't have them.
-// Hebrew and Yiddish are respelled in spokenText. The chat text is not changed.
+// Speech for the virtual commander.
+// speak() asks POST /api/speak for an eSpeak NG WAV. Ches and chaf in that
+// script are the phoneme x. If the endpoint is down, the browser's
+// speechSynthesis speaks spokenText() instead. SpeechRecognition listens.
+// No key, no paid service. Callers keep working when a browser has neither.
+// The chat text is not changed.
 
-import { phonemeScript, pronounce } from './pronounce.js'
+import { phonemeScript } from './pronounce.js'
 
 const SILENCE_MS = 8000
 
@@ -22,17 +24,31 @@ export function stripForSpeech(text) {
 
 const SPEAK_ENDPOINT = `${import.meta.env?.BASE_URL ?? '/'}api/speak`
 
-// Plain text with 613 expanded. Hebrew words are still spelled normally here;
-// phonemeScript() is what the speak API receives.
+// Plain text with 613 expanded. Hebrew words stay spelled normally here;
+// phonemeScript() is what POST /api/speak receives.
 function speechPlain(text) {
   return stripForSpeech(text).replace(/\b613\b/g, 'six thirteen')
 }
 
-// Fallback spelling when the speak API is down. An English browser voice
-// cannot say ches, so this is not the voice kids hear when the API is up.
-export function spokenText(text, voice) {
-  void voice
-  return pronounce(speechPlain(text))
+// Browser-voice forms for the commander's Hebrew and Yiddish words.
+// Used only when /api/speak is down. The on-screen text stays spelled the
+// usual way. "ch" here is the guttural ches (loch / Bach), never the English
+// "ch" of "chair". Shabbos is left as Shabbos: it has no ches. Longer words
+// are replaced before the shorter ones.
+const SPEECH_WORDS = [
+  [/\bkapitlach\b/gi, 'kahpeetlockh'],
+  [/\bkapitel\b/gi, 'kahpeetel'],
+  [/\bchayolim\b/gi, 'khahyolim'],
+  [/\bchayol\b/gi, 'khahyole'],
+  [/\btehillim\b/gi, 'tuhhillim'],
+  [/\bmevorchim\b/gi, 'mehvorkhim'],
+]
+
+// If a "613" is still spoken, say "six thirteen", not "six hundred and thirteen".
+export function spokenText(text) {
+  let spoken = speechPlain(text)
+  for (const [pattern, say] of SPEECH_WORDS) spoken = spoken.replace(pattern, say)
+  return spoken
 }
 
 let currentAudio = null
@@ -48,8 +64,8 @@ function stopAudio() {
 // and only break where a sentence already ends.
 const CHUNK_CHARS = 180
 
-export function speechChunks(text, voice) {
-  const clean = spokenText(text, voice)
+export function speechChunks(text) {
+  const clean = spokenText(text)
   if (!clean) return []
   if (clean.length <= CHUNK_CHARS) return [clean]
   const sentences = clean.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [clean]
@@ -86,11 +102,18 @@ function voiceScore(voice) {
 // A paid neural voice is not used here. If none of these exist, the browser
 // default is the fallback; a neural service could be added later behind the
 // PHP /chat proxy without changing the on-screen text.
-export function pickVoice(voices) {
+export function pickVoice(voices, gender) {
   let best = null
   let bestScore = 0
   for (const voice of voices || []) {
-    const score = voiceScore(voice)
+    let score = voiceScore(voice)
+    const name = voice?.name || ''
+    const female = /female|woman|aria|jenny|sara|samantha|zira|susan|libby/i.test(name)
+    const male = /\bmale\b|\bguy\b|\bdavis\b|\bdavid\b|\bmark\b|\bdaniel\b|\bandrew\b/i.test(name)
+    if (gender === 'girl' && female) score += 80
+    if (gender === 'boy' && male) score += 80
+    if (gender === 'girl' && male) score -= 30
+    if (gender === 'boy' && female) score -= 30
     if (score > bestScore) {
       best = voice
       bestScore = score
@@ -251,7 +274,7 @@ async function speakFromApi(script, my) {
   }
 }
 
-function speakWithBrowser(text, my) {
+function speakWithBrowser(text, my, gender) {
   const synth = canSpeak() ? window.speechSynthesis : null
   const chunks = speechChunks(text)
   const cancelNow = () => {
@@ -289,10 +312,9 @@ function speakWithBrowser(text, my) {
     }
     const queue = (voice) => {
       if (my !== token) { finish('interrupted'); return }
-      const lines = speechChunks(text, voice)
-      const totalChars = lines.reduce((n, chunk) => n + chunk.length, 0)
-      const last = lines.length - 1
-      lines.forEach((chunk, index) => {
+      const totalChars = chunks.reduce((n, chunk) => n + chunk.length, 0)
+      const last = chunks.length - 1
+      chunks.forEach((chunk, index) => {
         const utter = new SpeechSynthesisUtterance(chunk)
         utter.lang = 'en-US'
         utter.rate = 1
@@ -337,7 +359,7 @@ function speakWithBrowser(text, my) {
         }
         if (my !== token) { finish('interrupted'); return }
         synth.resume?.()
-        queue(pickVoice(voices))
+        queue(pickVoice(voices, gender))
       } catch {
         finish('blocked')
       }
@@ -350,18 +372,21 @@ function speakWithBrowser(text, my) {
   })
 }
 
-export function speak(text, { muted = false } = {}) {
+export function speak(text, { muted = false, gender = null } = {}) {
   const plain = speechPlain(text)
+  const my = ++token
+  stopAudio()
+  if (canSpeak()) {
+    try { window.speechSynthesis.cancel() } catch { /* ignore */ }
+  }
   if (muted) return Promise.resolve('muted')
   if (!plain) return Promise.resolve('empty')
   if (typeof window === 'undefined' || typeof fetch !== 'function') return Promise.resolve('unavailable')
-  const my = ++token
-  stopAudio()
   const script = phonemeScript(plain)
   return speakFromApi(script, my).then((status) => {
     if (status) return status
     if (my !== token) return 'interrupted'
-    return speakWithBrowser(text, my)
+    return speakWithBrowser(text, my, gender)
   })
 }
 

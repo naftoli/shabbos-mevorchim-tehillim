@@ -1,24 +1,33 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { Band, Button, Card, Field, Input } from '@/components/ui.jsx'
 import { IS_DEMO } from '@/lib/liveMode.js'
 
+function safeNext(value) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('://') || value.includes('\\')) {
+    return '/admin'
+  }
+  return value
+}
+
 export default function AdminLogin() {
   const { admin, loginAdmin } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next'))
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
-  if (admin) return <Navigate to="/admin" replace />
+  if (admin) return <Navigate to={next} replace />
 
   async function submit(e) {
     e.preventDefault()
     setError('')
     try {
       await loginAdmin(username, password)
-      navigate('/admin', { replace: true })
+      navigate(next, { replace: true })
     } catch (err) {
       setError(err.message)
     }
@@ -46,8 +55,8 @@ export default function AdminLogin() {
           {IS_DEMO ? (
             <div className="mt-4 space-y-1 rounded-xl border border-dashed border-line bg-track/40 px-3 py-2 text-xs text-muted">
               <p className="font-semibold text-navy">Demo logins (password: tehillim)</p>
-              <p>HQ: <button type="button" className="underline" onClick={() => { setUsername('hq'); setPassword('tehillim') }}>hq</button></p>
-              <p>School admin: <button type="button" className="underline" onClick={() => { setUsername('cheder-menachem-sample'); setPassword('tehillim') }}>cheder-menachem-sample</button></p>
+              <p>HQ: <button type="button" className="underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-1" onClick={() => { setUsername('hq'); setPassword('tehillim') }}>hq</button></p>
+              <p>School admin: <button type="button" className="underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center max-sm:px-1" onClick={() => { setUsername('cheder-menachem-sample'); setPassword('tehillim') }}>cheder-menachem-sample</button></p>
             </div>
           ) : null}
         </form>

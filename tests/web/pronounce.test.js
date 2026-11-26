@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { confirmLadderChoice, openingGreeting } from '../../src/lib/general613.js'
+import { confirmLadderChoice, openingGreeting, pickPitch } from '../../src/lib/general613.js'
 import { CHES_WORDS, phonemeOf, phonemeScript, pronounce } from '../../src/lib/pronounce.js'
 import { spokenText } from '../../src/lib/speech.js'
 
@@ -71,23 +71,34 @@ test('eSpeak keeps x in the phoneme string it will speak', () => {
 })
 
 test('the chat spelling stays put', () => {
-  const greeting = openingGreeting({
+  const ctx = {
     ladder: null,
     firstName: 'Meir',
     grade: '1',
     monthEn: 'Cheshvan',
     situation: 'pick',
     progress: { missionsTotal: 0, months: [] },
-  })
-  assert.match(greeting, /Shabbos Mevorchim Tehillim/)
-  assert.match(greeting, /Cheshvan/)
-  assert.match(greeting, /kapitlach/)
+  }
+  // The ladder walk names the month and the quota. The opening line for a
+  // new soldier is the shorter welcome cue. Neither is a phoneme script.
+  const greeting = openingGreeting(ctx)
+  const pitch = pickPitch(ctx)
+  assert.match(pitch, /Shabbos Mevorchim Tehillim/)
+  assert.match(pitch, /Cheshvan/)
+  assert.match(pitch, /kapitlach/)
   assert.equal(greeting.includes('[['), false)
-  assert.equal(greeting.includes("x'ESvn"), false)
+  assert.equal(pitch.includes('[['), false)
+  assert.equal(pitch.includes("x'ESvn"), false)
+  assert.match(phonemeScript(pitch), /\[\[x'ESvn\]\]/)
+  assert.equal(phonemeScript(pitch).includes('Cheshvan'), false)
   const wish = confirmLadderChoice({ firstName: 'Meir' })
   assert.match(wish, /hatzlacha/)
   assert.equal(wish.includes('hatsl'), false)
   assert.match(phonemeScript(wish), /\[\[hatsl'Ox@\]\]/)
-  assert.match(spokenText('Hatzlacha'), /hatz-LAH-chah/)
+  // pronounce() is the plain respelling table. The live browser fallback
+  // keeps the newer speech forms (kahpeetlockh), not that table.
+  assert.match(pronounce('Hatzlacha'), /hatz-LAH-chah/)
+  assert.equal(spokenText('Hatzlacha').includes('[['), false)
+  assert.match(spokenText('kapitlach'), /kahpeetlockh/)
   assert.equal(pronounce('613 Tehillim').includes('[['), false)
 })

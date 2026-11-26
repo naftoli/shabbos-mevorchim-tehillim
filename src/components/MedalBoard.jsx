@@ -1,22 +1,15 @@
 import { Link } from 'react-router-dom'
-import { MEDALS, MEDAL_THRESHOLDS } from '@/lib/medals.js'
+import { MEDALS, MEDAL_THRESHOLDS, isPreYearMedalNote } from '@/lib/medals.js'
 import { Card, CrownIcon } from './ui.jsx'
 import MedalCoin from './MedalCoin.jsx'
 import { fmt } from '@/lib/format.js'
 
-// One medal in the strip: the real coin when earned, dimmed when locked, with
-// its mission threshold beneath. Mirrors the Mashpia medal board's medal row.
 function StripMedal({ medal, earned, current }) {
-  return (
-    <span className="flex flex-col items-center gap-0.5">
-      <MedalCoin medal={medal} size={44} locked={!earned} active={current} />
-      <span className="font-cond text-[10px] font-semibold tabular-nums text-muted">{medal.threshold}</span>
-    </span>
-  )
+  return <MedalCoin medal={medal} size={52} locked={!earned} active={current} faces />
 }
 
 // Compact medal board on the dashboard — tap to open the full levels page.
-export default function MedalBoard({ progress }) {
+export default function MedalBoard({ progress, earnBy, earnedOn, onMedal }) {
   const { medal, missionsTotal } = progress
   const earnedCount = medal.earnedCount
   const next = medal.next
@@ -35,8 +28,8 @@ export default function MedalBoard({ progress }) {
             </p>
           </div>
           {next ? (
-            <div className="w-full rounded-xl bg-[#4358a2] px-3.5 py-2 text-center text-[13px] font-semibold leading-snug text-white sm:w-auto sm:max-w-[230px]">
-              Don’t miss a month to earn your <span className="font-bold text-gold">{next.name}</span> medal!
+            <div className="w-full rounded-xl bg-[#4358a2] px-3.5 py-2 text-center text-[13px] font-semibold leading-snug text-white sm:w-auto sm:max-w-[260px]">
+              You can earn your <span className="font-bold text-gold">{next.name}</span> medal{earnBy ? <> by {earnBy}, if every mission is completed</> : <> after {medal.missionsToNext} more completed mission{medal.missionsToNext === 1 ? '' : 's'}</>}.
             </div>
           ) : null}
         </div>
@@ -44,9 +37,18 @@ export default function MedalBoard({ progress }) {
         {/* Medal strip */}
         <div className="mt-5 flex flex-wrap items-center gap-2 sm:justify-between">
           {MEDALS.map((m) => (
-            <StripMedal key={m.index} medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
+            <button
+              key={m.index}
+              type="button"
+              className="rounded-xl"
+              aria-label={`${m.name} medal, ${m.index < earnedCount ? 'earned' : 'not earned'}, ${m.threshold} missions`}
+              onClick={(e) => { e.preventDefault(); onMedal?.(m) }}
+            >
+              <StripMedal medal={m} earned={m.index < earnedCount} current={medal.current?.index === m.index} />
+            </button>
           ))}
         </div>
+        {earnedOn && medal.current && !isPreYearMedalNote(earnedOn) ? <p className="mt-3 text-sm font-semibold text-navy">Your {medal.current.name} medal was earned {earnedOn}.</p> : null}
 
         {/* Progress bar — grey track, next-medal fill, centred label */}
         <div className="relative mt-4 h-6 w-full overflow-hidden rounded-full" style={{ background: '#c5cbd9' }}>

@@ -30,7 +30,7 @@ function CopyCard({ title, text }) {
     <Card className="flex flex-col p-5">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="font-display font-black text-navy">{title}</h3>
-        <Button variant="outline" className="!px-3 !py-1.5 !text-[13px]" onClick={copy}>{copied ? 'Copied!' : 'Copy'}</Button>
+        <Button variant="outline" className="!px-3 !py-1.5 !text-[13px] max-sm:!min-h-11" onClick={copy}>{copied ? 'Copied!' : 'Copy'}</Button>
       </div>
       <p className="flex-1 whitespace-pre-wrap rounded-xl bg-track/40 p-3 text-sm text-navy/80">{text}</p>
     </Card>

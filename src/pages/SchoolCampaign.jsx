@@ -1,20 +1,29 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Card, Pill, SchoolLogo, Button } from '@/components/ui.jsx'
+import { useMemo, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { Card, SchoolLogo, Button } from '@/components/ui.jsx'
 import { PageHero } from './_page.jsx'
 import QuotaBars from '@/components/QuotaBars.jsx'
+import { Pending, QuotaReached, RaceToggle, StarMark } from '@/components/campaignBits.jsx'
+import { PerfectPlatoonLogo, TopBaseBadge } from '@/components/brandMarks.jsx'
+import SoldierLeaderboard from '@/components/SoldierLeaderboard.jsx'
 import { fmt } from '@/lib/format.js'
 import { asset } from '@/lib/asset.js'
-import { GRADE_LABEL, MONTH_HEB } from '@/data/ladders.js'
+import { MONTH_HEB } from '@/data/ladders.js'
 import { useLiveData } from '@/lib/useLiveData.js'
+import { raceMetric, rankByRace } from '@/lib/schoolRace.js'
+import { sortClasses } from '@/lib/classOrder.js'
+import { baseRanks } from '@/lib/baseRank.js'
 import {
   getSchool,
+  getSchools,
   schoolSoldierLeaderboard,
   schoolClassLeaderboard,
-  CURRENT_MONTH,
 } from '@/services/api.js'
+import { useCampaignClock } from '@/lib/useCampaignClock.js'
+import { displayClassName } from '@/lib/formatClassName.js'
+import { teacherName } from '@/lib/teacherName.js'
+import ClassName from '@/components/ClassName.jsx'
 
-const RANK_MEDAL = ['🥇', '🥈', '🥉']
 const RACE_FILLS = [
   'linear-gradient(90deg, #86a8db 0%, var(--color-race-blue) 55%, #1f4f9e 100%)',
   'linear-gradient(90deg, #fde58f 0%, var(--color-race-yellow) 55%, #f0b929 100%)',
@@ -30,10 +39,22 @@ const classMono = (c) => {
 
 export default function SchoolCampaign() {
   const { schoolId } = useParams()
-  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId), [schoolId])
-  const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId, 10), [schoolId])
+  const [params] = useSearchParams()
+  const yearParam = params.get('year')
+  const monthParam = params.get('month')
+  const clock = useCampaignClock(yearParam || undefined)
+  const year = yearParam || clock.year
+  const month = monthParam || clock.currentMonth
+  const period = { year, month }
+  const { data: school, loading, error, reload } = useLiveData(() => getSchool(schoolId, period), [schoolId, year, month])
+  const { data: soldiers } = useLiveData(() => schoolSoldierLeaderboard(schoolId), [schoolId])
   const { data: classesData } = useLiveData(() => schoolClassLeaderboard(schoolId), [schoolId])
+  const { data: armySchools } = useLiveData(() => getSchools(period), [year, month])
   const classes = classesData ?? []
+  const rank = useMemo(
+    () => (armySchools ? baseRanks(armySchools).get(String(schoolId)) ?? null : null),
+    [armySchools, schoolId],
+  )
   const soldierRows = soldiers ?? []
   const [classSort, setClassSort] = useState('finished')
 
@@ -54,8 +75,8 @@ export default function SchoolCampaign() {
   if (!school) {
     return (
       <>
-        <PageHero eyebrow="Base Campaign" title={loading ? 'Loading…' : 'School not found'}>
-          {loading ? 'Loading this school’s campaign…' : 'We couldn’t find that school.'}
+        <PageHero eyebrow="Base Campaign" title={loading ? 'This base' : 'School not found'}>
+          {loading ? <Pending label="Getting this base" /> : 'We couldn’t find that school.'}
         </PageHero>
         {loading ? null : (
           <div className="mx-auto max-w-5xl px-4 py-10"><Button to="/">Back to Home</Button></div>
@@ -64,19 +85,19 @@ export default function SchoolCampaign() {
     )
   }
 
-  const perfect = classes.filter((c) => c.perfect)
-  const PERFECT_SHOWN = 24 // compact sample; the rest open on the school's own page
+  const perfect = sortClasses(classes.filter((c) => c.perfect))
 
   return (
     <>
       <section className="hero-navy">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-10 sm:px-6 lg:px-10">
-          <SchoolLogo school={school} size={72} className="ring-2 ring-white/30" />
-          <div className="min-w-0">
-            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
-            <h1 className="font-display text-3xl font-black text-white sm:text-4xl">{school.name}</h1>
+        <div className="mx-auto flex max-w-[1400px] items-start gap-3 px-4 py-8 sm:gap-4 sm:px-6 sm:py-10 lg:px-10">
+          <SchoolLogo school={school} size={72} className="!h-14 !w-14 ring-2 ring-white/30 sm:!h-[72px] sm:!w-[72px]" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-[13px] font-semibold uppercase tracking-[0.1em] text-gold">Base Campaign · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></p>
+            <h1 className="min-w-0 break-words font-display text-[1.65rem] font-black leading-tight text-white sm:text-4xl">{school.name}</h1>
             <p className="text-white/80">{school.city ? `${school.city} · ` : ''}{fmt(school.kids)} soldiers</p>
           </div>
+          <TopBaseBadge rank={rank} className="h-10 w-auto shrink-0 sm:h-12" />
         </div>
       </section>
 
@@ -84,13 +105,13 @@ export default function SchoolCampaign() {
         {/* Goal meter — kapitlach, minutes and soldiers finished */}
         <Card className="p-6 sm:p-8">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <p className="sh">This month · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></p>
-            {school.pct >= 100 ? <Pill className="!bg-green !text-white">🎉 Quota reached!</Pill> : null}
+            <p className="sh">This month · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></p>
+            {school.pct >= 100 ? <QuotaReached /> : null}
           </div>
           <QuotaBars
             kapitlach={{ quota: school.quotaMonth, said: school.saidMonth, pct: school.pct }}
             minutes={{ quota: school.minutesQuotaMonth, said: school.minutesSaidMonth, pct: school.minutesPct }}
-            soldiers={{ total: school.kids, finished: school.metMonth, pct: school.pctMet }}
+            soldiers={{ total: school.kids, finished: school.metMonth, participated: school.participatedMonth, pct: school.pctMet }}
           />
         </Card>
 
@@ -105,33 +126,31 @@ export default function SchoolCampaign() {
         {/* Perfect platoons — classes where every soldier completed their quota */}
         <Card className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h2 className="font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[CURRENT_MONTH]}</span></h2>
-            <span className="rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green">🎉 {fmt(perfect.length)} this month</span>
+            <div className="flex min-w-0 items-center gap-3">
+              <PerfectPlatoonLogo className="h-12 w-auto sm:h-14" />
+              <h2 className="min-w-0 font-display text-xl font-black text-navy">Perfect Platoons · <span className="font-heb">{MONTH_HEB[month] ?? month}</span></h2>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-green/15 px-3 py-1 font-cond text-sm font-bold uppercase tracking-wide text-green"><StarMark className="h-4 w-4" /> {fmt(perfect.length)} this month</span>
           </div>
           <p className="mb-4 mt-1 text-[13px] font-semibold text-muted">
-            A platoon (class) is <span className="text-navy">perfect</span> when every single soldier completed their full quota.
+            A “platoon” is a class — and it’s <span className="text-navy">perfect</span> when every single soldier in it finished their full quota of kapitlach this month.
           </p>
           {perfect.length ? (
             <div className="flex flex-wrap gap-2">
-              {perfect.slice(0, PERFECT_SHOWN).map((c) => (
-                <span
-                  key={c.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
-                  title={`${c.name}${c.teacher ? ' · ' + c.teacher : ''} · ${c.size} soldiers`}
-                >
-                  <img src={asset('design/medal-gold.png')} alt="" aria-hidden="true" draggable="false" className="h-4 w-auto flex-none" />
-                  <span className="font-display font-bold text-navy">{c.name}</span>
-                  {c.teacher ? <span className="text-navy/55">· {c.teacher}</span> : null}
-                </span>
-              ))}
-              {perfect.length > PERFECT_SHOWN ? (
-                <Link
-                  to={`/perfect-platoons?school=${schoolId}`}
-                  className="inline-flex items-center rounded-full bg-navy/5 px-3 py-1.5 text-sm font-semibold text-navy ring-1 ring-line transition hover:bg-navy/10"
-                >
-                  +{fmt(perfect.length - PERFECT_SHOWN)} more — see all →
-                </Link>
-              ) : null}
+              {perfect.map((c) => {
+                const teacher = teacherName(c.teacher)
+                return (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-3 py-1.5 text-sm ring-1 ring-gold/40"
+                    title={`${displayClassName(c.name)}${teacher ? ' · ' + teacher : ''} · ${c.size} soldiers`}
+                  >
+                    <StarMark className="h-4 w-4 flex-none" />
+                    <span className="font-display font-bold text-navy"><ClassName name={c.name} /></span>
+                    {teacher ? <span className="text-green">· {teacher}</span> : null}
+                  </span>
+                )
+              })}
             </div>
           ) : (
             <p className="text-sm font-semibold text-navy">No perfect platoons yet this month — a class turns perfect when every soldier in it completes their quota. Keep going! 💪</p>
@@ -139,60 +158,19 @@ export default function SchoolCampaign() {
         </Card>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          {/* Soldier leaderboard */}
-          <Card className="p-5 sm:p-6">
-            <h2 className="mb-4 font-display text-xl font-black text-navy">Top Soldiers</h2>
-            <ol className="space-y-2">
-              {soldierRows.map((s, i) => (
-                <li key={s.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-black/[0.03]">
-                  <span className="w-7 text-center font-display text-lg font-bold italic text-blue-accent">{RANK_MEDAL[i] || i + 1}</span>
-                  <span className="min-w-0 flex-1 truncate font-semibold text-navy">{s.name}</span>
-                  <span className="text-xs text-muted">{GRADE_LABEL[s.grade]}</span>
-                  <span className="font-display font-bold tabular-nums text-green">{fmt(s.saidYear)}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="mt-2 text-xs text-muted">Kapitlach said this year.</p>
-          </Card>
+          <SoldierLeaderboard key={schoolId} soldiers={soldierRows} />
 
           {/* Class leaderboard — toggle the metric like the home page race */}
           {(() => {
-            const SEGMENTS = [
-              { key: 'finished', label: '% Soldiers', sub: 'completed quota', icon: asset('design/icon-soldier-hat.png') },
-              { key: 'kapitlach', label: '% Kapitlach', sub: 'goal completed', emoji: '📖' },
-              { key: 'time', label: '% Time', sub: 'goal completed', icon: asset('design/icon-clock.png') },
-            ]
-            const metricOf = (c) => (classSort === 'finished' ? c.pctMet : classSort === 'kapitlach' ? c.pct : c.minutesPct)
-            const ranked = [...classes].sort(
-              (a, b) => metricOf(b) - metricOf(a) || b.pctMet - a.pctMet || b.pct - a.pct || a.name.localeCompare(b.name),
-            )
+            // Same ranking as the schools race: a tie on the selected metric breaks
+            // toward whoever has more of that metric's raw count (see rankByRace).
+            const metricOf = (c) => raceMetric(c, classSort)
+            const ranked = rankByRace(classes, classSort)
             return (
               <Card className="p-5 sm:p-6">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="font-display text-xl font-black text-navy">Platoons (Classes)</h2>
-                  <div className="inline-flex rounded-[22px] bg-[#6d93d8] p-1 font-cond uppercase tracking-[0.04em]">
-                    {SEGMENTS.map((sg) => {
-                      const active = classSort === sg.key
-                      return (
-                        <button
-                          key={sg.key}
-                          type="button"
-                          onClick={() => setClassSort(sg.key)}
-                          aria-pressed={active}
-                          className={`flex w-[84px] flex-col items-center gap-0.5 rounded-[18px] px-2 py-1.5 text-green transition sm:w-[92px] ${active ? 'shadow-sm' : 'hover:bg-white/15'}`}
-                          style={active ? { background: 'linear-gradient(90deg, #a6c6f6 0%, #6d93d8 45%, #547fc2 100%)' } : undefined}
-                        >
-                          {sg.icon ? (
-                            <img src={sg.icon} alt="" aria-hidden="true" draggable="false" className="h-5 w-auto sm:h-6" />
-                          ) : (
-                            <span className="text-[18px] leading-none sm:text-[20px]">{sg.emoji}</span>
-                          )}
-                          <span className="text-[11px] leading-none sm:text-[12px]">{sg.label}</span>
-                          <span className="text-[8px] font-semibold normal-case leading-tight tracking-normal text-navy/70">{sg.sub}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <h2 className="w-full font-display text-xl font-black text-navy sm:w-auto">Platoons (Classes)</h2>
+                  <RaceToggle value={classSort} onChange={setClassSort} compact />
                 </div>
                 <ul className="space-y-2 sm:space-y-3">
                   {ranked.map((c, i) => {
@@ -200,7 +178,7 @@ export default function SchoolCampaign() {
                     return (
                       <li
                         key={c.id}
-                        className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-2xl px-1 py-2 sm:flex sm:gap-4"
+                        className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-2xl px-1 py-2 sm:flex sm:gap-4"
                       >
                         <span className="grid w-9 flex-none place-items-center sm:w-12">
                           {i < 3 && m > 0 ? (
@@ -210,16 +188,16 @@ export default function SchoolCampaign() {
                           )}
                         </span>
                         <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-navy font-cond text-sm font-bold text-gold sm:h-11 sm:w-11">{classMono(c)}</span>
-                        <span className="min-w-0 truncate font-display text-[16px] font-semibold text-navy sm:w-40 sm:flex-none sm:text-[18px]">
-                          {c.name} {c.perfect ? <span title="Perfect Platoon">★</span> : null}
+                        <span className="min-w-0 whitespace-normal font-display text-[15px] font-semibold leading-tight text-navy sm:w-40 sm:flex-none sm:truncate sm:text-[18px]">
+                          <ClassName name={c.name} /> {c.perfect ? <StarMark className="ml-1 inline h-4 w-4 align-text-bottom" /> : null}
                         </span>
-                        <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
+                        <span className="relative col-span-4 order-last h-4 overflow-hidden rounded-full bg-bar-track sm:order-none sm:col-span-1 sm:h-5 sm:flex-1">
                           <span
                             className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700"
                             style={{ width: `${Math.max(3, Math.min(100, m))}%`, background: c.perfect ? 'var(--color-green-mid)' : RACE_FILLS[i % RACE_FILLS.length] }}
                           />
                         </span>
-                        <span className="text-right font-display text-[15px] font-bold tabular-nums text-green sm:w-24 sm:flex-none sm:text-[17px]">
+                        <span className="text-right font-display text-[13px] font-bold leading-tight tabular-nums text-green sm:w-24 sm:flex-none sm:text-[17px]">
                           {m}%{classSort === 'finished' ? <span className="font-semibold text-muted"> · {c.met}/{c.size}</span> : null}
                         </span>
                       </li>

@@ -2,10 +2,6 @@
 // facade. Modeled on Mivtza Lulav's src/services/mashpia.js: signed bearer
 // tokens over the existing Mashpia roster, served from /shabbos-mevorchim-
 // tehillim/api (see api/README.md).
-//
-// Only the endpoints the facade has been wired to live so far are implemented
-// here. The rest of services/api.js still runs on the demo roster; each
-// function flips to its mashpia.* twin as it is wired, the Lulav pattern.
 
 // import.meta.env is injected by Vite in the app; guard it so the module also
 // loads under plain Node (the test harness), where it is undefined.
@@ -19,6 +15,10 @@ const TOKEN_KEYS = { kid: 'wwtc_token_kid', admin: 'wwtc_token_admin' }
 const memoryTokens = { kid: null, admin: null }
 const listeners = new Set()
 let timer = null
+
+export function getKidToken() {
+  return readToken('kid')
+}
 
 function readToken(role) {
   try {
@@ -83,10 +83,27 @@ async function req(path, { method = 'GET', body, as = null } = {}) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (response.status === 401 && as && token) endSession(as)
-  const payload = await response.json().catch(() => null)
+  // Any 401 on a request that was meant to be authenticated (`as` is set) ends
+  // the session, even when no token went out: the 30-day session record outlives
+  // the 12-hour bearer token, so after a token expires readToken() returns null
+  // and we'd send a tokenless request. Without this, that 401 left the soldier
+  // stranded on "Couldn't load your Tehillim" — session still live, so no bounce
+  // to login, and Try again just 401s again. Clearing here redirects to /login.
+  if (response.status === 401 && as) endSession(as)
+  const payload = await response.json().catch(() => undefined)
   if (!response.ok) {
-    throw new Error(payload?.error || `Request failed (${response.status}).`)
+    const error = new Error(payload?.error || `Request failed (${response.status}).`)
+    error.status = response.status
+    error.code = payload?.code
+    error.threshold = payload?.threshold
+    throw error
+  }
+  // A 2xx with an unparseable (e.g. empty) body means the server died after its
+  // headers went out; surface it as a clear error rather than returning null and
+  // letting callers crash on `const { token } = null`. (No endpoint here replies
+  // 2xx-with-no-body; the only 204 is the CORS preflight the browser handles.)
+  if (payload === undefined) {
+    throw new Error(`The server returned an unreadable response (${response.status}).`)
   }
   return payload
 }
@@ -114,6 +131,19 @@ export async function verifyKid(serial, dob) {
   }
 }
 
+/**
+ * The parent site's one-tap sign-in: trade the short-lived code it put in our
+ * URL for the same session POST /soldier/login issues.
+ */
+export async function verifyKidHandoff(code) {
+  const { token, expiresIn, soldier } = await req('/soldier/handoff', {
+    method: 'POST',
+    body: { code },
+  })
+  saveToken('kid', token, expiresIn)
+  return soldier
+}
+
 export async function verifyAdmin(username, password) {
   try {
     const { token, expiresIn, admin } = await req('/admin/login', {
@@ -130,24 +160,127 @@ export async function verifyAdmin(username, password) {
 
 // ---- read endpoints --------------------------------------------------------
 
-export const getSchool = (id) => req(`/schools/${id}`)
-export const getGlobalStats = () => req('/stats')
-export const getSchools = () => req('/schools').then((r) => r.schools || [])
-export const getPerfectPlatoons = () => req('/perfect-platoons').then((r) => r.platoons || [])
+function periodQuery(period) {
+  if (!period) return ''
+  const params = new URLSearchParams()
+  if (period.year) params.set('year', String(period.year))
+  if (period.month) params.set('month', period.month)
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+export const getSchool = (id, period) => req(`/schools/${id}${periodQuery(period)}`)
+export const getGlobalStats = (period) => req(`/stats${periodQuery(period)}`)
+export const getSchools = (period) => req(`/schools${periodQuery(period)}`).then((r) => r.schools || [])
+export const getPerfectPlatoons = (period) => req(`/perfect-platoons${periodQuery(period)}`).then((r) => r.platoons || [])
+export const getCampaign = (year) => req(`/campaign${year ? `?year=${year}` : ''}`)
+export const getDedication = async (period) => {
+  const params = new URLSearchParams()
+  params.set('scope', period?.scope || 'army')
+  if (period?.year) params.set('year', String(period.year))
+  if (period?.month) params.set('month', period.month)
+  if (period?.schoolId) params.set('schoolId', String(period.schoolId))
+  const data = await req(`/dedication?${params}`)
+  return data?.dedication ?? null
+}
+export const getHqVerify = (period) => req(`/hq/verify${periodQuery(period)}`, { as: 'admin' })
 export const getClassLeaderboard = (id) => req(`/schools/${id}/class-leaderboard`).then((r) => r.classes || [])
 export const getNotCompleted = (id) => req(`/schools/${id}/not-completed`, { as: 'admin' }).then((r) => r.classes || [])
-export const getSoldierLeaderboard = (id, n = 10) =>
-  req(`/schools/${id}/leaderboard?n=${n}`).then((r) => r.soldiers || [])
+export const getSoldierLeaderboard = (id, n = null) => {
+  const q = n == null ? '' : `?n=${encodeURIComponent(n)}`
+  return req(`/schools/${id}/leaderboard${q}`).then((r) => r.soldiers || [])
+}
 export const getRunningTotals = () => req('/running-totals')
+export const getRunningTotalsBreakdown = () => req('/running-totals/breakdown')
 const monthQuery = (idx) => (idx === undefined || idx === null ? '' : `?monthIdx=${idx}`)
-export const getArmyReport = (monthIdx) => req(`/reports/army${monthQuery(monthIdx)}`)
-export const getBaseReport = (schoolId, monthIdx) => req(`/reports/base/${schoolId}${monthQuery(monthIdx)}`)
-export const getPlatoonReport = (classId, monthIdx) => req(`/reports/platoon/${classId}${monthQuery(monthIdx)}`)
+function reportQuery(monthIdx, period) {
+  if (period?.year || period?.month) return periodQuery(period)
+  return monthQuery(monthIdx)
+}
+export const getArmyReport = (monthIdx, period) => req(`/reports/army${reportQuery(monthIdx, period)}`)
+export const getBaseReport = (schoolId, monthIdx, period) => req(`/reports/base/${schoolId}${reportQuery(monthIdx, period)}`)
+export async function getPlatoonReport(classId, monthIdx, period) {
+  const path = `/reports/platoon/${classId}${reportQuery(monthIdx, period)}`
+  // The summary is public. Attach the staff token when we have one so the
+  // server can add the roll. A rejected token must not blank the class summary.
+  if (!readToken('admin')) return req(path)
+  try {
+    return await req(path, { as: 'admin' })
+  } catch (error) {
+    const message = String(error?.message || '')
+    if (/authentication|permission|invalid|request failed \(40[13]\)/i.test(message)) {
+      return req(path)
+    }
+    throw error
+  }
+}
 
 // The signed-in soldier (token-scoped, so no id is sent).
 export const getKidProgress = () => req('/me/progress', { as: 'kid' })
 export const getKidSocial = () => req('/me/social', { as: 'kid' })
-export const recordMonth = (kapitlach, minutes) =>
-  write('/me/report', { method: 'POST', body: { kapitlach, minutes }, as: 'kid' })
+export const recordMonth = (kapitlach, minutes, extra = {}) =>
+  write('/me/report', {
+    method: 'POST',
+    body: {
+      kapitlach,
+      minutes,
+      ...(extra?.exceptionalConfirmed ? { exceptionalConfirmed: true } : {}),
+      ...(extra?.flagConfirmed ? { flagConfirmed: true } : {}),
+    },
+    as: 'kid',
+  })
+export const getFlagQueue = () => req('/admin/flags', { as: 'admin' })
+export const reviewFlag = (id, action) =>
+  write(`/admin/flags/${id}/${action}`, { method: 'POST', as: 'admin' })
+export const setDedication = async ({ scope, schoolId, text, year, month }) => {
+  const data = await write('/dedication', { method: 'PUT', body: { scope, schoolId, text, year, month }, as: 'admin' })
+  return data?.dedication ?? null
+}
 export const setKidLadder = (ladder) =>
   write('/me/ladder', { method: 'PUT', body: { ladder }, as: 'kid' })
+
+// Admin sets a ladder for a whole school (classId/kidId null), one class
+// (classId set), or one soldier (classId + kidId). kidId is the platoon roll's
+// row id (the soldier's user_id). Server scopes it to the admin's authority.
+export const adminSetLadder = ({ schoolId, classId = null, kidId = null, ladder }) =>
+  write('/admin/ladder', { method: 'PUT', body: { schoolId, classId, kidId, ladder }, as: 'admin' })
+
+export const getPublicPlatoonGraphics = (period) => req(`/platoon-graphics${periodQuery(period)}`)
+export const getOfficePlatoonGraphics = (period) => req(`/office/platoon-graphics${periodQuery(period)}`, { as: 'admin' })
+export const saveSchoolWhatsapp = (schoolId, whatsapp) =>
+  write('/office/platoon-graphics/contact', { method: 'PUT', body: { schoolId, whatsapp: whatsapp || '' }, as: 'admin' })
+export const markPlatoonGraphicsSent = ({ ids, sent }) =>
+  write('/office/platoon-graphics/sent', { method: 'POST', body: { ids, sent }, as: 'admin' })
+export const markSchoolGraphicsSent = (schoolId) =>
+  write('/office/platoon-graphics/sent', { method: 'POST', body: { schoolId, sent: true }, as: 'admin' })
+
+export const setSchoolYearStart = ({ schoolId, firstMonth }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, firstMonth }, as: 'admin' })
+
+export const setSchoolYearPick = ({ schoolId, allowSchoolPick }) =>
+  write('/admin/school-year', { method: 'PUT', body: { schoolId, allowSchoolPick }, as: 'admin' })
+
+export const getSchoolLadders = (schoolId) =>
+  req(`/admin/school-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setSchoolLadders = ({ schoolId, hidden, classes, children, sendScopes = false }) =>
+  write('/admin/school-ladders', {
+    method: 'PUT',
+    body: sendScopes ? { schoolId, hidden, classes: classes || [], children: children || [] } : { schoolId, hidden },
+    as: 'admin',
+  })
+
+export const overrideQuota = ({ kidId, year, month, reason }) =>
+  write('/admin/quota-override', { method: 'POST', body: { kidId, year, month, reason }, as: 'admin' })
+
+export const listCustomLadderSoldiers = (schoolId) =>
+  req(`/admin/custom-ladders?schoolId=${encodeURIComponent(schoolId)}`, { as: 'admin' })
+
+export const setCustomLadder = ({ kidId, targetKapitlach, finishGrade, reason }) =>
+  write('/admin/custom-ladder', { method: 'POST', body: { kidId, targetKapitlach, finishGrade, reason }, as: 'admin' })
+
+export const removeCustomLadder = ({ kidId }) =>
+  write('/admin/custom-ladder/remove', { method: 'POST', body: { kidId }, as: 'admin' })
+
+export const undoQuotaOverride = ({ kidId, year, month }) =>
+  write('/admin/quota-override/undo', { method: 'POST', body: { kidId, year, month }, as: 'admin' })

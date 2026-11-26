@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { forwardRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { asset } from '../lib/asset.js'
 
@@ -20,16 +20,16 @@ export function Band({ className = '' }) {
 // `wideSize` applies from 2xl.
 export function Brand({ size = 46, phoneSize = size, wideSize = size, dark = false }) {
   return (
-    <span className="inline-flex items-center gap-2.5 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
+    <span className="inline-flex min-w-0 items-center gap-2 sm:gap-3" style={{ '--logo-h': `${size}px`, '--logo-h-phone': `${phoneSize}px`, '--logo-h-wide': `${wideSize}px` }}>
       <img src={asset('brand/wwtc-shield.png')} alt="Worldwide Tehillim Club" className="h-(--logo-h-phone) w-auto shrink-0 sm:h-(--logo-h) 2xl:h-(--logo-h-wide)" />
-      <span className="flex flex-col leading-none">
-        <span className="font-cond text-[1.35rem] uppercase leading-none tracking-[0.02em] sm:text-[2.1rem] 2xl:text-[2.25rem]"
+      <span className="flex min-w-0 flex-col leading-none">
+        <span className="whitespace-nowrap font-cond text-[0.9rem] uppercase leading-[1.05] tracking-[0.02em] sm:text-[1.35rem] 2xl:text-[1.55rem]"
           style={{ color: dark ? '#fff' : 'var(--color-green)' }}>
-          Tehillim Club
-        </span>
-        <span className="mt-1 font-display text-[10px] font-semibold uppercase leading-none tracking-[0.04em] sm:text-[13px] 2xl:text-[15px]"
-          style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
           Tzivos Hashem
+        </span>
+        <span className="mt-1 max-w-[7.6rem] font-display text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.02em] sm:max-w-none sm:text-[11px] sm:leading-tight sm:tracking-[0.03em] 2xl:text-[13px]"
+          style={{ color: dark ? 'var(--color-gold)' : 'var(--color-green)' }}>
+          Worldwide Tehillim Campaign
         </span>
       </span>
     </span>
@@ -78,9 +78,9 @@ export function Avatar({ name = '', src, size = 40, className = '' }) {
 }
 
 // Sky card on the page: big radius, no border, only a whisper of shadow.
-export function Card({ className = '', children }) {
+export function Card({ className = '', children, ...props }) {
   return (
-    <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`}>
+    <div className={`overflow-hidden rounded-[28px] bg-card shadow-card ${className}`} {...props}>
       {children}
     </div>
   )
@@ -119,20 +119,21 @@ export function Field({ label, hint, children }) {
   )
 }
 
-export function Input(props) {
+export const Input = forwardRef(function Input(props, ref) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      ref={ref}
+      className={`min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 sm:min-h-0 ${props.className || ''}`}
     />
   )
-}
+})
 
 export function Textarea(props) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 ${props.className || ''}`}
+      className={`min-h-11 w-full rounded-xl border border-line bg-[#eef4ff] px-3.5 py-2.5 text-[15px] text-navy outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/25 sm:min-h-0 ${props.className || ''}`}
     />
   )
 }
@@ -148,7 +149,7 @@ export function Pill({ children, className = '' }) {
 // Badge is an alias of Pill, kept for components that import it by that name.
 export const Badge = Pill
 
-export function Spinner({ label = 'Loading…' }) {
+export function Spinner({ label = 'One moment' }) {
   return (
     <div className="flex items-center justify-center gap-3 py-16 text-muted">
       <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-green" />
